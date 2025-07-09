@@ -48,6 +48,30 @@
 
 .progress-container {
     display: none;
+}
+
+.loading-spinner {
+    width: 1rem;
+    height: 1rem;
+}
+
+.test-result {
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.test-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.test-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
     margin-top: 10px;
 }
 
@@ -152,6 +176,13 @@
                                     </div>
                                     
                                     <div class="model-actions">
+                                        <button class="btn btn-sm btn-outline-primary test-model-btn mr-2" 
+                                                data-model="{{ model.name }}:{{ model.tag }}">
+                                            <i class="fas fa-check-circle"></i> Test
+                                            <div class="loading-spinner spinner-border spinner-border-sm" role="status" style="display: none;">
+                                                <span class="sr-only">Loading...</span>
+                                            </div>
+                                        </button>
                                         <button class="btn btn-sm btn-outline-danger delete-model-btn" 
                                                 data-model="{{ model.name }}:{{ model.tag }}">
                                             <i class="fas fa-trash"></i> Elimina
@@ -161,6 +192,7 @@
                                             <i class="fas fa-info-circle"></i> Info
                                         </button>
                                     </div>
+                                    <div id="test-result-{{ (model.name + ':' + model.tag)|replace(':', '-')|replace('/', '-') }}" class="test-result mt-2" style="display: none;"></div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -197,7 +229,15 @@
                                             data-model="{{ model.name }}">
                                         <i class="fas fa-download"></i> Scarica
                                     </button>
+                                    <button class="btn btn-sm btn-outline-primary test-model-btn ml-2" 
+                                            data-model="{{ model.name }}">
+                                        <i class="fas fa-check-circle"></i> Test
+                                        <div class="loading-spinner spinner-border spinner-border-sm" role="status" style="display: none;">
+                                            <span class="sr-only">Loading...</span>
+                                        </div>
+                                    </button>
                                 </div>
+                                <div id="test-result-{{ model.name|replace(':', '-')|replace('/', '-') }}" class="test-result mt-2" style="display: none;"></div>
                                 
                                 <div class="progress-container" id="progress-{{ model.name|replace(':', '-') }}">
                                     <div class="progress">
@@ -414,5 +454,43 @@ function showModelInfo(modelName) {
         `;
     }, 1000);
 }
+
+// Test modello
+document.querySelectorAll('.test-model-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const modelName = this.dataset.model;
+        const spinner = this.querySelector('.loading-spinner');
+        const resultDiv = document.getElementById(`test-result-${modelName.replace(/[\/:]/g, '-')}`);
+        
+        // Mostra spinner
+        spinner.style.display = 'inline-block';
+        this.disabled = true;
+        resultDiv.style.display = 'none';
+        
+        // Test di connessione al modello
+        fetch('/admin/ollama/test-model', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({model: modelName})
+        })
+        .then(response => response.json())
+        .then(data => {
+            resultDiv.className = `test-result ${data.success ? 'test-success' : 'test-error'}`;
+            resultDiv.textContent = data.message;
+            resultDiv.style.display = 'block';
+        })
+        .catch(error => {
+            resultDiv.className = 'test-result test-error';
+            resultDiv.textContent = 'Errore nella connessione: ' + error.message;
+            resultDiv.style.display = 'block';
+        })
+        .finally(() => {
+            spinner.style.display = 'none';
+            this.disabled = false;
+        });
+    });
+});
 </script>
 {% endblock %}

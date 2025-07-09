@@ -23,7 +23,7 @@ Il sistema di etichettatura AI integra **Ollama** (locale) e **OpenRouter** (clo
 ## 📋 Prerequisiti
 
 ### Per Ollama
-- Server Ollama in esecuzione su `http://192.168.12.14:11345`
+- Server Ollama in esecuzione su `http://192.168.12.14:11435`
 - Almeno un modello scaricato (es. `llama3`, `mistral`)
 
 ### Per OpenRouter

@@ -11,7 +11,7 @@ from datetime import datetime
 
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://192.168.12.14:11345"):
+    def __init__(self, base_url: str = "http://192.168.129.14:11435"):
         self.base_url = base_url.rstrip('/')
         
     def test_connection(self) -> bool:

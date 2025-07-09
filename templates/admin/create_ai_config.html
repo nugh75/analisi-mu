@@ -48,6 +48,29 @@
     margin-bottom: 8px;
 }
 
+.loading-spinner {
+    width: 1rem;
+    height: 1rem;
+}
+
+.test-result {
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.test-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.test-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
 .test-connection {
     margin-top: 15px;
 }
@@ -89,23 +112,29 @@
                             <div class="form-group">
                                 <label for="ollama_url">URL Ollama</label>
                                 <input type="url" class="form-control" id="ollama_url" name="ollama_url"
-                                       value="http://192.168.12.14:11345" placeholder="http://localhost:11434">
+                                       value="http://192.168.129.14:11435" placeholder="http://192.168.129.14:11435">
                                 <div class="form-help">URL dell'istanza Ollama (include porta)</div>
                             </div>
                             
                             <div class="form-group">
                                 <label for="ollama_model">Modello</label>
-                                <input type="text" class="form-control" id="ollama_model" name="ollama_model"
-                                       placeholder="llama3">
-                                <div class="form-help">Nome del modello Ollama (es. llama3, mistral, gemma)</div>
+                                <select class="form-control" id="ollama_model" name="ollama_model">
+                                    <option value="">Seleziona un modello...</option>
+                                    {% for model in ollama_models %}
+                                    <option value="{{ model.name }}:{{ model.tag }}" 
+                                            data-size="{{ '%.1f'|format(model.size / 1024**3) }} GB">
+                                        {{ model.name }}:{{ model.tag }} 
+                                        ({{ '%.1f'|format(model.size / 1024**3) }} GB)
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-help">Scegli un modello installato su Ollama</div>
                                 
                                 <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="test-ollama-connection">
-                                    <i class="fas fa-plug"></i> Testa Connessione e Mostra Modelli
+                                    <i class="fas fa-plug"></i> Testa Connessione
                                 </button>
                                 
-                                <div id="ollama-models-list" class="model-grid" style="display: none;">
-                                    <!-- I modelli verranno caricati dinamicamente -->
-                                </div>
+                                <div id="ollama-test-result" class="mt-2"></div>
                             </div>
                         </div>
                         
@@ -126,22 +155,21 @@
                             <div class="form-group">
                                 <label for="openrouter_model">Modello</label>
                                 <select class="form-control" id="openrouter_model" name="openrouter_model">
-                                    <option value="">Seleziona un modello</option>
-                                    <optgroup label="Modelli Gratuiti">
-                                        <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini 128K (Free)</option>
-                                        <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
-                                        <option value="huggingfaceh4/zephyr-7b-beta:free">Zephyr 7B (Free)</option>
-                                        <option value="google/gemma-7b-it:free">Gemma 7B (Free)</option>
-                                    </optgroup>
-                                    <optgroup label="Modelli a Pagamento">
-                                        <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
-                                        <option value="openai/gpt-4o">GPT-4o</option>
-                                        <option value="anthropic/claude-3-haiku">Claude 3 Haiku</option>
-                                        <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                                        <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
-                                    </optgroup>
+                                    <option value="">Seleziona un modello...</option>
+                                    {% for model in openrouter_models %}
+                                    <option value="{{ model.model_id }}" 
+                                            data-context="{{ model.context_length }}"
+                                            data-free="{{ model.is_free }}"
+                                            data-description="{{ model.description }}">
+                                        {{ model.name }}
+                                        {% if model.is_free %}
+                                        <span class="badge bg-success">FREE</span>
+                                        {% endif %}
+                                        ({{ model.context_length }}K context)
+                                    </option>
+                                    {% endfor %}
                                 </select>
-                                <div class="form-help">Scegli un modello. I modelli gratuiti hanno limitazioni di utilizzo.</div>
+                                <div class="form-help">Scegli un modello OpenRouter. I modelli gratuiti hanno limitazioni di utilizzo.</div>
                                 
                                 <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="test-openrouter-connection">
                                     <i class="fas fa-plug"></i> Testa API Key e Carica Modelli
@@ -193,13 +221,22 @@
                         
                         <!-- Pulsanti -->
                         <div class="form-group mt-4">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="button" class="btn btn-outline-primary" id="test-config-btn">
+                                <i class="fas fa-check-circle"></i> Test Configurazione
+                                <div class="loading-spinner spinner-border spinner-border-sm" role="status" style="display: none;">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                            </button>
+                            <button type="submit" class="btn btn-primary ml-2">
                                 <i class="fas fa-save"></i> Salva Configurazione
                             </button>
                             <a href="{{ url_for('admin.ai_configuration') }}" class="btn btn-secondary ml-2">
                                 <i class="fas fa-times"></i> Annulla
                             </a>
                         </div>
+                        
+                        <!-- Risultato Test -->
+                        <div id="test-result" class="test-result mt-3" style="display: none;"></div>
                     </form>
                 </div>
             </div>
@@ -284,6 +321,75 @@ document.addEventListener('DOMContentLoaded', function() {
             this.innerHTML = '<i class="fas fa-check"></i> API Key valida!';
             this.className = 'btn btn-sm btn-success mt-2';
         }, 1500);
+    });
+    
+    // Test configurazione
+    document.getElementById('test-config-btn').addEventListener('click', function() {
+        const provider = document.getElementById('provider').value;
+        const spinner = this.querySelector('.loading-spinner');
+        const resultDiv = document.getElementById('test-result');
+        
+        // Validazione base
+        if (!provider) {
+            alert('Seleziona prima un provider');
+            return;
+        }
+        
+        let testData = { provider: provider };
+        
+        if (provider === 'ollama') {
+            const url = document.getElementById('ollama_url').value;
+            const model = document.getElementById('ollama_model').value;
+            
+            if (!url || !model) {
+                alert('Compila URL e modello per Ollama');
+                return;
+            }
+            
+            testData.ollama_url = url;
+            testData.ollama_model = model;
+            
+        } else if (provider === 'openrouter') {
+            const apiKey = document.getElementById('openrouter_api_key').value;
+            const model = document.getElementById('openrouter_model').value;
+            
+            if (!apiKey || !model) {
+                alert('Compila API key e modello per OpenRouter');
+                return;
+            }
+            
+            testData.openrouter_api_key = apiKey;
+            testData.openrouter_model = model;
+        }
+        
+        // Mostra spinner
+        spinner.style.display = 'inline-block';
+        this.disabled = true;
+        resultDiv.style.display = 'none';
+        
+        // Test di connessione
+        fetch('/admin/test-ai-config-preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(testData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            resultDiv.className = `test-result ${data.success ? 'test-success' : 'test-error'}`;
+            resultDiv.textContent = data.message;
+            resultDiv.style.display = 'block';
+        })
+        .catch(error => {
+            resultDiv.className = 'test-result test-error';
+            resultDiv.textContent = 'Errore nella connessione: ' + error.message;
+            resultDiv.style.display = 'block';
+        })
+        .finally(() => {
+            spinner.style.display = 'none';
+            this.disabled = false;
+        });
     });
     
     // Validazione form

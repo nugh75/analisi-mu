@@ -21,7 +21,7 @@ def test_ollama():
     print("🔧 Test Ollama")
     print("-" * 50)
     
-    client = OllamaClient("http://192.168.12.14:11345")
+    client = OllamaClient("http://192.168.12.14:11435")
     
     # Test connessione
     print("📡 Test connessione...")

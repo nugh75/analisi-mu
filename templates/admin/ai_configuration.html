@@ -168,14 +168,32 @@
                                         <span class="sr-only">Loading...</span>
                                     </div>
                                 </button>
-                                {% if not config.is_active %}
-                                <form method="POST" action="{{ url_for('admin.activate_ai_config', config_id=config.id) }}" 
+                                
+                                <a href="{{ url_for('admin.edit_ai_config', config_id=config.id) }}" 
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-edit"></i> Modifica
+                                </a>
+                                
+                                <form method="POST" action="{{ url_for('admin.toggle_ai_config', config_id=config.id) }}" 
                                       style="display: inline;">
+                                    {% if config.is_active %}
+                                    <button type="submit" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-pause"></i> Disattiva
+                                    </button>
+                                    {% else %}
                                     <button type="submit" class="btn btn-sm btn-success">
                                         <i class="fas fa-play"></i> Attiva
                                     </button>
+                                    {% endif %}
                                 </form>
-                                {% endif %}
+                                
+                                <form method="POST" action="{{ url_for('admin.delete_ai_config', config_id=config.id) }}" 
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Sei sicuro di voler eliminare questa configurazione?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i> Elimina
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
