@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}Gestisci Etichette - Analisi MU{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2>
+                    <i class="bi bi-tags me-2"></i>Gestisci Etichette
+                </h2>
+                <p class="text-muted">Visualizza e modifica le etichette disponibili per l'annotazione</p>
+            </div>
+            <div>
+                <a href="{{ url_for('labels.create_label') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Crea Nuova Etichetta
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtri -->
+{% if categories %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-funnel me-2"></i>Filtra per Categoria
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-6">
+                        <select name="category" id="category" class="form-select" onchange="this.form.submit()">
+                            <option value="">Tutte le categorie</option>
+                            {% for category in categories %}
+                            <option value="{{ category }}" {{ 'selected' if category == current_category else '' }}>
+                                {{ category }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-center">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search me-1"></i>Applica
+                        </button>
+                        <a href="{{ url_for('labels.list_labels') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Reset
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if labels.items %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list me-2"></i>Etichette
+                    {% if current_category %}
+                    <span class="badge bg-primary">{{ current_category }}</span>
+                    {% endif %}
+                </h5>
+                <small class="text-muted">
+                    Pagina {{ labels.page }} di {{ labels.pages }} ({{ labels.total }} etichette totali)
+                </small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Etichetta</th>
+                                <th>Categoria</th>
+                                <th>Descrizione</th>
+                                <th>Utilizzo</th>
+                                <th>Creata</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for label in labels.items %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge me-2" style="background-color: {{ label.color }}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
+                                        <strong>{{ label.name }}</strong>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if label.category %}
+                                    <span class="badge bg-secondary">{{ label.category }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if label.description %}
+                                    <div class="text-truncate" style="max-width: 200px;" title="{{ label.description }}">
+                                        {{ label.description }}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">Nessuna descrizione</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary">{{ label.annotations|length }} annotazioni</span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ label.created_at.strftime('%d/%m/%Y') }}</small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{ url_for('labels.edit_label', label_id=label.id) }}" 
+                                           class="btn btn-outline-primary" 
+                                           title="Modifica etichetta">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        {% if label.annotations|length == 0 %}
+                                        <button type="button" 
+                                                class="btn btn-outline-danger"
+                                                title="Elimina etichetta"
+                                                onclick="confirmDelete('{{ label.name }}', '{{ url_for('labels.delete_label', label_id=label.id) }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% else %}
+                                        <button type="button" 
+                                                class="btn btn-outline-secondary disabled"
+                                                title="Non può essere eliminata: in uso in {{ label.annotations|length }} annotazioni">
+                                            <i class="bi bi-lock"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Paginazione -->
+{% if labels.pages > 1 %}
+<nav aria-label="Navigazione etichette" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if labels.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.prev_num, category=current_category) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% endif %}
+
+        {% for page_num in labels.iter_pages() %}
+        {% if page_num %}
+        {% if page_num != labels.page %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=page_num, category=current_category) }}">
+                {{ page_num }}
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item active">
+            <span class="page-link">{{ page_num }}</span>
+        </li>
+        {% endif %}
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link">…</span>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if labels.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.next_num, category=current_category) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<!-- Stato vuoto -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-tags display-1 text-muted mb-4"></i>
+                {% if current_category %}
+                <h4 class="text-muted">Nessuna Etichetta nella Categoria "{{ current_category }}"</h4>
+                <p class="text-muted mb-4">
+                    Non ci sono etichette nella categoria selezionata. 
+                    Prova a cambiare filtro o crea una nuova etichetta.
+                </p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <a href="{{ url_for('labels.list_labels') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-funnel me-2"></i>Rimuovi Filtro
+                    </a>
+                    <a href="{{ url_for('labels.create_label') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-2"></i>Crea Etichetta
+                    </a>
+                </div>
+                {% else %}
+                <h4 class="text-muted">Nessuna Etichetta Disponibile</h4>
+                <p class="text-muted mb-4">
+                    Inizia creando la tua prima etichetta per categorizzare i contenuti testuali.
+                    Le etichette ti aiuteranno a organizzare e analizzare i dati in modo sistematico.
+                </p>
+                <a href="{{ url_for('labels.create_label') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle me-2"></i>Crea la Prima Etichetta
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Statistiche rapide -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-tags display-4 text-primary mb-2"></i>
+                <h5>{{ labels.total }}</h5>
+                <small class="text-muted">Etichette Totali</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-collection display-4 text-success mb-2"></i>
+                <h5>{{ categories|length }}</h5>
+                <small class="text-muted">Categorie</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-pencil-square display-4 text-info mb-2"></i>
+                <h5>
+                    {% set total_usage = labels.items|map(attribute='annotations')|map('length')|sum %}
+                    {{ total_usage }}
+                </h5>
+                <small class="text-muted">Utilizzi Totali</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(labelName, deleteUrl) {
+    if (confirm(`Sei sicuro di voler eliminare l'etichetta "${labelName}"?\n\nQuesta azione non può essere annullata.`)) {
+        // Crea un form per l'eliminazione
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        
+        // Aggiungi token CSRF
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                         document.querySelector('input[name="csrf_token"]')?.value;
+        
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

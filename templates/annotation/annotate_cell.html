@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}Etichetta Cella - Analisi MU{% endblock %}
+
+{% block head %}
+<style>
+.label-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    margin: 0.25rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+.label-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.label-badge.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
+}
+
+.cell-content {
+    background: #f8f9fa;
+    border-left: 4px solid #007bff;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.annotation-history {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.user-annotation {
+    border-left: 3px solid #28a745;
+}
+
+.other-annotation {
+    border-left: 3px solid #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- Informazioni sulla cella -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-grid-3x3-gap me-2"></i>
+                    Cella: {{ cell.sheet_name }} - {{ cell.cell_reference }}
+                </h5>
+                <small class="text-muted">
+                    File: {{ cell.excel_file.original_filename }} | 
+                    Colonna: {{ cell.column_name }}
+                </small>
+            </div>
+            <div class="card-body">
+                <div class="cell-content">
+                    <h6 class="text-muted mb-2">Contenuto della cella:</h6>
+                    <div class="fs-5">{{ cell.text_content }}</div>
+                </div>
+                
+                <!-- Controlli di navigazione -->
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div>
+                        <a href="{{ url_for('annotation.browse_annotations') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i>Torna alla Lista
+                        </a>
+                    </div>
+                    <div>
+                        <small class="text-muted">
+                            Caratteri: {{ cell.text_content|length }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione etichettatura -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-tags me-2"></i>Assegna Etichette
+                </h5>
+                <small class="text-muted">Clicca sulle etichette per assegnarle/rimuoverle</small>
+            </div>
+            <div class="card-body">
+                <!-- Filtro per categoria -->
+                <div class="mb-3">
+                    <label for="categoryFilter" class="form-label">Filtra per categoria:</label>
+                    <select id="categoryFilter" class="form-select">
+                        <option value="">Tutte le categorie</option>
+                        {% set categories = labels|groupby('category') %}
+                        {% for category, group in categories if category %}
+                        <option value="{{ category }}">{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Etichette disponibili -->
+                <div id="labels-container">
+                    {% set categories = labels|groupby('category') %}
+                    {% for category, group in categories %}
+                    <div class="category-group mb-4" data-category="{{ category or '' }}">
+                        {% if category %}
+                        <h6 class="text-muted mb-2">
+                            <i class="bi bi-folder me-1"></i>{{ category }}
+                        </h6>
+                        {% else %}
+                        <h6 class="text-muted mb-2">
+                            <i class="bi bi-tags me-1"></i>Senza categoria
+                        </h6>
+                        {% endif %}
+                        
+                        <div class="d-flex flex-wrap">
+                            {% for label in group %}
+                            <span class="label-badge {{ 'selected' if label.id in user_label_ids else '' }}"
+                                  data-label-id="{{ label.id }}"
+                                  data-category="{{ label.category or '' }}"
+                                  style="background-color: {{ label.color }}; color: {{ '#fff' if label.color != '#ffffff' else '#000' }};"
+                                  title="{{ label.description or label.name }}">
+                                {{ label.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Azioni rapide -->
+                <div class="mt-4 pt-3 border-top">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="selectAllBtn">
+                            <i class="bi bi-check-all me-1"></i>Seleziona Tutte
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllBtn">
+                            <i class="bi bi-x-circle me-1"></i>Rimuovi Tutte
+                        </button>
+                        <a href="{{ url_for('labels.create_label') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle me-1"></i>Crea Nuova Etichetta
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar con storico annotazioni -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-clock-history me-2"></i>Storico Annotazioni
+                </h6>
+            </div>
+            <div class="card-body annotation-history">
+                {% if annotations %}
+                {% for annotation, label, user in annotations %}
+                <div class="card mb-2 {{ 'user-annotation' if annotation.user_id == current_user.id else 'other-annotation' }}">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="d-flex align-items-center">
+                                <span class="badge me-2" style="background-color: {{ label.color }};">
+                                    &nbsp;
+                                </span>
+                                <div>
+                                    <small class="fw-bold">{{ label.name }}</small>
+                                    {% if label.category %}
+                                    <br><small class="text-muted">{{ label.category }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block">{{ user.username }}</small>
+                                <small class="text-muted">{{ annotation.created_at.strftime('%d/%m %H:%M') }}</small>
+                            </div>
+                        </div>
+                        {% if label.description %}
+                        <div class="mt-1">
+                            <small class="text-muted">{{ label.description }}</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="bi bi-info-circle display-4 mb-2"></i>
+                    <p>Nessuna annotazione ancora.<br>Inizia assegnando alcune etichette!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Statistiche della cella -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-graph-up me-2"></i>Statistiche
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h4 class="text-primary">{{ annotations|length }}</h4>
+                            <small class="text-muted">Totale<br>Annotazioni</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success">{{ user_label_ids|length }}</h4>
+                        <small class="text-muted">Tue<br>Etichette</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="loadingSpinner" class="position-fixed top-50 start-50 translate-middle d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Caricamento...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cellId = {{ cell.id }};
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    // Gestione click sulle etichette
+    document.querySelectorAll('.label-badge').forEach(badge => {
+        badge.addEventListener('click', function() {
+            const labelId = this.dataset.labelId;
+            const isSelected = this.classList.contains('selected');
+            
+            if (isSelected) {
+                removeAnnotation(labelId, this);
+            } else {
+                addAnnotation(labelId, this);
+            }
+        });
+    });
+
+    // Filtra etichette per categoria
+    categoryFilter.addEventListener('change', function() {
+        const selectedCategory = this.value;
+        document.querySelectorAll('.category-group').forEach(group => {
+            const groupCategory = group.dataset.category;
+            if (selectedCategory === '' || groupCategory === selectedCategory) {
+                group.style.display = 'block';
+            } else {
+                group.style.display = 'none';
+            }
+        });
+    });
+
+    // Seleziona tutte le etichette visibili
+    selectAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.category-group:not([style*="display: none"]) .label-badge:not(.selected)').forEach(badge => {
+            const labelId = badge.dataset.labelId;
+            addAnnotation(labelId, badge);
+        });
+    });
+
+    // Rimuovi tutte le etichette
+    clearAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.label-badge.selected').forEach(badge => {
+            const labelId = badge.dataset.labelId;
+            removeAnnotation(labelId, badge);
+        });
+    });
+
+    // Funzione per aggiungere annotazione
+    function addAnnotation(labelId, badgeElement) {
+        showLoading();
+        
+        fetch('/annotation/api/add_annotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                cell_id: cellId,
+                label_id: parseInt(labelId)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                badgeElement.classList.add('selected');
+                showToast('Etichetta aggiunta con successo', 'success');
+                // Ricarica la pagina per aggiornare lo storico
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di connessione', 'error');
+        })
+        .finally(() => hideLoading());
+    }
+
+    // Funzione per rimuovere annotazione
+    function removeAnnotation(labelId, badgeElement) {
+        showLoading();
+        
+        fetch('/annotation/api/remove_annotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                cell_id: cellId,
+                label_id: parseInt(labelId)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                badgeElement.classList.remove('selected');
+                showToast('Etichetta rimossa con successo', 'success');
+                // Ricarica la pagina per aggiornare lo storico
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di connessione', 'error');
+        })
+        .finally(() => hideLoading());
+    }
+
+    // Utility functions
+    function showLoading() {
+        loadingSpinner.classList.remove('d-none');
+    }
+
+    function hideLoading() {
+        loadingSpinner.classList.add('d-none');
+    }
+
+    function showToast(message, type) {
+        // Crea un toast semplice
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} position-fixed top-0 end-0 m-3`;
+        toast.style.zIndex = '9999';
+        toast.textContent = message;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+});
+</script>
+{% endblock %}

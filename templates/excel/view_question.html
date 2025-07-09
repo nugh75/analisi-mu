@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}{{ question_name }} - {{ excel_file.original_filename }} - Analisi MU{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2>
+                    <i class="bi bi-question-circle me-2"></i>{{ question_name }}
+                </h2>
+                <p class="text-muted mb-0">
+                    File: {{ excel_file.original_filename }}
+                </p>
+            </div>
+            <div>
+                <a href="{{ url_for('excel.view_file', file_id=excel_file.id, view='questions') }}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-left me-1"></i>Torna alle Domande
+                </a>
+                <a href="{{ url_for('excel.questions_overview', file_id=excel_file.id) }}" class="btn btn-outline-primary">
+                    <i class="bi bi-grid-3x3-gap me-1"></i>Panoramica Domande
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiche della domanda -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-chat-text display-4 mb-2"></i>
+                <h4>{{ total_responses }}</h4>
+                <p class="mb-0">Risposte Totali</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-check2-square display-4 mb-2"></i>
+                <h4>{{ annotated_responses }}</h4>
+                <p class="mb-0">Risposte Annotate</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-percent display-4 mb-2"></i>
+                <h4>{{ "%.1f"|format((annotated_responses / total_responses * 100) if total_responses > 0 else 0) }}%</h4>
+                <p class="mb-0">Completamento</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Etichette più usate -->
+{% if popular_labels %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-tags me-2"></i>Etichette Più Usate
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    {% for label_name, label_color, count in popular_labels %}
+                    <span class="badge" style="background-color: {{ label_color }}; font-size: 0.9em;">
+                        {{ label_name }} ({{ count }})
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Navigazione rapida -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-skip-start me-2"></i>Navigazione Rapida
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name, page=1) }}" 
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-skip-backward me-1"></i>Prima Pagina
+                    </a>
+                    <a href="{{ url_for('annotation.annotate_cell', cell_id=responses.items[0].id) if responses.items else '#' }}" 
+                       class="btn btn-sm btn-success {{ 'disabled' if not responses.items else '' }}">
+                        <i class="bi bi-pencil me-1"></i>Inizia Annotazione
+                    </a>
+                    <a href="{{ url_for('labels.create_label') }}" class="btn btn-sm btn-info">
+                        <i class="bi bi-plus-circle me-1"></i>Crea Etichetta
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Risposte -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-chat-dots me-2"></i>Risposte
+                </h5>
+                <small class="text-muted">
+                    Pagina {{ responses.page }} di {{ responses.pages }} ({{ responses.total }} risposte totali)
+                </small>
+            </div>
+            <div class="card-body">
+                {% if responses.items %}
+                <div class="row">
+                    {% for response in responses.items %}
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100 border-start border-4 {{ 'border-success' if response.annotations else 'border-warning' }}">
+                            <div class="card-header bg-light py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Risposta #{{ response.row_index }}</strong>
+                                        <small class="text-muted ms-2">{{ response.sheet_name }}</small>
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=response.id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-pencil me-1"></i>Annota
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="response-content">
+                                    {{ response.text_content }}
+                                </div>
+                                
+                                <!-- Annotazioni esistenti -->
+                                {% set response_annotations = response.annotations %}
+                                {% if response_annotations %}
+                                <div class="mt-3 pt-3 border-top">
+                                    <h6 class="text-muted mb-2">
+                                        <i class="bi bi-tags me-1"></i>Annotazioni ({{ response_annotations|length }})
+                                    </h6>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for annotation in response_annotations %}
+                                        <span class="label-display" 
+                                              style="background-color: {{ annotation.label.color }};"
+                                              title="{{ annotation.label.description or annotation.label.name }} - {{ annotation.user.username }}">
+                                            {{ annotation.label.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="mt-3 pt-3 border-top text-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Non ancora annotata
+                                    </small>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer bg-light py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        {{ response.text_content|length }} caratteri
+                                    </small>
+                                    <small class="text-muted">
+                                        Riga {{ response.row_index }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Paginazione -->
+                {% if responses.pages > 1 %}
+                <nav aria-label="Navigazione risposte" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if responses.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name, page=responses.prev_num) }}">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in responses.iter_pages() %}
+                        {% if page_num %}
+                        {% if page_num != responses.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name, page=page_num) }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if responses.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name, page=responses.next_num) }}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-search display-4 text-muted mb-3"></i>
+                    <h6 class="text-muted">Nessuna risposta trovata per questa domanda</h6>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.response-content {
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+.label-display {
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+</style>
+{% endblock %}

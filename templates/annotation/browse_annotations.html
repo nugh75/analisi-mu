@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Naviga Annotazioni - Analisi MU{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2>
+                    <i class="bi bi-search me-2"></i>Naviga e Annota Celle
+                </h2>
+                <p class="text-muted">Esplora le celle testuali e assegna etichette tematiche</p>
+            </div>
+            <div>
+                <a href="{{ url_for('annotation.statistics') }}" class="btn btn-info">
+                    <i class="bi bi-graph-up me-2"></i>Vedi Statistiche
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtri -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-funnel me-2"></i>Filtri di Ricerca
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="file_id" class="form-label">File Excel</label>
+                        <select name="file_id" id="file_id" class="form-select">
+                            <option value="">Tutti i file</option>
+                            {% for file in files %}
+                            <option value="{{ file.id }}" {{ 'selected' if file.id == current_file_id else '' }}>
+                                {{ file.original_filename }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="sheet" class="form-label">Foglio Excel</label>
+                        <select name="sheet" id="sheet" class="form-select">
+                            <option value="">Tutti i fogli</option>
+                            {% for sheet in sheet_names %}
+                            <option value="{{ sheet }}" {{ 'selected' if sheet == current_sheet else '' }}>
+                                {{ sheet }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="annotated_only" class="form-label">Stato Annotazione</label>
+                        <select name="annotated_only" id="annotated_only" class="form-select">
+                            <option value="">Tutte le celle</option>
+                            <option value="1" {{ 'selected' if annotated_only else '' }}>Solo celle annotate</option>
+                            <option value="0" {{ 'selected' if annotated_only == False else '' }}>Solo celle non annotate</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-search me-1"></i>Applica Filtri
+                        </button>
+                        <a href="{{ url_for('annotation.browse_annotations') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Reset Filtri
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Risultati -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-grid-3x3-gap me-2"></i>Celle Testuali
+                </h5>
+                <small class="text-muted">
+                    Pagina {{ cells.page }} di {{ cells.pages }} ({{ cells.total }} celle trovate)
+                </small>
+            </div>
+            <div class="card-body">
+                {% if cells.items %}
+                <div class="row">
+                    {% for cell in cells.items %}
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100 border-start border-4 {% if cell.annotations %}border-success{% else %}border-warning{% endif %}">
+                            <div class="card-header bg-light py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ cell.excel_file.original_filename }}</strong>
+                                        <br>
+                                        <small class="text-muted">
+                                            {{ cell.sheet_name }}:{{ cell.cell_reference }} ({{ cell.column_name }})
+                                        </small>
+                                    </div>
+                                    <div>
+                                        {% if cell.annotations %}
+                                        <span class="badge bg-success">{{ cell.annotations|length }} annotazioni</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Non annotata</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="cell-content mb-3">
+                                    {{ cell.text_content }}
+                                </div>
+                                
+                                <!-- Annotazioni esistenti -->
+                                {% if cell.annotations %}
+                                <div class="mb-3">
+                                    <h6 class="text-muted mb-2">
+                                        <i class="bi bi-tags me-1"></i>Etichette Assegnate
+                                    </h6>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for annotation in cell.annotations %}
+                                        <span class="label-display" 
+                                              style="background-color: {{ annotation.label.color }};"
+                                              title="{{ annotation.label.description or annotation.label.name }} - {{ annotation.user.username }}">
+                                            {{ annotation.label.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        {{ cell.text_content|length }} caratteri | 
+                                        Riga {{ cell.row_index + 1 }}, Col {{ cell.column_index + 1 }}
+                                    </small>
+                                    <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" 
+                                       class="btn btn-primary btn-sm">
+                                        <i class="bi bi-pencil me-1"></i>Annota
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Paginazione -->
+                {% if cells.pages > 1 %}
+                <nav aria-label="Navigazione celle" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if cells.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('annotation.browse_annotations', 
+                                page=cells.prev_num, 
+                                file_id=current_file_id, 
+                                sheet=current_sheet, 
+                                annotated_only=annotated_only) }}">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in cells.iter_pages() %}
+                        {% if page_num %}
+                        {% if page_num != cells.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('annotation.browse_annotations', 
+                                page=page_num, 
+                                file_id=current_file_id, 
+                                sheet=current_sheet, 
+                                annotated_only=annotated_only) }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if cells.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('annotation.browse_annotations', 
+                                page=cells.next_num, 
+                                file_id=current_file_id, 
+                                sheet=current_sheet, 
+                                annotated_only=annotated_only) }}">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <!-- Stato vuoto -->
+                <div class="text-center py-5">
+                    <i class="bi bi-search display-4 text-muted mb-3"></i>
+                    <h6 class="text-muted">Nessuna Cella Trovata</h6>
+                    <p class="text-muted">
+                        {% if current_file_id or current_sheet or annotated_only %}
+                        Prova a modificare i filtri di ricerca o a caricare più file Excel.
+                        {% else %}
+                        Inizia caricando alcuni file Excel per estrarre le celle testuali da annotare.
+                        {% endif %}
+                    </p>
+                    {% if not files %}
+                    <a href="{{ url_for('excel.upload') }}" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload me-2"></i>Carica File Excel
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Azioni rapide -->
+{% if cells.items %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="mb-3">
+                    <i class="bi bi-lightning me-2"></i>Azioni Rapide
+                </h6>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ url_for('labels.create_label') }}" class="btn btn-info btn-sm">
+                        <i class="bi bi-plus-circle me-1"></i>Crea Nuova Etichetta
+                    </a>
+                    <a href="{{ url_for('labels.list_labels') }}" class="btn btn-secondary btn-sm">
+                        <i class="bi bi-tags me-1"></i>Gestisci Etichette
+                    </a>
+                    <a href="{{ url_for('excel.upload') }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-cloud-upload me-1"></i>Carica Altro File
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Aggiorna i fogli quando cambia il file
+    const fileSelect = document.getElementById('file_id');
+    const sheetSelect = document.getElementById('sheet');
+    
+    if (fileSelect && sheetSelect) {
+        fileSelect.addEventListener('change', function() {
+            const fileId = this.value;
+            
+            // Reset opzioni fogli
+            sheetSelect.innerHTML = '<option value="">Tutti i fogli</option>';
+            
+            if (fileId) {
+                // Qui potresti implementare una chiamata AJAX per ottenere i fogli
+                // Per ora manteniamo la lista attuale
+            }
+        });
+    }
+    
+    // Navigazione rapida con tastiera
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    const prevLink = document.querySelector('.pagination .page-item:not(.disabled) .page-link[href*="page=' + ({{ cells.page }} - 1) + '"]');
+                    if (prevLink) prevLink.click();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    const nextLink = document.querySelector('.pagination .page-item:not(.disabled) .page-link[href*="page=' + ({{ cells.page }} + 1) + '"]');
+                    if (nextLink) nextLink.click();
+                    break;
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
