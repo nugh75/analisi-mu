@@ -59,13 +59,15 @@ class Label(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text)
-    category = db.Column(db.String(50))
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    category = db.Column(db.String(50))  # Manteniamo per compatibilità, sarà deprecato
     color = db.Column(db.String(7), default='#007bff')  # Colore HEX
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relazioni
     annotations = db.relationship('CellAnnotation', backref='label', lazy=True, cascade='all, delete-orphan')
+    category_obj = db.relationship('Category', foreign_keys=[category_id], back_populates='labels')
     
     def __repr__(self):
         return f'<Label {self.name}>'
@@ -123,3 +125,19 @@ class CellAnnotation(db.Model):
     
     def __repr__(self):
         return f'<CellAnnotation User:{self.user_id} Label:{self.label_id} Cell:{self.text_cell_id}>'
+
+class Category(db.Model):
+    """Modello per le categorie delle etichette"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    color = db.Column(db.String(7), default='#6c757d')  # Colore per la categoria
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    labels = db.relationship('Label', foreign_keys='Label.category_id', back_populates='category_obj', lazy=True)
+    
+    def __repr__(self):
+        return f'<Category {self.name}>'

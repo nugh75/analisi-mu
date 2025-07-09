@@ -98,33 +98,36 @@
                     <label for="categoryFilter" class="form-label">Filtra per categoria:</label>
                     <select id="categoryFilter" class="form-select">
                         <option value="">Tutte le categorie</option>
-                        {% set categories = labels|groupby('category') %}
-                        {% for category, group in categories if category %}
-                        <option value="{{ category }}">{{ category }}</option>
+                        {% set categories = labels|map(attribute='category_obj')|unique %}
+                        {% for category in categories %}
+                        <option value="{{ category.name if category else 'none' }}">{{ category.name if category else 'Senza categoria' }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <!-- Etichette disponibili -->
                 <div id="labels-container">
-                    {% set categories = labels|groupby('category') %}
-                    {% for category, group in categories %}
-                    <div class="category-group mb-4" data-category="{{ category or '' }}">
+                    {% set labels_by_category = {} %}
+                    {% for label in labels %}
+                        {% set cat = label.category_obj %}
+                        {% set _ = labels_by_category.setdefault(cat, []).append(label) %}
+                    {% endfor %}
+                    {% for category, group in labels_by_category.items() %}
+                    <div class="category-group mb-4" data-category="{{ category.name if category else 'none' }}">
                         {% if category %}
                         <h6 class="text-muted mb-2">
-                            <i class="bi bi-folder me-1"></i>{{ category }}
+                            <i class="bi bi-folder me-1"></i>{{ category.name }}
                         </h6>
                         {% else %}
                         <h6 class="text-muted mb-2">
                             <i class="bi bi-tags me-1"></i>Senza categoria
                         </h6>
                         {% endif %}
-                        
                         <div class="d-flex flex-wrap">
                             {% for label in group %}
                             <span class="label-badge {{ 'selected' if label.id in user_label_ids else '' }}"
                                   data-label-id="{{ label.id }}"
-                                  data-category="{{ label.category or '' }}"
+                                  data-category="{{ category.name if category else 'none' }}"
                                   style="background-color: {{ label.color }}; color: {{ '#fff' if label.color != '#ffffff' else '#000' }};"
                                   title="{{ label.description or label.name }}">
                                 {{ label.name }}
@@ -144,7 +147,7 @@
                         <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllBtn">
                             <i class="bi bi-x-circle me-1"></i>Rimuovi Tutte
                         </button>
-                        <a href="{{ url_for('labels.create_label') }}" class="btn btn-outline-primary btn-sm">
+                        <a href="{{ url_for('labels.create_label', next=request.path) }}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-plus-circle me-1"></i>Crea Nuova Etichetta
                         </a>
                     </div>

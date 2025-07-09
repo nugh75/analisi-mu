@@ -128,7 +128,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set total_annotations = user_stats|map(1)|sum %}
+                            {% set total_annotations = 0 %}
+                            {% for u in user_stats %}
+                              {% set total_annotations = total_annotations + u[1] %}
+                            {% endfor %}
                             {% for username, count in user_stats %}
                             <tr>
                                 <td>

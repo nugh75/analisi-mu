@@ -180,7 +180,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set total_annotations = file_stats.label_stats|map(3)|sum %}
+                            {% set total_annotations = 0 %}
+                            {% for label in file_stats.label_stats %}
+                              {% set total_annotations = total_annotations + label[3] %}
+                            {% endfor %}
                             {% for label in file_stats.label_stats %}
                             <tr>
                                 <td>
@@ -232,7 +235,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set total_contributions = file_stats.contributors|map(1)|sum %}
+                            {% set total_contributions = 0 %}
+                            {% for contributor in file_stats.contributors %}
+                              {% set total_contributions = total_contributions + contributor[1] %}
+                            {% endfor %}
                             {% for contributor in file_stats.contributors %}
                             <tr>
                                 <td>

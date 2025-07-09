@@ -51,10 +51,18 @@ class LabelForm(FlaskForm):
         Optional(),
         Length(max=500, message='La descrizione non può superare i 500 caratteri')
     ], render_kw={"rows": 3})
-    category = StringField('Categoria', validators=[
+    category_id = SelectField('Categoria', 
+                             coerce=int,
+                             validators=[Optional()],
+                             description='Seleziona una categoria esistente')
+    new_category = StringField('Nuova Categoria', validators=[
         Optional(),
-        Length(max=50, message='La categoria non può superare i 50 caratteri')
-    ])
+        Length(max=50, message='Il nome della categoria non può superare i 50 caratteri')
+    ], description='Oppure crea una nuova categoria')
+    new_category_description = TextAreaField('Descrizione Nuova Categoria', validators=[
+        Optional(),
+        Length(max=500, message='La descrizione non può superare i 500 caratteri')
+    ], render_kw={"rows": 2})
     color = StringField('Colore', 
                        validators=[Optional()],
                        widget=ColorInput(),
@@ -63,8 +71,24 @@ class LabelForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(LabelForm, self).__init__(*args, **kwargs)
-        # Aggiungi suggerimenti per le categorie più comuni
-        self.category.render_kw = {
-            'list': 'category-suggestions',
-            'placeholder': 'es. emozione, opinione, strategia...'
-        }
+        from models import Category
+        # Popola le scelte delle categorie
+        categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+        self.category_id.choices = [(0, 'Nessuna categoria')] + [(cat.id, cat.name) for cat in categories]
+
+class CategoryForm(FlaskForm):
+    """Form per creare/modificare categorie"""
+    name = StringField('Nome Categoria', validators=[
+        DataRequired(message='Il nome è obbligatorio'),
+        Length(min=1, max=50, message='Il nome deve essere tra 1 e 50 caratteri')
+    ])
+    description = TextAreaField('Descrizione', validators=[
+        Optional(),
+        Length(max=500, message='La descrizione non può superare i 500 caratteri')
+    ], render_kw={"rows": 3})
+    color = StringField('Colore', 
+                       validators=[Optional()],
+                       widget=ColorInput(),
+                       default='#6c757d',
+                       description='Seleziona un colore per la categoria')
+    is_active = BooleanField('Attiva', default=True)
