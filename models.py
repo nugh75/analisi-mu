@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+import json
 
 # Questa istanza db sarà importata da app.py
 db = SQLAlchemy()
@@ -23,7 +24,7 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relazioni
-    annotations = db.relationship('CellAnnotation', backref='user', lazy=True, cascade='all, delete-orphan')
+    annotations = db.relationship('CellAnnotation', foreign_keys='CellAnnotation.user_id', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Imposta la password hashata"""
@@ -53,6 +54,21 @@ class User(UserMixin, db.Model):
     
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
+
+class Category(db.Model):
+    """Modello per le categorie di etichette"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    color = db.Column(db.String(7), default='#6c757d')  # Colore HEX
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    labels = db.relationship('Label', foreign_keys='Label.category_id', back_populates='category_obj')
+    
+    def __repr__(self):
+        return f'<Category {self.name}>'
 
 class Label(db.Model):
     """Modello per le etichette globali"""
@@ -100,7 +116,7 @@ class TextCell(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relazioni
-    annotations = db.relationship('CellAnnotation', backref='text_cell', lazy=True, cascade='all, delete-orphan')
+    # annotations verranno creati automaticamente dal backref in CellAnnotation
     
     @property
     def cell_reference(self):
@@ -111,6 +127,69 @@ class TextCell(db.Model):
     def __repr__(self):
         return f'<TextCell {self.sheet_name}:{self.cell_reference}>'
 
+class AIConfiguration(db.Model):
+    """Configurazione per i provider AI"""
+    id = db.Column(db.Integer, primary_key=True)
+    provider = db.Column(db.String(20), nullable=False)  # 'ollama' o 'openrouter'
+    name = db.Column(db.String(100), nullable=False)  # Nome descrittivo
+    
+    # Configurazione Ollama
+    ollama_url = db.Column(db.String(255))
+    ollama_model = db.Column(db.String(100))
+    
+    # Configurazione OpenRouter
+    openrouter_api_key = db.Column(db.String(255))
+    openrouter_model = db.Column(db.String(100))
+    
+    # Configurazione generale
+    is_active = db.Column(db.Boolean, default=True)
+    max_tokens = db.Column(db.Integer, default=1000)
+    temperature = db.Column(db.Float, default=0.7)
+    system_prompt = db.Column(db.Text)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'provider': self.provider,
+            'name': self.name,
+            'ollama_url': self.ollama_url,
+            'ollama_model': self.ollama_model,
+            'openrouter_model': self.openrouter_model,
+            'is_active': self.is_active,
+            'max_tokens': self.max_tokens,
+            'temperature': self.temperature
+        }
+
+class OpenRouterModel(db.Model):
+    """Modelli disponibili su OpenRouter"""
+    id = db.Column(db.Integer, primary_key=True)
+    model_id = db.Column(db.String(100), nullable=False, unique=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    context_length = db.Column(db.Integer)
+    pricing_prompt = db.Column(db.Float)  # Prezzo per token di input
+    pricing_completion = db.Column(db.Float)  # Prezzo per token di output
+    is_free = db.Column(db.Boolean, default=False)
+    is_available = db.Column(db.Boolean, default=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class OllamaModel(db.Model):
+    """Modelli disponibili su Ollama"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    tag = db.Column(db.String(50), nullable=False)
+    size = db.Column(db.BigInteger)  # Dimensione in bytes
+    digest = db.Column(db.String(100))
+    modified_at = db.Column(db.DateTime)
+    is_pulled = db.Column(db.Boolean, default=False)
+    pull_progress = db.Column(db.Float, default=0.0)  # Progresso del download 0-100
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (db.UniqueConstraint('name', 'tag', name='unique_model_tag'),)
+
 class CellAnnotation(db.Model):
     """Modello per le annotazioni delle celle"""
     id = db.Column(db.Integer, primary_key=True)
@@ -120,24 +199,33 @@ class CellAnnotation(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Vincolo di unicità: un utente può assegnare una etichetta a una cella solo una volta
-    __table_args__ = (db.UniqueConstraint('text_cell_id', 'label_id', 'user_id', name='unique_annotation'),)
-    
-    def __repr__(self):
-        return f'<CellAnnotation User:{self.user_id} Label:{self.label_id} Cell:{self.text_cell_id}>'
-
-class Category(db.Model):
-    """Modello per le categorie delle etichette"""
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False, unique=True)
-    description = db.Column(db.Text)
-    color = db.Column(db.String(7), default='#6c757d')  # Colore per la categoria
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Campi specifici per AI
+    is_ai_generated = db.Column(db.Boolean, default=False)
+    ai_confidence = db.Column(db.Float)  # Confidence score 0-1
+    ai_model = db.Column(db.String(100))  # Modello AI utilizzato
+    ai_provider = db.Column(db.String(20))  # Provider AI (ollama/openrouter)
+    status = db.Column(db.String(20), default='active')  # active, pending_review, rejected
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'))  # Chi ha approvato/rifiutato
+    reviewed_at = db.Column(db.DateTime)
     
     # Relazioni
-    labels = db.relationship('Label', foreign_keys='Label.category_id', back_populates='category_obj', lazy=True)
+    text_cell = db.relationship('TextCell', backref='annotations')
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'text_cell_id': self.text_cell_id,
+            'label_id': self.label_id,
+            'user_id': self.user_id,
+            'is_ai_generated': self.is_ai_generated,
+            'ai_confidence': self.ai_confidence,
+            'ai_model': self.ai_model,
+            'ai_provider': self.ai_provider,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None
+        }
     
     def __repr__(self):
-        return f'<Category {self.name}>'
+        return f'<CellAnnotation {self.id}: Cell {self.text_cell_id} -> Label {self.label_id}>'

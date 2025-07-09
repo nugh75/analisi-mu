@@ -82,10 +82,23 @@
                             <li><a class="dropdown-item" href="{{ url_for('admin.manage_users') }}">
                                 <i class="bi bi-people me-1"></i>Gestisci Utenti
                             </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">
+                                <i class="bi bi-robot me-1"></i>Intelligenza Artificiale
+                            </h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.ai_configuration') }}">
+                                <i class="bi bi-gear-fill me-1"></i>Configurazione AI
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.ollama_models') }}">
+                                <i class="bi bi-download me-1"></i>Modelli Ollama
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.openrouter_models') }}">
+                                <i class="bi bi-cloud me-1"></i>Modelli OpenRouter
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.backup_page') }}">
                                 <i class="bi bi-download me-1"></i>Backup Sistema
                             </a></li>
-                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.system_stats') }}">
                                 <i class="bi bi-bar-chart me-1"></i>Statistiche Sistema
                             </a></li>

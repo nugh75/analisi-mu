@@ -160,29 +160,29 @@
             </div>
             <div class="card-body annotation-history">
                 {% if annotations %}
-                {% for annotation, label, user in annotations %}
-                <div class="card mb-2 {{ 'user-annotation' if annotation.user_id == current_user.id else 'other-annotation' }}">
+                {% for item in annotations %}
+                <div class="card mb-2 {{ 'user-annotation' if item.annotation.user_id == current_user.id else 'other-annotation' }}">
                     <div class="card-body p-2">
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="d-flex align-items-center">
-                                <span class="badge me-2" style="background-color: {{ label.color }};">
+                                <span class="badge me-2" style="background-color: {{ item.label.color }};">
                                     &nbsp;
                                 </span>
                                 <div>
-                                    <small class="fw-bold">{{ label.name }}</small>
-                                    {% if label.category %}
-                                    <br><small class="text-muted">{{ label.category }}</small>
+                                    <small class="fw-bold">{{ item.label.name }}</small>
+                                    {% if item.label.category %}
+                                    <br><small class="text-muted">{{ item.label.category }}</small>
                                     {% endif %}
                                 </div>
                             </div>
                             <div class="text-end">
-                                <small class="text-muted d-block">{{ user.username }}</small>
-                                <small class="text-muted">{{ annotation.created_at.strftime('%d/%m %H:%M') }}</small>
+                                <small class="text-muted d-block">{{ item.user.username }}</small>
+                                <small class="text-muted">{{ item.annotation.created_at.strftime('%d/%m %H:%M') }}</small>
                             </div>
                         </div>
-                        {% if label.description %}
+                        {% if item.label.description %}
                         <div class="mt-1">
-                            <small class="text-muted">{{ label.description }}</small>
+                            <small class="text-muted">{{ item.label.description }}</small>
                         </div>
                         {% endif %}
                     </div>

@@ -12,6 +12,9 @@ from datetime import datetime
 import shutil
 
 from models import User, Label, ExcelFile, TextCell, CellAnnotation, db
+from models import AIConfiguration, OpenRouterModel, OllamaModel
+from services.ollama_client import OllamaClient
+from services.openrouter_client import OpenRouterClient, KNOWN_FREE_MODELS, POPULAR_PAID_MODELS
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -301,3 +304,270 @@ def system_stats():
     }
     
     return render_template('admin/system_stats.html', stats=stats)
+
+@admin_bp.route('/ai-config')
+@login_required
+@admin_required
+def ai_configuration():
+    """Configurazione AI"""
+    configurations = AIConfiguration.query.order_by(AIConfiguration.created_at.desc()).all()
+    ollama_models = OllamaModel.query.all()
+    openrouter_models = OpenRouterModel.query.all()
+    
+    return render_template('admin/ai_configuration.html', 
+                         configurations=configurations,
+                         ollama_models=ollama_models,
+                         openrouter_models=openrouter_models)
+
+@admin_bp.route('/ai-config/create', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_ai_config():
+    """Crea una nuova configurazione AI"""
+    if request.method == 'POST':
+        provider = request.form.get('provider')
+        name = request.form.get('name')
+        
+        # Disattiva le altre configurazioni se questa è marcata come attiva
+        is_active = request.form.get('is_active') == 'on'
+        if is_active:
+            AIConfiguration.query.update({'is_active': False})
+        
+        config = AIConfiguration(
+            provider=provider,
+            name=name,
+            is_active=is_active,
+            max_tokens=int(request.form.get('max_tokens', 1000)),
+            temperature=float(request.form.get('temperature', 0.7)),
+            system_prompt=request.form.get('system_prompt', '')
+        )
+        
+        if provider == 'ollama':
+            config.ollama_url = request.form.get('ollama_url')
+            config.ollama_model = request.form.get('ollama_model')
+        elif provider == 'openrouter':
+            config.openrouter_api_key = request.form.get('openrouter_api_key')
+            config.openrouter_model = request.form.get('openrouter_model')
+        
+        try:
+            db.session.add(config)
+            db.session.commit()
+            flash('Configurazione AI creata con successo.', 'success')
+            return redirect(url_for('admin.ai_configuration'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Errore nella creazione: {str(e)}', 'error')
+    
+    return render_template('admin/create_ai_config.html')
+
+@admin_bp.route('/ai-config/<int:config_id>/activate', methods=['POST'])
+@login_required
+@admin_required
+def activate_ai_config(config_id):
+    """Attiva una configurazione AI"""
+    try:
+        # Disattiva tutte le configurazioni
+        AIConfiguration.query.update({'is_active': False})
+        
+        # Attiva quella selezionata
+        config = AIConfiguration.query.get_or_404(config_id)
+        config.is_active = True
+        
+        db.session.commit()
+        flash('Configurazione attivata con successo.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore nell\'attivazione: {str(e)}', 'error')
+    
+    return redirect(url_for('admin.ai_configuration'))
+
+@admin_bp.route('/ai-config/<int:config_id>/test', methods=['POST'])
+@login_required
+@admin_required
+def test_ai_config(config_id):
+    """Testa una configurazione AI"""
+    config = AIConfiguration.query.get_or_404(config_id)
+    
+    try:
+        if config.provider == 'ollama':
+            client = OllamaClient(config.ollama_url)
+            is_connected = client.test_connection()
+            
+            if is_connected:
+                # Testa anche il modello specifico
+                models = client.list_models()
+                model_available = any(m['name'] == config.ollama_model for m in models)
+                
+                if model_available:
+                    return jsonify({'success': True, 'message': 'Connessione riuscita e modello disponibile'})
+                else:
+                    return jsonify({'success': False, 'message': f'Modello {config.ollama_model} non trovato'})
+            else:
+                return jsonify({'success': False, 'message': 'Impossibile connettersi a Ollama'})
+                
+        elif config.provider == 'openrouter':
+            client = OpenRouterClient(config.openrouter_api_key)
+            is_connected = client.test_connection()
+            
+            if is_connected:
+                return jsonify({'success': True, 'message': 'API key valida'})
+            else:
+                return jsonify({'success': False, 'message': 'API key non valida'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@admin_bp.route('/ollama/models')
+@login_required
+@admin_required
+def ollama_models():
+    """Gestione modelli Ollama"""
+    # Ottiene la configurazione Ollama attiva
+    ollama_config = AIConfiguration.query.filter_by(provider='ollama', is_active=True).first()
+    
+    if not ollama_config:
+        flash('Nessuna configurazione Ollama attiva trovata.', 'error')
+        return redirect(url_for('admin.ai_configuration'))
+    
+    client = OllamaClient(ollama_config.ollama_url)
+    
+    # Aggiorna i modelli nel database
+    try:
+        api_models = client.list_models()
+        
+        # Pulisci i modelli esistenti
+        OllamaModel.query.delete()
+        
+        # Aggiungi i modelli correnti
+        for model in api_models:
+            db_model = OllamaModel(
+                name=model.get('name', '').split(':')[0],
+                tag=model.get('name', '').split(':')[1] if ':' in model.get('name', '') else 'latest',
+                size=model.get('size', 0),
+                digest=model.get('digest', ''),
+                modified_at=datetime.now(),
+                is_pulled=True
+            )
+            db.session.add(db_model)
+        
+        db.session.commit()
+    except Exception as e:
+        flash(f'Errore nell\'aggiornamento modelli: {str(e)}', 'error')
+    
+    installed_models = OllamaModel.query.all()
+    available_models = client.search_models()
+    
+    return render_template('admin/ollama_models.html',
+                         installed_models=installed_models,
+                         available_models=available_models,
+                         ollama_url=ollama_config.ollama_url)
+
+@admin_bp.route('/ollama/pull/<model_name>', methods=['POST'])
+@login_required
+@admin_required
+def ollama_pull_model(model_name):
+    """Scarica un modello Ollama"""
+    ollama_config = AIConfiguration.query.filter_by(provider='ollama', is_active=True).first()
+    
+    if not ollama_config:
+        return jsonify({'error': 'Nessuna configurazione Ollama attiva'})
+    
+    client = OllamaClient(ollama_config.ollama_url)
+    
+    try:
+        # Crea il record nel database
+        db_model = OllamaModel(
+            name=model_name.split(':')[0],
+            tag=model_name.split(':')[1] if ':' in model_name else 'latest',
+            is_pulled=False,
+            pull_progress=0.0
+        )
+        db.session.add(db_model)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': f'Download di {model_name} avviato'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)})
+
+@admin_bp.route('/ollama/delete/<model_name>', methods=['POST'])
+@login_required
+@admin_required
+def ollama_delete_model(model_name):
+    """Elimina un modello Ollama"""
+    ollama_config = AIConfiguration.query.filter_by(provider='ollama', is_active=True).first()
+    
+    if not ollama_config:
+        return jsonify({'error': 'Nessuna configurazione Ollama attiva'})
+    
+    client = OllamaClient(ollama_config.ollama_url)
+    
+    try:
+        success = client.delete_model(model_name)
+        
+        if success:
+            # Rimuovi dal database
+            name_part = model_name.split(':')[0]
+            tag_part = model_name.split(':')[1] if ':' in model_name else 'latest'
+            
+            OllamaModel.query.filter_by(name=name_part, tag=tag_part).delete()
+            db.session.commit()
+            
+            return jsonify({'success': True, 'message': f'Modello {model_name} eliminato'})
+        else:
+            return jsonify({'error': 'Errore nell\'eliminazione del modello'})
+            
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@admin_bp.route('/openrouter/models')
+@login_required
+@admin_required
+def openrouter_models():
+    """Gestione modelli OpenRouter"""
+    openrouter_config = AIConfiguration.query.filter_by(provider='openrouter', is_active=True).first()
+    
+    free_models = KNOWN_FREE_MODELS
+    paid_models = POPULAR_PAID_MODELS
+    
+    # Se c'è una configurazione attiva, prova a ottenere i modelli dall'API
+    if openrouter_config and openrouter_config.openrouter_api_key:
+        try:
+            client = OpenRouterClient(openrouter_config.openrouter_api_key)
+            api_free_models = client.get_free_models()
+            api_paid_models = client.get_paid_models()
+            
+            if api_free_models:
+                free_models = api_free_models
+            if api_paid_models:
+                paid_models = api_paid_models[:20]  # Limita a 20 per non sovraccaricare l'UI
+                
+        except Exception as e:
+            flash(f'Errore nel recupero modelli da OpenRouter: {str(e)}', 'warning')
+    
+    return render_template('admin/openrouter_models.html',
+                         free_models=free_models,
+                         paid_models=paid_models,
+                         has_api_key=bool(openrouter_config and openrouter_config.openrouter_api_key))
+
+@admin_bp.route('/openrouter/usage')
+@login_required  
+@admin_required
+def openrouter_usage():
+    """Visualizza l'utilizzo di OpenRouter"""
+    openrouter_config = AIConfiguration.query.filter_by(provider='openrouter', is_active=True).first()
+    
+    if not openrouter_config or not openrouter_config.openrouter_api_key:
+        flash('Nessuna configurazione OpenRouter attiva con API key.', 'error')
+        return redirect(url_for('admin.ai_configuration'))
+    
+    try:
+        client = OpenRouterClient(openrouter_config.openrouter_api_key)
+        usage_data = client.get_usage()
+        
+        return render_template('admin/openrouter_usage.html', usage=usage_data)
+        
+    except Exception as e:
+        flash(f'Errore nel recupero dati utilizzo: {str(e)}', 'error')
+        return redirect(url_for('admin.ai_configuration'))

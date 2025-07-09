@@ -31,12 +31,21 @@ def annotate_cell(cell_id):
     categories = Category.query.order_by(Category.name).all()
     
     # Ottieni le annotazioni esistenti per questa cella
-    annotations = db.session.query(CellAnnotation, Label, User)\
-        .join(Label)\
-        .join(User)\
+    annotations = db.session.query(CellAnnotation)\
+        .join(Label, CellAnnotation.label_id == Label.id)\
+        .join(User, CellAnnotation.user_id == User.id)\
         .filter(CellAnnotation.text_cell_id == cell_id)\
         .order_by(CellAnnotation.created_at.desc())\
         .all()
+    
+    # Converti in una struttura che includa label e user
+    annotation_data = []
+    for annotation in annotations:
+        annotation_data.append({
+            'annotation': annotation,
+            'label': annotation.label,
+            'user': annotation.user
+        })
     
     # Annotazioni dell'utente corrente
     user_annotations = CellAnnotation.query.filter_by(
@@ -58,7 +67,7 @@ def annotate_cell(cell_id):
                          cell=cell,
                          labels=labels,
                          categories=categories,
-                         annotations=annotations,
+                         annotations=annotation_data,
                          user_label_ids=user_label_ids,
                          next_url=next_url)
 

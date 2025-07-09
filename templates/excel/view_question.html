@@ -28,7 +28,7 @@
 
 <!-- Statistiche della domanda -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-primary text-white">
             <div class="card-body text-center">
                 <i class="bi bi-chat-text display-4 mb-2"></i>
@@ -37,7 +37,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-success text-white">
             <div class="card-body text-center">
                 <i class="bi bi-check2-square display-4 mb-2"></i>
@@ -46,12 +46,72 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-info text-white">
             <div class="card-body text-center">
                 <i class="bi bi-percent display-4 mb-2"></i>
                 <h4>{{ "%.1f"|format((annotated_responses / total_responses * 100) if total_responses > 0 else 0) }}%</h4>
                 <p class="mb-0">Completamento</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-robot display-4 mb-2"></i>
+                <h4 id="ai-annotations-count">0</h4>
+                <p class="mb-0">AI Suggerimenti</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Panel AI -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-robot me-2"></i>Assistente AI per Etichettatura
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <p class="mb-3">
+                            Utilizza l'AI per generare automaticamente etichette per tutte le risposte non ancora annotate.
+                            Potrai poi rivedere e accettare/rifiutare ogni suggerimento.
+                        </p>
+                        
+                        <div id="ai-status" class="mb-3">
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">Stato:</span>
+                                <span id="ai-config-status" class="badge badge-secondary">Caricamento...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button id="generate-ai-labels" class="btn btn-primary" disabled>
+                                <i class="bi bi-magic"></i> Genera Etichette AI
+                            </button>
+                            <button id="review-ai-labels" class="btn btn-outline-info" disabled>
+                                <i class="bi bi-eye"></i> Rivedi Suggerimenti (<span id="pending-count">0</span>)
+                            </button>
+                            <button id="ai-settings" class="btn btn-outline-secondary">
+                                <i class="bi bi-gear"></i> Configurazione AI
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <div id="ai-progress" class="progress mb-2" style="display: none;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small id="ai-progress-text" class="text-muted"></small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -254,4 +314,153 @@
     font-weight: 500;
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Carica stato AI
+    loadAIStatus();
+    
+    // Event listeners
+    document.getElementById('generate-ai-labels').addEventListener('click', generateAILabels);
+    document.getElementById('review-ai-labels').addEventListener('click', openReviewPage);
+    document.getElementById('ai-settings').addEventListener('click', () => {
+        window.open('{{ url_for("admin.ai_configuration") }}', '_blank');
+    });
+    
+    // Aggiorna stato ogni 30 secondi
+    setInterval(loadAIStatus, 30000);
+});
+
+function loadAIStatus() {
+    const fileId = {{ excel_file.id }};
+    
+    // Carica configurazione AI
+    fetch('/ai/config/current')
+        .then(response => response.json())
+        .then(data => {
+            const statusBadge = document.getElementById('ai-config-status');
+            
+            if (data.success) {
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = `${data.config.provider} (${data.config.model})`;
+                document.getElementById('generate-ai-labels').disabled = false;
+            } else {
+                statusBadge.className = 'badge badge-danger';
+                statusBadge.textContent = 'Non configurato';
+            }
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento config AI:', error);
+            const statusBadge = document.getElementById('ai-config-status');
+            statusBadge.className = 'badge badge-danger';
+            statusBadge.textContent = 'Errore';
+        });
+    
+    // Carica statistiche AI
+    fetch(`/ai/status/${fileId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('ai-annotations-count').textContent = data.ai_stats.total;
+                document.getElementById('pending-count').textContent = data.ai_stats.pending;
+                
+                if (data.ai_stats.pending > 0) {
+                    document.getElementById('review-ai-labels').disabled = false;
+                    document.getElementById('review-ai-labels').classList.add('btn-warning');
+                    document.getElementById('review-ai-labels').classList.remove('btn-outline-info');
+                } else {
+                    document.getElementById('review-ai-labels').disabled = true;
+                    document.getElementById('review-ai-labels').classList.remove('btn-warning');
+                    document.getElementById('review-ai-labels').classList.add('btn-outline-info');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento statistiche AI:', error);
+        });
+}
+
+function generateAILabels() {
+    const button = document.getElementById('generate-ai-labels');
+    const progress = document.getElementById('ai-progress');
+    const progressBar = progress.querySelector('.progress-bar');
+    const progressText = document.getElementById('ai-progress-text');
+    const fileId = {{ excel_file.id }};
+    
+    // Conferma
+    if (!confirm('Vuoi generare etichette AI per tutte le risposte non ancora annotate?')) {
+        return;
+    }
+    
+    // UI
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando...';
+    progress.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Inizializzazione...';
+    
+    // Simula progresso
+    let progressValue = 0;
+    const progressInterval = setInterval(() => {
+        progressValue += Math.random() * 15;
+        if (progressValue > 90) progressValue = 90;
+        
+        progressBar.style.width = progressValue + '%';
+        progressText.textContent = `Elaborazione in corso... ${Math.round(progressValue)}%`;
+    }, 500);
+    
+    // Chiamata API
+    fetch(`/ai/generate/${fileId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            batch_size: 50
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(progressInterval);
+        
+        if (data.success) {
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Completato!';
+            
+            setTimeout(() => {
+                progress.style.display = 'none';
+                button.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+                button.disabled = false;
+                
+                alert(`Generazione completata!\n\nProcessate: ${data.total_processed} risposte\nAnnotazioni create: ${data.annotations_count}`);
+                
+                // Ricarica statistiche
+                loadAIStatus();
+                
+            }, 1000);
+        } else {
+            progress.style.display = 'none';
+            button.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+            button.disabled = false;
+            
+            alert('Errore nella generazione: ' + (data.error || 'Errore sconosciuto'));
+        }
+    })
+    .catch(error => {
+        clearInterval(progressInterval);
+        progress.style.display = 'none';
+        button.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+        button.disabled = false;
+        
+        alert('Errore di connessione: ' + error.message);
+    });
+}
+
+function openReviewPage() {
+    const fileId = {{ excel_file.id }};
+    window.open(`/ai/review/file/${fileId}`, '_blank');
+}
+</script>
 {% endblock %}

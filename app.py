@@ -41,6 +41,7 @@ def create_app():
     from routes.labels import labels_bp
     from routes.annotation import annotation_bp
     from routes.admin import admin_bp
+    from routes.ai import ai_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp, url_prefix='/')
@@ -48,6 +49,7 @@ def create_app():
     app.register_blueprint(labels_bp, url_prefix='/labels')
     app.register_blueprint(annotation_bp, url_prefix='/annotation')
     app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(ai_bp, url_prefix='/ai')
     
     # Creazione delle cartelle necessarie
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -140,4 +142,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5004)
