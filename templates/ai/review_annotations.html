@@ -419,20 +419,36 @@ function updateSelectedCount() {
     const selected = document.querySelectorAll('.annotation-checkbox:checked');
     const count = selected.length;
     
-    document.getElementById('selected-count').textContent = `${count} selezionati`;
-    document.getElementById('batch-accept').disabled = count === 0;
-    document.getElementById('batch-reject').disabled = count === 0;
+    console.log(`📊 Selected count: ${count}`);
+    
+    const countElement = document.getElementById('selected-count');
+    const batchAcceptBtn = document.getElementById('batch-accept');
+    const batchRejectBtn = document.getElementById('batch-reject');
+    
+    if (countElement) countElement.textContent = `${count} selezionati`;
+    if (batchAcceptBtn) batchAcceptBtn.disabled = count === 0;
+    if (batchRejectBtn) batchRejectBtn.disabled = count === 0;
+    
+    console.log(`🎛️ Buttons disabled: ${count === 0}`);
 }
 
 function selectAll() {
-    document.querySelectorAll('.annotation-checkbox').forEach(checkbox => {
+    console.log('🔄 Selecting all checkboxes...');
+    const checkboxes = document.querySelectorAll('.annotation-checkbox');
+    console.log(`📋 Found ${checkboxes.length} checkboxes`);
+    
+    checkboxes.forEach(checkbox => {
         checkbox.checked = true;
     });
     updateSelectedCount();
 }
 
 function selectNone() {
-    document.querySelectorAll('.annotation-checkbox').forEach(checkbox => {
+    console.log('🔄 Deselecting all checkboxes...');
+    const checkboxes = document.querySelectorAll('.annotation-checkbox');
+    console.log(`📋 Found ${checkboxes.length} checkboxes`);
+    
+    checkboxes.forEach(checkbox => {
         checkbox.checked = false;
     });
     updateSelectedCount();
@@ -489,33 +505,46 @@ function batchReject() {
 }
 
 function batchReview(action) {
+    console.log(`🚀 BATCH REVIEW: action=${action}`);
+    
     const selected = Array.from(document.querySelectorAll('.annotation-checkbox:checked'))
                           .map(checkbox => parseInt(checkbox.value));
     
-    if (selected.length === 0) return;
+    console.log(`📋 Selected annotations:`, selected);
     
-    if (!confirm(`Vuoi ${action === 'accept' ? 'accettare' : 'rifiutare'} ${selected.length} annotazioni?`)) {
+    if (selected.length === 0) {
+        console.log('❌ No annotations selected');
         return;
     }
     
+    if (!confirm(`Vuoi ${action === 'accept' ? 'accettare' : 'rifiutare'} ${selected.length} annotazioni?`)) {
+        console.log('❌ User cancelled action');
+        return;
+    }
+    
+    console.log(`📡 Sending batch request...`);
     fetch('/ai/review/batch', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({
             annotation_ids: selected,
             action: action
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log(`📨 Batch response status:`, response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log(`📨 Batch response data:`, data);
         if (data.success) {
             showNotification(data.message, 'success');
             
             // Rimuovi le annotazioni processate
             selected.forEach(id => {
+                console.log(`🗑️ Removing card for annotation ${id}`);
                 const card = document.querySelector(`[data-annotation-id="${id}"]`);
                 if (card) card.remove();
             });
@@ -524,6 +553,7 @@ function batchReview(action) {
             
             // Ricarica se non ci sono più annotazioni
             if (document.querySelectorAll('.annotation-card').length === 0) {
+                console.log(`🔄 No more annotations, reloading...`);
                 setTimeout(() => location.reload(), 1000);
             }
         } else {
@@ -531,6 +561,7 @@ function batchReview(action) {
         }
     })
     .catch(error => {
+        console.error('💥 Batch review error:', error);
         showNotification('Errore di connessione: ' + error.message, 'error');
     });
 }
