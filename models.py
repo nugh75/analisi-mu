@@ -16,8 +16,11 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+    role = db.Column(db.String(20), default='annotatore')  # 'amministratore' o 'annotatore'
+    is_active = db.Column(db.Boolean, default=True)
+    last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relazioni
     annotations = db.relationship('CellAnnotation', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -30,8 +33,26 @@ class User(UserMixin, db.Model):
         """Verifica la password"""
         return check_password_hash(self.password_hash, password)
     
+    @property
+    def is_admin(self):
+        """Compatibilità con il codice esistente"""
+        return self.role == 'amministratore'
+    
+    def can_manage_users(self):
+        """Verifica se l'utente può gestire altri utenti"""
+        return self.role == 'amministratore'
+    
+    def can_access_backup(self):
+        """Verifica se l'utente può accedere al backup"""
+        return self.role == 'amministratore'
+    
+    def update_last_login(self):
+        """Aggiorna il timestamp dell'ultimo login"""
+        self.last_login = datetime.utcnow()
+        db.session.commit()
+    
     def __repr__(self):
-        return f'<User {self.username}>'
+        return f'<User {self.username} ({self.role})>'
 
 class Label(db.Model):
     """Modello per le etichette globali"""

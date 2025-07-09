@@ -23,7 +23,12 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         
         if user and user.check_password(form.password.data):
+            if not user.is_active:
+                flash('Account disattivato. Contatta l\'amministratore.', 'error')
+                return render_template('auth/login.html', form=form)
+            
             login_user(user, remember=form.remember_me.data)
+            user.update_last_login()
             flash('Login effettuato con successo!', 'success')
             
             # Redirect alla pagina richiesta o alla homepage
