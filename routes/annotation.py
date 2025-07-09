@@ -15,7 +15,7 @@ from models import TextCell, Label, CellAnnotation, ExcelFile, User, db
 
 annotation_bp = Blueprint('annotation', __name__)
 
-@annotation_bp.route('/cell/<int:cell_id>')
+@annotation_bp.route('/cell/<int:cell_id>', methods=['GET', 'POST'])
 @login_required
 def annotate_cell(cell_id):
     """Pagina di annotazione per una singola cella"""
@@ -40,11 +40,20 @@ def annotate_cell(cell_id):
     
     user_label_ids = [ann.label_id for ann in user_annotations]
     
+    next_url = request.args.get('next') or request.form.get('next')
+
+    if request.method == 'POST':
+        # Esempio: gestione di una form classica (aggiungi qui la logica di salvataggio se serve)
+        # ...
+        flash('Annotazione salvata!', 'success')
+        return redirect(next_url or url_for('annotation.browse_annotations'))
+
     return render_template('annotation/annotate_cell.html',
                          cell=cell,
                          labels=labels,
                          annotations=annotations,
-                         user_label_ids=user_label_ids)
+                         user_label_ids=user_label_ids,
+                         next_url=next_url)
 
 @annotation_bp.route('/api/add_annotation', methods=['POST'])
 @login_required
@@ -143,7 +152,29 @@ def browse_annotations():
     page = request.args.get('page', 1, type=int)
     file_id = request.args.get('file_id', type=int)
     sheet_name = request.args.get('sheet', '')
-    annotated_only = request.args.get('annotated_only', type=bool)
+    annotated_only = request.args.get('annotated_only', '')
+    view_mode = request.args.get('view_mode', 'classic')
+    selected_question = request.args.get('question', '')
+    ajax = request.args.get('ajax', '')
+    
+    # Se è una richiesta AJAX, restituisci solo i dati dei filtri
+    if ajax == '1' and file_id:
+        sheets = db.session.query(TextCell.sheet_name)\
+                          .filter_by(excel_file_id=file_id)\
+                          .distinct().all()
+        sheet_names = [sheet[0] for sheet in sheets]
+        
+        questions = db.session.query(TextCell.column_name)\
+                             .filter_by(excel_file_id=file_id)\
+                             .distinct()\
+                             .order_by(TextCell.column_name)\
+                             .all()
+        question_names = [q[0] for q in questions if q[0]]
+        
+        return jsonify({
+            'sheets': sheet_names,
+            'questions': question_names
+        })
     
     query = TextCell.query
     
@@ -152,33 +183,89 @@ def browse_annotations():
     
     if sheet_name:
         query = query.filter_by(sheet_name=sheet_name)
+        
+    if selected_question:
+        query = query.filter_by(column_name=selected_question)
     
-    if annotated_only:
+    if annotated_only == '1':
         # Solo celle che hanno almeno un'annotazione
-        query = query.join(CellAnnotation)
+        query = query.join(CellAnnotation).distinct()
+    elif annotated_only == '0':
+        # Solo celle non annotate
+        query = query.outerjoin(CellAnnotation).filter(CellAnnotation.id.is_(None))
     
     cells = query.order_by(TextCell.excel_file_id, TextCell.sheet_name, 
                           TextCell.row_index, TextCell.column_index)\
-                 .paginate(page=page, per_page=10, error_out=False)
+                 .paginate(page=page, per_page=20, error_out=False)
     
     # Per i filtri
     files = ExcelFile.query.order_by(ExcelFile.original_filename).all()
     
+    # Ottieni tutti i fogli disponibili
     if file_id:
+        # Se è selezionato un file, mostra solo i fogli di quel file
         sheets = db.session.query(TextCell.sheet_name)\
                           .filter_by(excel_file_id=file_id)\
                           .distinct().all()
         sheet_names = [sheet[0] for sheet in sheets]
+        
+        # Ottieni tutte le domande/colonne per il file selezionato
+        questions = db.session.query(TextCell.column_name)\
+                             .filter_by(excel_file_id=file_id)\
+                             .distinct()\
+                             .order_by(TextCell.column_name)\
+                             .all()
+        question_names = [q[0] for q in questions if q[0]]
     else:
-        sheet_names = []
+        # Se non è selezionato nessun file, mostra tutti i fogli di tutti i file
+        sheets = db.session.query(TextCell.sheet_name)\
+                          .distinct().all()
+        sheet_names = [sheet[0] for sheet in sheets]
+        
+        # Ottieni tutte le domande/colonne di tutti i file
+        questions = db.session.query(TextCell.column_name)\
+                             .distinct()\
+                             .order_by(TextCell.column_name)\
+                             .all()
+        question_names = [q[0] for q in questions if q[0]]
+    
+    # Per la Vista per Domanda, calcola le statistiche per domanda
+    questions_stats = []
+    if view_mode == 'per_domanda':
+        # Ottieni statistiche per ogni domanda come in questions_overview
+        base_query = db.session.query(
+            TextCell.column_name,
+            db.func.count(TextCell.id).label('total_responses'),
+            db.func.count(CellAnnotation.id).label('annotated_responses')
+        ).outerjoin(CellAnnotation)
+        
+        # Applica filtro per file se selezionato
+        if file_id:
+            base_query = base_query.filter(TextCell.excel_file_id == file_id)
+        
+        # Applica filtro per domanda specifica se selezionata
+        if selected_question:
+            base_query = base_query.filter(TextCell.column_name == selected_question)
+        
+        # Applica filtro per foglio se selezionato
+        if sheet_name:
+            base_query = base_query.filter(TextCell.sheet_name == sheet_name)
+        
+        questions_stats = base_query.group_by(TextCell.column_name)\
+                                   .order_by(TextCell.column_name)\
+                                   .all()
     
     return render_template('annotation/browse_annotations.html',
                          cells=cells,
                          files=files,
                          sheet_names=sheet_names,
+                         question_names=question_names,
                          current_file_id=file_id,
                          current_sheet=sheet_name,
-                         annotated_only=annotated_only)
+                         selected_question=selected_question,
+                         annotated_only=annotated_only,
+                         view_mode=view_mode,
+                         questions_stats=questions_stats)
 
 @annotation_bp.route('/statistics')
 @login_required

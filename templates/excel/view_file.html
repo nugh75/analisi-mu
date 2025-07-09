@@ -94,8 +94,8 @@
         <div class="card bg-warning text-white">
             <div class="card-body text-center">
                 <i class="bi bi-pencil-square display-4 mb-2"></i>
-                <h4>{{ cells.items|selectattr('annotations')|list|length if view_mode == 'cells' else 'N/A' }}</h4>
-                <p class="mb-0">Annotate</p>
+                <h4>{{ annotated_cells_count }}</h4>
+                <p class="mb-0">Celle Annotate</p>
             </div>
         </div>
     </div>
@@ -205,27 +205,31 @@
                     </small>
                 </div>
                 <div class="card-body">
-                    {% if question_names %}
+                    {% if questions_stats %}
                     <div class="row">
-                        {% for question in question_names %}
-                        {% set question_responses = cells.items|selectattr('column_name', 'equalto', question)|list %}
-                        {% set question_responses_count = question_responses|length %}
-                        {% set question_annotated = question_responses|selectattr('annotations')|list|length %}
-                        {% set question_progress = (question_annotated / question_responses_count * 100) if question_responses_count > 0 else 0 %}
+                        {% for question_name, total_responses, annotated_responses in questions_stats %}
+                        {% set question_progress = (annotated_responses / total_responses * 100) if total_responses > 0 else 0 %}
                         
                         <div class="col-lg-6 col-xl-4 mb-4">
                             <div class="card h-100 border-start border-4 {{ 'border-success' if question_progress == 100 else 'border-warning' if question_progress > 0 else 'border-secondary' }}">
                                 <div class="card-header bg-light py-2">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div class="flex-grow-1">
-                                            <h6 class="mb-1">{{ question }}</h6>
+                                            <h6 class="mb-1">{{ question_name }}</h6>
                                             <div class="d-flex gap-2 mb-2">
-                                                <span class="badge bg-primary">{{ question_responses_count }} risposte</span>
-                                                {% if question_annotated > 0 %}
-                                                <span class="badge bg-success">{{ question_annotated }} annotate</span>
+                                                <span class="badge bg-primary">{{ total_responses }} risposte</span>
+                                                {% if annotated_responses > 0 %}
+                                                <span class="badge bg-success">{{ annotated_responses }} annotate</span>
                                                 {% endif %}
                                             </div>
                                         </div>
+                                        {% if question_progress == 100 %}
+                                        <span class="badge bg-success">Completata</span>
+                                        {% elif question_progress > 0 %}
+                                        <span class="badge bg-warning">In corso</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Non iniziata</span>
+                                        {% endif %}
                                     </div>
                                     
                                     <!-- Barra di progresso -->
@@ -242,30 +246,28 @@
                                 </div>
                                 
                                 <div class="card-body py-2">
-                                    <!-- Anteprima prime risposte -->
-                                    {% if question_responses[:2] %}
+                                    <!-- Anteprima prime risposte dalla paginazione corrente -->
+                                    {% set sample_responses = cells.items|selectattr('column_name', 'equalto', question_name)|list %}
+                                    {% if sample_responses[:2] %}
                                     <div class="mb-3">
-                                        <small class="text-muted d-block mb-2">Anteprima risposte:</small>
-                                        {% for response in question_responses[:2] %}
+                                        <small class="text-muted d-block mb-2">Anteprima risposte (pagina corrente):</small>
+                                        {% for response in sample_responses[:2] %}
                                         <div class="p-2 bg-light rounded mb-1">
                                             <small>{{ response.text_content[:80] }}{{ '...' if response.text_content|length > 80 else '' }}</small>
                                         </div>
                                         {% endfor %}
-                                        {% if question_responses|length > 2 %}
-                                        <small class="text-muted">...e altre {{ question_responses|length - 2 }} risposte</small>
-                                        {% endif %}
                                     </div>
                                     {% endif %}
                                 </div>
                                 
                                 <div class="card-footer bg-light py-2">
                                     <div class="d-flex gap-1 justify-content-center">
-                                        <a href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question) }}" 
+                                        <a href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name) }}" 
                                            class="btn btn-sm btn-primary">
                                             <i class="bi bi-eye me-1"></i>Vedi Tutte
                                         </a>
-                                        {% if question_responses %}
-                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=question_responses[0].id) }}" 
+                                        {% if sample_responses %}
+                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=sample_responses[0].id) }}" 
                                            class="btn btn-sm btn-success">
                                             <i class="bi bi-pencil me-1"></i>Annota
                                         </a>
@@ -447,6 +449,40 @@
                         <i class="bi bi-graph-up me-1"></i>Vedi Statistiche
                     </a>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sezione: Commenti per Etichetta -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-tags me-2"></i>Commenti per Etichetta</h5>
+            </div>
+            <div class="card-body">
+                {% if label_comments and label_comments|length > 0 %}
+                    {% for label, comments in label_comments %}
+                        <div class="mb-4">
+                            <h6>
+                                <span class="label-display" style="background-color: {{ label.color }};">
+                                    {{ label.name }}
+                                </span>
+                                <small class="text-muted ms-2">({{ comments|length }} commenti)</small>
+                            </h6>
+                            <ul class="list-group">
+                                {% for comment in comments %}
+                                <li class="list-group-item">{{ comment }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted">
+                        Nessun commento etichettato trovato per questo file.
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

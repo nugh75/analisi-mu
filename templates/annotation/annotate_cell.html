@@ -71,7 +71,7 @@
                 <!-- Controlli di navigazione -->
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <div>
-                        <a href="{{ url_for('annotation.browse_annotations') }}" class="btn btn-outline-secondary">
+                        <a href="{{ next_url or request.args.get('next') or url_for('excel.questions_overview', file_id=cell.excel_file.id) }}" class="btn btn-outline-secondary">
                             <i class="bi bi-arrow-left me-1"></i>Torna alla Lista
                         </a>
                     </div>

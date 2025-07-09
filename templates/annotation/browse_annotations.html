@@ -21,6 +21,79 @@
     </div>
 </div>
 
+<!-- Panoramica File -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-excel me-2"></i>File Disponibili
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if files %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome File</th>
+                                <th>Caricato da</th>
+                                <th>Data Caricamento</th>
+                                <th>Celle Estratte</th>
+                                <th>Annotazioni</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in files %}
+                            <tr>
+                                <td>
+                                    <strong>{{ file.original_filename }}</strong>
+                                    {% if file.id == current_file_id %}
+                                    <span class="badge bg-primary ms-2">Selezionato</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ file.uploader.username }}</td>
+                                <td>{{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>
+                                    {% set total_cells = file.text_cells|length %}
+                                    <span class="badge bg-info">{{ total_cells }}</span>
+                                </td>
+                                <td>
+                                    {% set total_annotations = file.text_cells|map(attribute='annotations')|map('length')|sum %}
+                                    <span class="badge bg-success">{{ total_annotations }}</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('excel.view_file', file_id=file.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="Visualizza File">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('annotation.browse_annotations', file_id=file.id, view_mode=view_mode) }}" 
+                                           class="btn btn-sm btn-outline-success" title="Naviga Celle">
+                                            <i class="bi bi-search"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-file-earmark-x display-4 text-muted"></i>
+                    <p class="text-muted mt-2">Nessun file Excel caricato</p>
+                    <a href="{{ url_for('excel.upload') }}" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload me-1"></i>Carica File Excel
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Filtri -->
 <div class="row mb-4">
     <div class="col-12">
@@ -31,9 +104,11 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="GET" class="row g-3">
-                    <div class="col-md-4">
-                        <label for="file_id" class="form-label">File Excel</label>
+                <form method="GET" class="row g-3" id="filters-form">
+                    <div class="col-md-3">
+                        <label for="file_id" class="form-label">
+                            <i class="bi bi-file-earmark-excel me-1"></i>File Excel
+                        </label>
                         <select name="file_id" id="file_id" class="form-select">
                             <option value="">Tutti i file</option>
                             {% for file in files %}
@@ -42,9 +117,14 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if current_file_id %}
+                        <small class="text-muted">File selezionato</small>
+                        {% endif %}
                     </div>
-                    <div class="col-md-4">
-                        <label for="sheet" class="form-label">Foglio Excel</label>
+                    <div class="col-md-3">
+                        <label for="sheet" class="form-label">
+                            <i class="bi bi-table me-1"></i>Foglio Excel
+                        </label>
                         <select name="sheet" id="sheet" class="form-select">
                             <option value="">Tutti i fogli</option>
                             {% for sheet in sheet_names %}
@@ -53,22 +133,64 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if not current_file_id and not sheet_names %}
+                        <small class="text-muted">Seleziona un file per vedere i fogli</small>
+                        {% endif %}
                     </div>
-                    <div class="col-md-4">
-                        <label for="annotated_only" class="form-label">Stato Annotazione</label>
+                    <div class="col-md-3">
+                        <label for="question" class="form-label">
+                            <i class="bi bi-question-circle me-1"></i>Domanda Specifica
+                        </label>
+                        <select name="question" id="question" class="form-select">
+                            <option value="">Tutte le domande</option>
+                            {% for question in question_names %}
+                            <option value="{{ question }}" {{ 'selected' if question == selected_question else '' }}>
+                                {{ question[:50] }}{{ '...' if question|length > 50 else '' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not current_file_id and not question_names %}
+                        <small class="text-muted">Seleziona un file per vedere le domande</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="annotated_only" class="form-label">
+                            <i class="bi bi-check-circle me-1"></i>Stato Annotazione
+                        </label>
                         <select name="annotated_only" id="annotated_only" class="form-select">
                             <option value="">Tutte le celle</option>
-                            <option value="1" {{ 'selected' if annotated_only else '' }}>Solo celle annotate</option>
-                            <option value="0" {{ 'selected' if annotated_only == False else '' }}>Solo celle non annotate</option>
+                            <option value="1" {{ 'selected' if annotated_only == '1' else '' }}>Solo celle annotate</option>
+                            <option value="0" {{ 'selected' if annotated_only == '0' else '' }}>Solo celle non annotate</option>
                         </select>
                     </div>
                     <div class="col-12">
-                        <button type="submit" class="btn btn-primary me-2">
-                            <i class="bi bi-search me-1"></i>Applica Filtri
-                        </button>
-                        <a href="{{ url_for('annotation.browse_annotations') }}" class="btn btn-outline-secondary">
-                            <i class="bi bi-x-circle me-1"></i>Reset Filtri
-                        </a>
+                        <input type="hidden" name="view_mode" value="{{ view_mode }}">
+                        <div class="d-flex gap-2 align-items-center">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search me-1"></i>Applica Filtri
+                            </button>
+                            <a href="{{ url_for('annotation.browse_annotations', view_mode=view_mode) }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-1"></i>Reset Filtri
+                            </a>
+                            {% if current_file_id or current_sheet or selected_question or annotated_only %}
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% if current_file_id %}
+                                <span class="badge bg-primary">File: {{ files|selectattr('id', 'equalto', current_file_id)|map(attribute='original_filename')|first }}</span>
+                                {% endif %}
+                                {% if current_sheet %}
+                                <span class="badge bg-info">Foglio: {{ current_sheet }}</span>
+                                {% endif %}
+                                {% if selected_question %}
+                                <span class="badge bg-success">Domanda: {{ selected_question[:30] }}{{ '...' if selected_question|length > 30 else '' }}</span>
+                                {% endif %}
+                                {% if annotated_only == '1' %}
+                                <span class="badge bg-warning">Solo annotate</span>
+                                {% elif annotated_only == '0' %}
+                                <span class="badge bg-secondary">Solo non annotate</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </form>
             </div>
@@ -81,49 +203,133 @@
     <div class="col-12">
         <ul class="nav nav-tabs">
             <li class="nav-item">
-                <a class="nav-link {% if request.args.get('view_mode', 'classic') == 'classic' %}active{% endif %}" href="?view_mode=classic&file_id={{ current_file_id }}&sheet={{ current_sheet }}&annotated_only={{ annotated_only }}">Vista Classica</a>
+                <a class="nav-link {% if view_mode == 'classic' %}active{% endif %}" href="?view_mode=classic&file_id={{ current_file_id or '' }}&sheet={{ current_sheet or '' }}&question={{ selected_question or '' }}&annotated_only={{ annotated_only or '' }}">Vista Classica</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if request.args.get('view_mode') == 'per_domanda' %}active{% endif %}" href="?view_mode=per_domanda&file_id={{ current_file_id }}&sheet={{ current_sheet }}&annotated_only={{ annotated_only }}">Vista per Domanda</a>
+                <a class="nav-link {% if view_mode == 'per_domanda' %}active{% endif %}" href="?view_mode=per_domanda&file_id={{ current_file_id or '' }}&sheet={{ current_sheet or '' }}&question={{ selected_question or '' }}&annotated_only={{ annotated_only or '' }}">Vista per Domanda</a>
             </li>
         </ul>
     </div>
 </div>
 
-{% if request.args.get('view_mode', 'classic') == 'per_domanda' %}
-    {% set cells_by_question = {} %}
-    {% for cell in cells.items %}
-        {% set _ = cells_by_question.setdefault(cell.column_name, []).append(cell) %}
-    {% endfor %}
-    <div class="row mt-4">
+<!-- Debug Info -->
+<!-- view_mode: {{ view_mode }} -->
+<!-- request.args.get('view_mode'): {{ request.args.get('view_mode') }} -->
+
+{% if view_mode == 'per_domanda' or request.args.get('view_mode') == 'per_domanda' %}
+    <!-- VISTA PER DOMANDA ATTIVA -->
+    <div class="row">
         <div class="col-12">
-            {% for question, question_cells in cells_by_question.items() %}
-            <div class="card mb-3">
-                <div class="card-header bg-light">
-                    <strong>{{ question }}</strong>
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle me-2"></i>Vista per Domanda
+                        {% if current_file_id %}
+                        <span class="badge bg-primary">{{ files|selectattr('id', 'equalto', current_file_id)|map(attribute='original_filename')|first }}</span>
+                        {% endif %}
+                    </h5>
+                    <small class="text-muted">
+                        {{ questions_stats|length }} domande trovate
+                    </small>
                 </div>
                 <div class="card-body">
+                    {% if questions_stats %}
                     <div class="row">
-                        {% for cell in question_cells %}
-                        <div class="col-md-6 col-lg-4 mb-3">
-                            <div class="border rounded p-2 h-100">
-                                <div class="small text-muted mb-1">Riga: {{ cell.row_index + 1 }}</div>
-                                <div class="cell-content small mb-2">{{ cell.text_content }}</div>
-                                {% if cell.annotations %}
-                                    <span class="badge bg-success mb-1">{{ cell.annotations|length }} annotazioni</span>
-                                {% else %}
-                                    <span class="badge bg-secondary mb-1">Non annotata</span>
-                                {% endif %}
-                                <div>
-                                    <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" class="btn btn-sm btn-outline-primary mt-2">Annota</a>
+                        {% for question_name, total_responses, annotated_responses in questions_stats %}
+                        {% set progress = (annotated_responses / total_responses * 100) if total_responses > 0 else 0 %}
+                        
+                        <div class="col-lg-6 col-xl-4 mb-4">
+                            <div class="card h-100 border-start border-4 {{ 'border-success' if progress == 100 else 'border-warning' if progress > 0 else 'border-secondary' }}">
+                                <div class="card-header bg-light py-2">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">{{ question_name }}</h6>
+                                            <div class="d-flex gap-2 mb-2">
+                                                <span class="badge bg-primary">{{ total_responses }} risposte</span>
+                                                {% if annotated_responses > 0 %}
+                                                <span class="badge bg-success">{{ annotated_responses }} annotate</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% if progress == 100 %}
+                                        <span class="badge bg-success">Completata</span>
+                                        {% elif progress > 0 %}
+                                        <span class="badge bg-warning">In corso</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Non iniziata</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Barra di progresso -->
+                                    <div class="progress mb-2" style="height: 8px;">
+                                        <div class="progress-bar {{ 'bg-success' if progress == 100 else 'bg-warning' if progress > 0 else 'bg-secondary' }}" 
+                                             role="progressbar" 
+                                             style="width: {{ progress }}%;" 
+                                             aria-valuenow="{{ progress }}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Progresso: {{ "%.0f"|format(progress) }}%</small>
+                                </div>
+                                
+                                <div class="card-body py-2">
+                                    <!-- Anteprima prime risposte -->
+                                    {% if current_file_id %}
+                                    {% set sample_responses = cells.items|selectattr('column_name', 'equalto', question_name)|list %}
+                                    {% if sample_responses[:2] %}
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block mb-2">Anteprima risposte:</small>
+                                        {% for response in sample_responses[:2] %}
+                                        <div class="p-2 bg-light rounded mb-1">
+                                            <small>{{ response.text_content[:80] }}{{ '...' if response.text_content|length > 80 else '' }}</small>
+                                        </div>
+                                        {% endfor %}
+                                        {% if sample_responses|length > 2 %}
+                                        <small class="text-muted">...e altre {{ sample_responses|length - 2 }} risposte</small>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% else %}
+                                    <div class="mb-3">
+                                        <small class="text-muted">Seleziona un file per vedere l'anteprima delle risposte</small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="card-footer bg-light py-2">
+                                    <div class="d-flex gap-1 justify-content-center">
+                                        <a href="{{ url_for('annotation.browse_annotations', question=question_name, file_id=current_file_id, view_mode='classic') }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye me-1"></i>Vedi Tutte
+                                        </a>
+                                        {% if current_file_id %}
+                                        {% set sample_responses = cells.items|selectattr('column_name', 'equalto', question_name)|list %}
+                                        {% if sample_responses %}
+                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=sample_responses[0].id) }}" 
+                                           class="btn btn-sm btn-success">
+                                            <i class="bi bi-pencil me-1"></i>Annota
+                                        </a>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         {% endfor %}
                     </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        {% if current_file_id %}
+                        Nessuna domanda trovata per questo file. Controlla i filtri o verifica che il file contenga delle intestazioni di colonna.
+                        {% else %}
+                        Nessuna domanda trovata. Carica alcuni file Excel o seleziona un file specifico per vedere le domande disponibili.
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            {% endfor %}
         </div>
     </div>
 {% else %}
@@ -212,7 +418,8 @@
                                 page=cells.prev_num, 
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
-                                annotated_only=annotated_only) }}">
+                                annotated_only=annotated_only,
+                                view_mode=view_mode) }}">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
                         </li>
@@ -226,7 +433,8 @@
                                 page=page_num, 
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
-                                annotated_only=annotated_only) }}">
+                                annotated_only=annotated_only,
+                                view_mode=view_mode) }}">
                                 {{ page_num }}
                             </a>
                         </li>
@@ -248,7 +456,8 @@
                                 page=cells.next_num, 
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
-                                annotated_only=annotated_only) }}">
+                                annotated_only=annotated_only,
+                                view_mode=view_mode) }}">
                                 <i class="bi bi-chevron-right"></i>
                             </a>
                         </li>
@@ -280,9 +489,10 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Azioni rapide -->
-{% if cells.items %}
+{% if cells is defined and cells and cells.items %}
 <div class="row mt-4">
     <div class="col-12">
         <div class="card bg-light">
@@ -306,28 +516,62 @@
     </div>
 </div>
 {% endif %}
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Aggiorna i fogli quando cambia il file
+    // Aggiorna i filtri quando cambia il file
     const fileSelect = document.getElementById('file_id');
     const sheetSelect = document.getElementById('sheet');
+    const questionSelect = document.getElementById('question');
     
-    if (fileSelect && sheetSelect) {
+    if (fileSelect && sheetSelect && questionSelect) {
         fileSelect.addEventListener('change', function() {
             const fileId = this.value;
             
-            // Reset opzioni fogli
-            sheetSelect.innerHTML = '<option value="">Tutti i fogli</option>';
-            
             if (fileId) {
-                // Qui potresti implementare una chiamata AJAX per ottenere i fogli
-                // Per ora manteniamo la lista attuale
+                // Fai una richiesta AJAX per ottenere i fogli e le domande del file selezionato
+                fetch(`/annotation/browse?file_id=${fileId}&ajax=1`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Aggiorna le opzioni dei fogli
+                        sheetSelect.innerHTML = '<option value="">Tutti i fogli</option>';
+                        data.sheets.forEach(sheet => {
+                            const option = document.createElement('option');
+                            option.value = sheet;
+                            option.textContent = sheet;
+                            sheetSelect.appendChild(option);
+                        });
+                        
+                        // Aggiorna le opzioni delle domande
+                        questionSelect.innerHTML = '<option value="">Tutte le domande</option>';
+                        data.questions.forEach(question => {
+                            const option = document.createElement('option');
+                            option.value = question;
+                            option.textContent = question.length > 50 ? question.substring(0, 50) + '...' : question;
+                            questionSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Errore nel caricamento dei filtri:', error);
+                    });
+            } else {
+                // Se non è selezionato nessun file, ricarica la pagina per mostrare tutte le opzioni
+                window.location.href = `${window.location.pathname}?view_mode={{ view_mode }}`;
             }
         });
     }
+    
+    // Auto-submit quando cambia un filtro (opzionale)
+    const filters = document.querySelectorAll('#file_id, #sheet, #question, #annotated_only');
+    filters.forEach(filter => {
+        filter.addEventListener('change', function() {
+            // Opzionale: submit automatico del form
+            // this.form.submit();
+        });
+    });
     
     // Navigazione rapida con tastiera
     document.addEventListener('keydown', function(e) {
@@ -335,13 +579,27 @@ document.addEventListener('DOMContentLoaded', function() {
             switch(e.key) {
                 case 'ArrowLeft':
                     e.preventDefault();
-                    const prevLink = document.querySelector('.pagination .page-item:not(.disabled) .page-link[href*="page=' + ({{ cells.page }} - 1) + '"]');
-                    if (prevLink) prevLink.click();
+                    {% if cells is defined and cells.has_prev %}
+                    window.location.href = "{{ url_for('annotation.browse_annotations', 
+                        page=cells.prev_num, 
+                        file_id=current_file_id, 
+                        sheet=current_sheet, 
+                        question=selected_question,
+                        annotated_only=annotated_only,
+                        view_mode=view_mode) }}";
+                    {% endif %}
                     break;
                 case 'ArrowRight':
                     e.preventDefault();
-                    const nextLink = document.querySelector('.pagination .page-item:not(.disabled) .page-link[href*="page=' + ({{ cells.page }} + 1) + '"]');
-                    if (nextLink) nextLink.click();
+                    {% if cells is defined and cells.has_next %}
+                    window.location.href = "{{ url_for('annotation.browse_annotations', 
+                        page=cells.next_num, 
+                        file_id=current_file_id, 
+                        sheet=current_sheet, 
+                        question=selected_question,
+                        annotated_only=annotated_only,
+                        view_mode=view_mode) }}";
+                    {% endif %}
                     break;
             }
         }

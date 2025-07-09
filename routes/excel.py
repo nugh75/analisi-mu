@@ -163,6 +163,53 @@ def view_file(file_id):
     total_responses = query.count()
     questions_count = len(question_names)
     
+    # Calcola il numero di celle annotate per questo file
+    annotated_cells_count = db.session.query(TextCell.id)\
+        .filter_by(excel_file_id=file_id)\
+        .join(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+        .distinct().count()
+    
+    # Se c'è un filtro foglio, calcola le annotazioni solo per quel foglio
+    if sheet_filter:
+        annotated_cells_count = db.session.query(TextCell.id)\
+            .filter_by(excel_file_id=file_id, sheet_name=sheet_filter)\
+            .join(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+            .distinct().count()
+    
+    # Per la vista per domande, calcola le statistiche per ogni domanda
+    questions_stats = []
+    if view_mode == 'questions':
+        base_query = db.session.query(
+            TextCell.column_name,
+            db.func.count(TextCell.id).label('total_responses'),
+            db.func.count(CellAnnotation.id).label('annotated_responses')
+        ).outerjoin(CellAnnotation)\
+         .filter(TextCell.excel_file_id == file_id)
+        
+        # Applica filtro per foglio se selezionato
+        if sheet_filter:
+            base_query = base_query.filter(TextCell.sheet_name == sheet_filter)
+        
+        questions_stats = base_query.group_by(TextCell.column_name)\
+                                   .order_by(TextCell.column_name)\
+                                   .all()
+    
+    # Recupera tutte le annotazioni del file
+    annotations = db.session.query(CellAnnotation, Label, TextCell)\
+        .join(Label, CellAnnotation.label_id == Label.id)\
+        .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+        .filter(TextCell.excel_file_id == file_id)\
+        .all()
+
+    # Raggruppa i commenti per etichetta
+    from collections import defaultdict
+    label_comments_dict = defaultdict(list)
+    label_objs = {}
+    for annotation, label, text_cell in annotations:
+        label_comments_dict[label.id].append(text_cell.text_content)
+        label_objs[label.id] = label
+    label_comments = [(label_objs[lid], comments) for lid, comments in label_comments_dict.items()]
+
     return render_template('excel/view_file.html', 
                          excel_file=excel_file, 
                          cells=cells,
@@ -172,7 +219,10 @@ def view_file(file_id):
                          view_mode=view_mode,
                          total_responses=total_responses,
                          questions_count=questions_count,
-                         available_labels_count=available_labels_count)
+                         available_labels_count=available_labels_count,
+                         annotated_cells_count=annotated_cells_count,
+                         questions_stats=questions_stats,
+                         label_comments=label_comments)
 
 @excel_bp.route('/file/<int:file_id>/question/<question_name>')
 @login_required
