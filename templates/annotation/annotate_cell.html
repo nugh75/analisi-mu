@@ -98,10 +98,10 @@
                     <label for="categoryFilter" class="form-label">Filtra per categoria:</label>
                     <select id="categoryFilter" class="form-select">
                         <option value="">Tutte le categorie</option>
-                        {% set categories = labels|map(attribute='category_obj')|unique %}
                         {% for category in categories %}
-                        <option value="{{ category.name if category else 'none' }}">{{ category.name if category else 'Senza categoria' }}</option>
+                        <option value="{{ category.name }}">{{ category.name }}</option>
                         {% endfor %}
+                        <option value="none">Senza categoria</option>
                     </select>
                 </div>
 
@@ -109,25 +109,19 @@
                 <div id="labels-container">
                     {% set labels_by_category = {} %}
                     {% for label in labels %}
-                        {% set cat = label.category_obj %}
+                        {% set cat = label.category_obj.name if label.category_obj else 'Senza categoria' %}
                         {% set _ = labels_by_category.setdefault(cat, []).append(label) %}
                     {% endfor %}
                     {% for category, group in labels_by_category.items() %}
-                    <div class="category-group mb-4" data-category="{{ category.name if category else 'none' }}">
-                        {% if category %}
+                    <div class="category-group mb-4" data-category="{{ category if category != 'Senza categoria' else 'none' }}">
                         <h6 class="text-muted mb-2">
-                            <i class="bi bi-folder me-1"></i>{{ category.name }}
+                            <i class="bi bi-{{ 'folder' if category != 'Senza categoria' else 'tags' }} me-1"></i>{{ category }}
                         </h6>
-                        {% else %}
-                        <h6 class="text-muted mb-2">
-                            <i class="bi bi-tags me-1"></i>Senza categoria
-                        </h6>
-                        {% endif %}
                         <div class="d-flex flex-wrap">
                             {% for label in group %}
                             <span class="label-badge {{ 'selected' if label.id in user_label_ids else '' }}"
                                   data-label-id="{{ label.id }}"
-                                  data-category="{{ category.name if category else 'none' }}"
+                                  data-category="{{ category if category != 'Senza categoria' else 'none' }}"
                                   style="background-color: {{ label.color }}; color: {{ '#fff' if label.color != '#ffffff' else '#000' }};"
                                   title="{{ label.description or label.name }}">
                                 {{ label.name }}

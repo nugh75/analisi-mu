@@ -22,7 +22,13 @@ def annotate_cell(cell_id):
     cell = TextCell.query.get_or_404(cell_id)
     
     # Ottieni tutte le etichette disponibili
-    labels = Label.query.order_by(Label.category, Label.name).all()
+    # Ordiniamo prima per categoria (trattando None come stringa vuota) poi per nome
+    labels = Label.query.all()
+    labels.sort(key=lambda x: (x.category or '', x.name))
+    
+    # Ottieni tutte le categorie disponibili
+    from models import Category
+    categories = Category.query.order_by(Category.name).all()
     
     # Ottieni le annotazioni esistenti per questa cella
     annotations = db.session.query(CellAnnotation, Label, User)\
@@ -51,6 +57,7 @@ def annotate_cell(cell_id):
     return render_template('annotation/annotate_cell.html',
                          cell=cell,
                          labels=labels,
+                         categories=categories,
                          annotations=annotations,
                          user_label_ids=user_label_ids,
                          next_url=next_url)
