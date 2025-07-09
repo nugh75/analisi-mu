@@ -121,7 +121,7 @@ KNOWN_FREE_MODELS = [
         "pricing": {"prompt": "0", "completion": "0"}
     },
     {
-        "id": "mistralai/mistral-7b-instruct:free", 
+        "id": "mistralai/mistral-7b-instruct:free",
         "name": "Mistral 7B Instruct (Free)",
         "description": "Mistral's 7B parameter instruction-tuned model",
         "context_length": 32768,
@@ -129,7 +129,7 @@ KNOWN_FREE_MODELS = [
     },
     {
         "id": "huggingfaceh4/zephyr-7b-beta:free",
-        "name": "Zephyr 7B Beta (Free)", 
+        "name": "Zephyr 7B Beta (Free)",
         "description": "A fine-tuned version of Mistral 7B",
         "context_length": 32768,
         "pricing": {"prompt": "0", "completion": "0"}
@@ -146,6 +146,104 @@ KNOWN_FREE_MODELS = [
         "name": "Gemma 7B Instruct (Free)",
         "description": "Google's Gemma 7B instruction-tuned model",
         "context_length": 8192,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "qwen/qwen-3-4b:free",
+        "name": "Qwen 3 4B (Free)",
+        "description": "Dual thinking/non-thinking; instruction-following, agent workflows",
+        "context_length": 128000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "nvidia/llama-3.1-nemotron-ultra-253b:free",
+        "name": "NVIDIA Llama 3.1 Nemotron Ultra 253B v1 (Free)",
+        "description": "Advanced reasoning, RAG, tool-calling (needs explicit reasoning prompt)",
+        "context_length": 128000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "deepseek/deepseek-r1-distill-qwen-14b:free",
+        "name": "DeepSeek R1 Distill Qwen 14B (Free)",
+        "description": "Distilled from R1; strong math & code (AIME 69.7, MATH-500 93.9)",
+        "context_length": 64000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "meta-llama/llama-3.2-3b-instruct:free",
+        "name": "Meta Llama 3.2 3B Instruct (Free)",
+        "description": "8 languages; dialogue, reasoning, summarization",
+        "context_length": 131000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "meta-llama/llama-3.1-405b-instruct:free",
+        "name": "Meta Llama 3.1 405B Instruct (Free)",
+        "description": "High-quality dialogue; rivals GPT-4o & Claude 3.5",
+        "context_length": 131000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "deepseek/deepseek-v3-0324:free",
+        "name": "DeepSeek V3 0324 (Free)",
+        "description": "Latest V3; strong all-round performance",
+        "context_length": 16000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "deepseek/deepseek-r1-0528:free",
+        "name": "DeepSeek R1 0528 (Free)",
+        "description": "Open reasoning tokens; MIT-licensed update of R1",
+        "context_length": 64000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "deepseek/deepseek-r1:free",
+        "name": "DeepSeek R1 (Free)",
+        "description": "Performance on par with OpenAI o1; fully open source",
+        "context_length": 64000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "deepseek/deepseek-v3:free",
+        "name": "DeepSeek V3 (Free)",
+        "description": "Pre-trained on 15T tokens; rivals closed models",
+        "context_length": 64000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "cypher/cypher-alpha:free",
+        "name": "Cypher Alpha (Free)",
+        "description": "Long-context general model; provider logs prompts & outputs",
+        "context_length": 1000000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "tng/deepseek-r1t-chimera:free",
+        "name": "TNG DeepSeek R1T Chimera (Free)",
+        "description": "Combines R1 reasoning with V3 efficiency; MIT licence",
+        "context_length": 64000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "google/gemini-2.0-flash-experimental:free",
+        "name": "Google Gemini 2.0 Flash Experimental (Free)",
+        "description": "Very fast TTFT; multimodal, coding, complex instructions, function calling",
+        "context_length": 1050000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "qwen/qwq-32b:free",
+        "name": "Qwen QwQ 32B (Free)",
+        "description": "Medium-size reasoning model; competitive with DeepSeek R1",
+        "context_length": 33000,
+        "pricing": {"prompt": "0", "completion": "0"}
+    },
+    {
+        "id": "mistralai/mistral-nemo:free",
+        "name": "Mistral Nemo (Free)",
+        "description": "Multilingual (11 langs), 128K context, function calling (Apache 2.0)",
+        "context_length": 131000,
         "pricing": {"prompt": "0", "completion": "0"}
     }
 ]

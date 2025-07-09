@@ -119,6 +119,11 @@ body {
     padding: 0.75rem 2rem;
 }
 
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Alerts */
 .alert {
     border: none;
@@ -144,22 +149,51 @@ body {
 .loading {
     opacity: 0.6;
     pointer-events: none;
+    position: relative;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-    .jumbotron {
-        padding: 2rem 1rem;
-    }
-    
-    .jumbotron h1 {
-        font-size: 2rem;
-    }
-    
-    .label-display {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Toast notifications */
+.toast {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.toast-container {
+    z-index: 9999;
+}
+
+/* Progress bars */
+.progress {
+    height: 8px;
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+/* AI assistant components */
+.ai-progress {
+    transition: all 0.3s ease;
 }
 
 /* Statistiche dashboard */
@@ -204,35 +238,26 @@ body {
     background-color: rgba(40, 167, 69, 0.1);
 }
 
-/* Toast notifications */
-.toast {
-    border: none;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+/* AI status badge enhancements */
+.badge {
+    font-size: 0.85em;
+    padding: 0.5em 0.75em;
 }
 
-/* Progress bars */
-.progress {
-    height: 8px;
-    border-radius: 10px;
-}
-
-.progress-bar {
-    border-radius: 10px;
-}
-
-/* List groups */
-.list-group-item {
-    border: none;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.list-group-item:last-child {
-    border-bottom: none;
-}
-
-/* Footer */
-footer {
-    margin-top: auto;
+/* Responsive design */
+@media (max-width: 768px) {
+    .jumbotron {
+        padding: 2rem 1rem;
+    }
+    
+    .jumbotron h1 {
+        font-size: 2rem;
+    }
+    
+    .label-display {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
 }
 
 /* Scrollbar styling */

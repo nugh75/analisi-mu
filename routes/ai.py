@@ -193,11 +193,11 @@ def get_ai_status(file_id):
         ).all()
         
         # Conta quelle in attesa di revisione
-        pending_annotations = [ann for ann in ai_annotations if not ann.is_reviewed]
+        pending_annotations = [ann for ann in ai_annotations if ann.status == 'pending_review']
         
         # Conta quelle approvate/rifiutate
-        reviewed_annotations = [ann for ann in ai_annotations if ann.is_reviewed]
-        approved_annotations = [ann for ann in reviewed_annotations if ann.is_approved]
+        reviewed_annotations = [ann for ann in ai_annotations if ann.status in ['active', 'rejected']]
+        approved_annotations = [ann for ann in reviewed_annotations if ann.status == 'active']
         
         return jsonify({
             'success': True,

@@ -226,6 +226,135 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    // AI labeling assistant initialization
+    // Sets up AI status, enables buttons, and binds generate/review actions
+    const generateBtn = document.getElementById('generate-ai-labels');
+    const reviewBtn = document.getElementById('review-ai-labels');
+    const statusBadge = document.getElementById('ai-config-status');
+    const pendingCountElem = document.getElementById('pending-count');
+    const aiCountElem = document.getElementById('ai-annotations-count');
+    
+    if (generateBtn) {
+        const fileId = generateBtn.dataset.fileId;
+        const progressDiv = document.getElementById('ai-progress');
+        const progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
+        const progressText = document.getElementById('ai-progress-text');
+
+        // Load current AI configuration
+        window.AnalisiMU.apiRequest(`/ai/config/current`).then(data => {
+            if (data.success) {
+                const cfg = data.config;
+                statusBadge.textContent = `${cfg.provider.toUpperCase()} (${cfg.model})`;
+                statusBadge.className = 'badge bg-success';
+                generateBtn.disabled = false;
+            } else {
+                statusBadge.textContent = data.message || 'Nessuna configurazione AI attiva';
+                statusBadge.className = 'badge bg-danger';
+            }
+        }).catch(() => {
+            statusBadge.textContent = 'Errore caricamento';
+            statusBadge.className = 'badge bg-danger';
+        });
+
+        // Refresh AI annotations status
+        function refreshStatus() {
+            window.AnalisiMU.apiRequest(`/ai/status/${fileId}`).then(data => {
+                if (data.success && data.ai_stats) {
+                    if (pendingCountElem) pendingCountElem.textContent = data.ai_stats.pending;
+                    if (aiCountElem) aiCountElem.textContent = data.ai_stats.total;
+                    
+                    if (reviewBtn) {
+                        reviewBtn.disabled = data.ai_stats.pending <= 0;
+                        if (data.ai_stats.pending > 0) {
+                            reviewBtn.classList.add('btn-warning');
+                            reviewBtn.classList.remove('btn-outline-info');
+                        } else {
+                            reviewBtn.classList.remove('btn-warning');
+                            reviewBtn.classList.add('btn-outline-info');
+                        }
+                    }
+                }
+            });
+        }
+        refreshStatus();
+
+        // Auto refresh every 30 seconds
+        setInterval(refreshStatus, 30000);
+
+        // Generate AI labels with enhanced UI
+        generateBtn.addEventListener('click', function() {
+            if (!confirm('Vuoi generare etichette AI per tutte le risposte non ancora annotate?')) {
+                return;
+            }
+            
+            // Update UI
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando...';
+            
+            if (progressDiv && progressBar && progressText) {
+                progressDiv.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressText.textContent = 'Inizializzazione...';
+                
+                // Progress simulation
+                let progressValue = 0;
+                const progressInterval = setInterval(() => {
+                    progressValue += Math.random() * 10;
+                    if (progressValue > 85) progressValue = 85;
+                    progressBar.style.width = progressValue + '%';
+                    progressText.textContent = `Elaborazione in corso... ${Math.round(progressValue)}%`;
+                }, 800);
+                
+                window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { 
+                    method: 'POST',
+                    body: JSON.stringify({ batch_size: 50 })
+                })
+                .then(res => {
+                    clearInterval(progressInterval);
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Completato!';
+                    
+                    setTimeout(() => {
+                        progressDiv.style.display = 'none';
+                        generateBtn.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+                        generateBtn.disabled = false;
+                        
+                        window.AnalisiMU.showToast(`Generazione completata!\n\nProcessate: ${res.total_processed} risposte\nAnnotazioni create: ${res.annotations_count}`, 'success', 5000);
+                        refreshStatus();
+                    }, 1000);
+                })
+                .catch(() => {
+                    clearInterval(progressInterval);
+                    progressDiv.style.display = 'none';
+                    generateBtn.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+                    generateBtn.disabled = false;
+                    window.AnalisiMU.showToast('Errore generazione etichette', 'error');
+                });
+            } else {
+                // Fallback without progress bar
+                window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { method: 'POST' })
+                    .then(res => {
+                        window.AnalisiMU.showToast(res.message || 'Generazione completata', 'success');
+                        refreshStatus();
+                    })
+                    .catch(() => {
+                        window.AnalisiMU.showToast('Errore generazione etichette', 'error');
+                    })
+                    .finally(() => {
+                        this.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+                        this.disabled = false;
+                    });
+            }
+        });
+
+        // Review AI labels
+        if (reviewBtn) {
+            reviewBtn.addEventListener('click', function() {
+                window.location.href = `/ai/review/file/${fileId}`;
+            });
+        }
+    }
 });
 
 // Utility functions
