@@ -43,8 +43,8 @@
                         <select name="category" id="category" class="form-select" onchange="this.form.submit()">
                             <option value="">Tutte le categorie</option>
                             {% for category in categories %}
-                            <option value="{{ category }}" {{ 'selected' if category == current_category else '' }}>
-                                {{ category }}
+                            <option value="{{ category.id }}" {% if category.id == current_category %}selected{% endif %}>
+                                {{ category.name }}
                             </option>
                             {% endfor %}
                         </select>

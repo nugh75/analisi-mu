@@ -68,9 +68,6 @@
             </div>
             <div class="card-body">
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="{{ url_for('annotation.browse_annotations', file_id=excel_file.id) }}" class="btn btn-success">
-                        <i class="bi bi-pencil-square me-1"></i>Inizia Annotazione
-                    </a>
                     <a href="{{ url_for('labels.create_label') }}" class="btn btn-info">
                         <i class="bi bi-plus-circle me-1"></i>Crea Nuova Etichetta
                     </a>
@@ -149,13 +146,6 @@
                                            title="Visualizza risposte">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        {% if total_responses > 0 %}
-                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=0) }}?question={{ question_name }}" 
-                                           class="btn btn-sm btn-outline-success" 
-                                           title="Inizia annotazione">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

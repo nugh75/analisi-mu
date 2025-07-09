@@ -96,10 +96,6 @@
                        class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-skip-backward me-1"></i>Prima Pagina
                     </a>
-                    <a href="{{ url_for('annotation.annotate_cell', cell_id=responses.items[0].id) if responses.items else '#' }}" 
-                       class="btn btn-sm btn-success {{ 'disabled' if not responses.items else '' }}">
-                        <i class="bi bi-pencil me-1"></i>Inizia Annotazione
-                    </a>
                     <a href="{{ url_for('labels.create_label') }}" class="btn btn-sm btn-info">
                         <i class="bi bi-plus-circle me-1"></i>Crea Etichetta
                     </a>

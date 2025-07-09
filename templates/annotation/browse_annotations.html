@@ -76,6 +76,57 @@
     </div>
 </div>
 
+<!-- Barra modalità -->
+<div class="row mb-3">
+    <div class="col-12">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link {% if request.args.get('view_mode', 'classic') == 'classic' %}active{% endif %}" href="?view_mode=classic&file_id={{ current_file_id }}&sheet={{ current_sheet }}&annotated_only={{ annotated_only }}">Vista Classica</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if request.args.get('view_mode') == 'per_domanda' %}active{% endif %}" href="?view_mode=per_domanda&file_id={{ current_file_id }}&sheet={{ current_sheet }}&annotated_only={{ annotated_only }}">Vista per Domanda</a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+{% if request.args.get('view_mode', 'classic') == 'per_domanda' %}
+    {% set cells_by_question = {} %}
+    {% for cell in cells.items %}
+        {% set _ = cells_by_question.setdefault(cell.column_name, []).append(cell) %}
+    {% endfor %}
+    <div class="row mt-4">
+        <div class="col-12">
+            {% for question, question_cells in cells_by_question.items() %}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>{{ question }}</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for cell in question_cells %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="border rounded p-2 h-100">
+                                <div class="small text-muted mb-1">Riga: {{ cell.row_index + 1 }}</div>
+                                <div class="cell-content small mb-2">{{ cell.text_content }}</div>
+                                {% if cell.annotations %}
+                                    <span class="badge bg-success mb-1">{{ cell.annotations|length }} annotazioni</span>
+                                {% else %}
+                                    <span class="badge bg-secondary mb-1">Non annotata</span>
+                                {% endif %}
+                                <div>
+                                    <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" class="btn btn-sm btn-outline-primary mt-2">Annota</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+{% else %}
 <!-- Risultati -->
 <div class="row">
     <div class="col-12">

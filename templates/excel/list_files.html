@@ -81,11 +81,6 @@
                                            title="Scarica file">
                                             <i class="bi bi-download"></i>
                                         </a>
-                                        <a href="{{ url_for('annotation.browse_annotations', file_id=file.id) }}" 
-                                           class="btn btn-outline-success"
-                                           title="Annota celle">
-                                            <i class="bi bi-pencil-square"></i>
-                                        </a>
                                         {% if current_user == file.uploader or current_user.is_admin %}
                                         <button type="button" 
                                                 class="btn btn-outline-danger"

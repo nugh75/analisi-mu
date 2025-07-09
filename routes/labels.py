@@ -15,27 +15,22 @@ labels_bp = Blueprint('labels', __name__)
 def list_labels():
     """Lista di tutte le etichette"""
     page = request.args.get('page', 1, type=int)
-    category_filter = request.args.get('category', '')
+    category_filter = request.args.get('category', type=int)
     
     query = Label.query
-    
     if category_filter:
-        query = query.filter_by(category=category_filter)
+        query = query.filter_by(category_id=category_filter)
     
     labels = query.order_by(Label.name).paginate(
         page=page, per_page=20, error_out=False
     )
     
-    # Liste delle categorie per il filtro
-    categories = db.session.query(Label.category)\
-                          .filter(Label.category.isnot(None))\
-                          .distinct()\
-                          .all()
-    category_names = [cat[0] for cat in categories if cat[0]]
+    # Liste delle categorie reali per il filtro
+    categories = Category.query.order_by(Category.name).all()
     
     return render_template('labels/list_labels.html', 
                          labels=labels,
-                         categories=category_names,
+                         categories=categories,
                          current_category=category_filter)
 
 @labels_bp.route('/create', methods=['GET', 'POST'])
@@ -114,7 +109,7 @@ def edit_label(label_id):
         else:
             label.name = form.name.data
             label.description = form.description.data
-            label.category = form.category.data
+            label.category_id = form.category_id.data
             label.color = form.color.data
             
             db.session.commit()
