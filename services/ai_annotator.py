@@ -56,23 +56,10 @@ class AIAnnotatorService:
     def build_annotation_prompt(self, texts: List[str], labels: List[Label]) -> str:
         """Costruisce il prompt per l'annotazione"""
         
-        # Prepara le categorie e etichette disponibili
-        labels_text = ""
-        for label in labels:
-            labels_text += f"- {label.name}"
-            if label.description:
-                labels_text += f": {label.description}"
-            labels_text += "\n"
-        
-        prompt = f"""Sei un assistente AI specializzato nell'etichettatura di testi.
-
-ETICHETTE DISPONIBILI:
-{labels_text}
-
-ISTRUZIONI:
+        prompt = f"""ISTRUZIONI SPECIFICHE PER QUESTA RICHIESTA:
 1. Analizza ogni testo fornito
-2. Assegna UNA sola etichetta per ogni testo dalla lista disponibile
-3. Se un testo non corrisponde a nessuna etichetta, usa "altro" o salta
+2. Assegna UNA o più etichette appropriate per ogni testo dalla lista disponibile nel tuo prompt di sistema
+3. Usa il tuo giudizio esperto per identificare temi, sentimenti e contenuti
 4. Rispondi SOLO in formato JSON valido con questa struttura:
 [
   {{"index": 0, "label": "nome_etichetta", "confidence": 0.95}},
@@ -84,10 +71,10 @@ TESTI DA ETICHETTARE:
         
         for i, text in enumerate(texts):
             # Pulisce il testo e lo tronca se troppo lungo
-            clean_text = re.sub(r'\s+', ' ', text.strip())[:500]
+            clean_text = re.sub(r'\s+', ' ', text.strip())[:800]
             prompt += f"{i}: {clean_text}\n"
         
-        prompt += "\nRispondi solo con il JSON:"
+        prompt += "\nRispondi solo con il JSON (array di oggetti):"
         
         return prompt
     

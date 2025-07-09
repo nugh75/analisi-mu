@@ -205,7 +205,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="text-end">
-                        <span id="selected-count" class="badge badge-info">0 selezionati</span>
+                        <span id="selected-count" class="badge bg-info text-dark">0 selezionati</span>
                     </div>
                 </div>
             </div>
@@ -343,29 +343,58 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    initializeEventListeners();
-    updateSelectedCount();
+    console.log('🚀 DOM caricato, inizializzazione...');
+    try {
+        initializeEventListeners();
+        updateSelectedCount();
+        console.log('✅ Inizializzazione completata');
+    } catch (error) {
+        console.error('❌ Errore durante inizializzazione:', error);
+    }
 });
 
 function initializeEventListeners() {
+    console.log('🔧 Inizializzazione event listeners...');
+    
+    // Verifica esistenza elementi
+    console.log('📊 Elementi trovati:');
+    console.log('- annotation-checkbox:', document.querySelectorAll('.annotation-checkbox').length);
+    console.log('- accept-btn:', document.querySelectorAll('.accept-btn').length);
+    console.log('- reject-btn:', document.querySelectorAll('.reject-btn').length);
+    console.log('- select-all:', document.getElementById('select-all'));
+    console.log('- batch-accept:', document.getElementById('batch-accept'));
+    
     // Checkbox singole
     document.querySelectorAll('.annotation-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectedCount);
     });
     
     // Controlli batch
-    document.getElementById('select-all').addEventListener('click', selectAll);
-    document.getElementById('select-none').addEventListener('click', selectNone);
-    document.getElementById('batch-accept').addEventListener('click', batchAccept);
-    document.getElementById('batch-reject').addEventListener('click', batchReject);
+    const selectAllBtn = document.getElementById('select-all');
+    const selectNoneBtn = document.getElementById('select-none');
+    const batchAcceptBtn = document.getElementById('batch-accept');
+    const batchRejectBtn = document.getElementById('batch-reject');
+    
+    if (selectAllBtn) selectAllBtn.addEventListener('click', selectAll);
+    if (selectNoneBtn) selectNoneBtn.addEventListener('click', selectNone);
+    if (batchAcceptBtn) batchAcceptBtn.addEventListener('click', batchAccept);
+    if (batchRejectBtn) batchRejectBtn.addEventListener('click', batchReject);
     
     // Azioni singole
     document.querySelectorAll('.accept-btn').forEach(btn => {
-        btn.addEventListener('click', e => reviewAnnotation(e.target.dataset.annotationId, 'accept'));
+        console.log('Adding accept listener to button:', btn);
+        btn.addEventListener('click', e => {
+            console.log('Accept button clicked!', e.target.dataset.annotationId);
+            reviewAnnotation(e.target.dataset.annotationId, 'accept');
+        });
     });
     
     document.querySelectorAll('.reject-btn').forEach(btn => {
-        btn.addEventListener('click', e => reviewAnnotation(e.target.dataset.annotationId, 'reject'));
+        console.log('Adding reject listener to button:', btn);
+        btn.addEventListener('click', e => {
+            console.log('Reject button clicked!', e.target.dataset.annotationId);
+            reviewAnnotation(e.target.dataset.annotationId, 'reject');
+        });
     });
     
     // Visualizza testo completo
@@ -377,9 +406,13 @@ function initializeEventListeners() {
     });
     
     // Filtri
-    document.getElementById('confidence-filter').addEventListener('change', applyFilters);
-    document.getElementById('label-filter').addEventListener('change', applyFilters);
-    document.getElementById('sort-by').addEventListener('change', applyFilters);
+    const confidenceFilter = document.getElementById('confidence-filter');
+    const labelFilter = document.getElementById('label-filter');
+    const sortBy = document.getElementById('sort-by');
+    
+    if (confidenceFilter) confidenceFilter.addEventListener('change', applyFilters);
+    if (labelFilter) labelFilter.addEventListener('change', applyFilters);
+    if (sortBy) sortBy.addEventListener('change', applyFilters);
 }
 
 function updateSelectedCount() {
@@ -406,10 +439,13 @@ function selectNone() {
 }
 
 function reviewAnnotation(annotationId, action) {
+    console.log(`🔥 REVIEW: annotation ${annotationId} with action ${action}`);
+    
+    // Rimuoviamo temporaneamente il CSRF per il debug
     fetch(`/ai/review/${annotationId}`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({ action: action })
     })
@@ -439,6 +475,7 @@ function reviewAnnotation(annotationId, action) {
         }
     })
     .catch(error => {
+        console.error('Review error:', error);
         showNotification('Errore di connessione: ' + error.message, 'error');
     });
 }
@@ -465,6 +502,7 @@ function batchReview(action) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
         },
         body: JSON.stringify({
             annotation_ids: selected,
@@ -565,6 +603,20 @@ function showNotification(message, type) {
             notification.remove();
         }
     }, 5000);
+}
+
+function getCSRFToken() {
+    const metaTag = document.querySelector('meta[name=csrf-token]');
+    if (metaTag) {
+        return metaTag.getAttribute('content');
+    }
+    
+    const hiddenInput = document.querySelector('input[name="csrf_token"]');
+    if (hiddenInput) {
+        return hiddenInput.value;
+    }
+    
+    return null;
 }
 </script>
 {% endblock %}

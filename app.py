@@ -6,6 +6,7 @@ di risposte testuali contenute in file Excel.
 
 from flask import Flask
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 import os
 
 # Importa l'istanza db dai modelli
@@ -13,6 +14,7 @@ from models import db
 
 # Inizializzazione delle altre estensioni
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 def create_app():
     """Factory function per creare l'applicazione Flask"""
@@ -28,6 +30,7 @@ def create_app():
     # Inizializzazione estensioni
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
     
     # Configurazione Flask-Login
     login_manager.login_view = 'auth.login'

@@ -61,16 +61,21 @@ def get_pending_annotations(file_id):
 @ai_bp.route('/review/<int:annotation_id>', methods=['POST'])
 @login_required
 def review_annotation(annotation_id):
-    """Rivede un'annotazione AI (accetta/rifiuta)"""
+    """Rivede un'annotazione AI (accetta/rifiuta) - TEMPORANEAMENTE SENZA CSRF"""
     try:
         data = request.get_json()
         action = data.get('action')  # 'accept' o 'reject'
         
+        print(f"🔍 DEBUG: Ricevuta richiesta per annotation {annotation_id}, action: {action}")
+        
         if action not in ['accept', 'reject']:
+            print(f"❌ DEBUG: Azione non valida: {action}")
             return jsonify({'success': False, 'error': 'Azione non valida'}), 400
         
         ai_service = AIAnnotatorService()
         success = ai_service.review_annotation(annotation_id, action, current_user.id)
+        
+        print(f"✅ DEBUG: Risultato review_annotation: {success}")
         
         if success:
             return jsonify({
@@ -81,6 +86,7 @@ def review_annotation(annotation_id):
             return jsonify({'success': False, 'error': 'Errore nella revisione'}), 400
             
     except Exception as e:
+        print(f"💥 DEBUG: Errore in review_annotation: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @ai_bp.route('/review/batch', methods=['POST'])
@@ -136,6 +142,41 @@ def review_file_annotations(file_id):
         ).count()
         
         return render_template('ai/review_annotations.html',
+                             excel_file=excel_file,
+                             pending_annotations=pending_annotations,
+                             total_cells=total_cells,
+                             annotated_cells=annotated_cells,
+                             ai_annotations_count=ai_annotations_count)
+        
+    except Exception as e:
+        flash(f'Errore nel caricamento: {str(e)}', 'error')
+        return redirect(url_for('excel.list_files'))
+
+@ai_bp.route('/review/test/<int:file_id>')
+@login_required
+def test_review_file_annotations(file_id):
+    """Pagina di test per rivedere le annotazioni AI di un file"""
+    try:
+        # Verifica che il file esista
+        excel_file = ExcelFile.query.get_or_404(file_id)
+        
+        # Ottiene le annotazioni pending
+        ai_service = AIAnnotatorService()
+        pending_annotations = ai_service.get_pending_annotations(file_id)
+        
+        # Statistiche
+        total_cells = TextCell.query.filter_by(excel_file_id=file_id).count()
+        annotated_cells = db.session.query(CellAnnotation.text_cell_id).join(TextCell).filter(
+            TextCell.excel_file_id == file_id,
+            CellAnnotation.status == 'active'
+        ).distinct().count()
+        
+        ai_annotations_count = CellAnnotation.query.join(TextCell).filter(
+            TextCell.excel_file_id == file_id,
+            CellAnnotation.is_ai_generated == True
+        ).count()
+        
+        return render_template('ai/test_review.html',
                              excel_file=excel_file,
                              pending_annotations=pending_annotations,
                              total_cells=total_cells,

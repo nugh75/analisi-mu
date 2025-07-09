@@ -44,6 +44,10 @@ class OpenRouterClient:
             print(f"Errore nel recupero modelli OpenRouter: {e}")
             return []
     
+    def list_models(self) -> List[Dict]:
+        """Alias per get_models() per compatibilità"""
+        return self.get_models()
+    
     def get_free_models(self) -> List[Dict]:
         """Recupera solo i modelli gratuiti"""
         models = self.get_models()
