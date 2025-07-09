@@ -5,6 +5,11 @@ Routes per l'annotazione delle celle
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
+import plotly.graph_objs as go
+import plotly.utils
+import json
+import os
+from collections import defaultdict
 
 from models import TextCell, Label, CellAnnotation, ExcelFile, User, db
 
@@ -205,14 +210,238 @@ def statistics():
         ExcelFile.original_filename,
         db.func.count(TextCell.id).label('total_cells'),
         db.func.count(CellAnnotation.id).label('annotated_cells')
-    ).outerjoin(TextCell)\
-     .outerjoin(CellAnnotation)\
+    ).select_from(ExcelFile)\
+     .outerjoin(TextCell, ExcelFile.id == TextCell.excel_file_id)\
+     .outerjoin(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
      .group_by(ExcelFile.id)\
      .all()
+    
+    # Nuove statistiche dettagliate per file
+    file_label_stats = get_file_label_statistics()
+    overview_charts = create_overview_charts(file_label_stats)
     
     return render_template('annotation/statistics.html',
                          total_cells=total_cells,
                          annotated_cells=annotated_cells,
                          user_stats=user_stats,
                          label_stats=label_stats,
-                         file_progress=file_progress)
+                         file_progress=file_progress,
+                         file_label_stats=file_label_stats,
+                         overview_charts=overview_charts)
+
+@annotation_bp.route('/file_statistics/<int:file_id>')
+@login_required
+def file_statistics(file_id):
+    """Statistiche dettagliate per un file specifico"""
+    file_obj = ExcelFile.query.get_or_404(file_id)
+    
+    # Ottieni statistiche solo per questo file
+    file_stats = get_file_label_statistics()
+    current_file_stats = None
+    
+    for stat in file_stats:
+        if stat['file'].id == file_id:
+            current_file_stats = stat
+            break
+    
+    if not current_file_stats:
+        flash('Nessuna statistica trovata per questo file.', 'warning')
+        return redirect(url_for('annotation.statistics'))
+    
+    return render_template('annotation/file_statistics.html',
+                         file_stats=current_file_stats)
+
+def get_file_label_statistics():
+    """Genera statistiche dettagliate delle etichette per ogni file"""
+    file_stats = []
+    
+    # Ottieni tutti i file con le loro statistiche
+    files = ExcelFile.query.all()
+    
+    for file in files:
+        # Statistiche base del file
+        total_cells = TextCell.query.filter_by(excel_file_id=file.id).count()
+        annotated_cells = db.session.query(TextCell.id)\
+            .filter_by(excel_file_id=file.id)\
+            .join(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+            .distinct().count()
+        
+        # Statistiche per etichetta in questo file
+        label_stats = db.session.query(
+            Label.name,
+            Label.color,
+            Label.category,
+            db.func.count(CellAnnotation.id).label('count')
+        ).select_from(Label)\
+         .join(CellAnnotation, Label.id == CellAnnotation.label_id)\
+         .join(TextCell, CellAnnotation.text_cell_id == TextCell.id)\
+         .filter(TextCell.excel_file_id == file.id)\
+         .group_by(Label.id)\
+         .order_by(db.desc('count'))\
+         .all()
+        
+        # Statistiche per categoria in questo file
+        category_stats = db.session.query(
+            Label.category,
+            db.func.count(CellAnnotation.id).label('count')
+        ).select_from(Label)\
+         .join(CellAnnotation, Label.id == CellAnnotation.label_id)\
+         .join(TextCell, CellAnnotation.text_cell_id == TextCell.id)\
+         .filter(TextCell.excel_file_id == file.id)\
+         .group_by(Label.category)\
+         .order_by(db.desc('count'))\
+         .all()
+        
+        # Contributori al file
+        contributors = db.session.query(
+            User.username,
+            db.func.count(CellAnnotation.id).label('count')
+        ).select_from(User)\
+         .join(CellAnnotation, User.id == CellAnnotation.user_id)\
+         .join(TextCell, CellAnnotation.text_cell_id == TextCell.id)\
+         .filter(TextCell.excel_file_id == file.id)\
+         .group_by(User.id)\
+         .order_by(db.desc('count'))\
+         .all()
+        
+        # Crea grafici per questo file
+        charts = create_file_charts(file.id, label_stats, category_stats, contributors)
+        
+        file_stats.append({
+            'file': file,
+            'total_cells': total_cells,
+            'annotated_cells': annotated_cells,
+            'completion_rate': round((annotated_cells / total_cells * 100) if total_cells > 0 else 0, 1),
+            'label_stats': label_stats,
+            'category_stats': category_stats,
+            'contributors': contributors,
+            'charts': charts
+        })
+    
+    return file_stats
+
+def create_file_charts(file_id, label_stats, category_stats, contributors):
+    """Crea grafici Plotly per un file specifico"""
+    charts = {}
+    
+    # Grafico a torta delle etichette
+    if label_stats:
+        labels = [stat.name for stat in label_stats]
+        values = [stat.count for stat in label_stats]
+        colors = [stat.color for stat in label_stats]
+        
+        fig_labels = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            marker_colors=colors,
+            hole=0.3,
+            textinfo='label+percent',
+            textposition='outside'
+        )])
+        
+        fig_labels.update_layout(
+            title=f"Distribuzione Etichette",
+            showlegend=True,
+            height=400,
+            font=dict(size=12)
+        )
+        
+        charts['labels_pie'] = json.dumps(fig_labels, cls=plotly.utils.PlotlyJSONEncoder)
+    
+    # Grafico a barre delle categorie
+    if category_stats:
+        categories = [stat.category for stat in category_stats]
+        counts = [stat.count for stat in category_stats]
+        
+        fig_categories = go.Figure(data=[go.Bar(
+            x=categories,
+            y=counts,
+            marker_color='rgb(55, 83, 109)'
+        )])
+        
+        fig_categories.update_layout(
+            title="Annotazioni per Categoria",
+            xaxis_title="Categoria",
+            yaxis_title="Numero di Annotazioni",
+            height=400
+        )
+        
+        charts['categories_bar'] = json.dumps(fig_categories, cls=plotly.utils.PlotlyJSONEncoder)
+    
+    # Grafico dei contributori
+    if contributors:
+        users = [contrib.username for contrib in contributors[:10]]  # Top 10
+        counts = [contrib.count for contrib in contributors[:10]]
+        
+        fig_contributors = go.Figure(data=[go.Bar(
+            x=counts,
+            y=users,
+            orientation='h',
+            marker_color='rgb(26, 118, 255)'
+        )])
+        
+        fig_contributors.update_layout(
+            title="Top Contributori",
+            xaxis_title="Numero di Annotazioni",
+            yaxis_title="Utente",
+            height=max(400, len(users) * 30)
+        )
+        
+        charts['contributors_bar'] = json.dumps(fig_contributors, cls=plotly.utils.PlotlyJSONEncoder)
+    
+    return charts
+
+def create_overview_charts(file_stats):
+    """Crea grafici di panoramica generale"""
+    charts = {}
+    
+    # Grafico del tasso di completamento per file
+    file_names = [stat['file'].original_filename[:30] + "..." if len(stat['file'].original_filename) > 30 
+                  else stat['file'].original_filename for stat in file_stats]
+    completion_rates = [stat['completion_rate'] for stat in file_stats]
+    
+    fig_completion = go.Figure(data=[go.Bar(
+        x=file_names,
+        y=completion_rates,
+        marker_color=['rgb(26, 118, 255)' if rate >= 50 else 'rgb(255, 65, 54)' for rate in completion_rates]
+    )])
+    
+    fig_completion.update_layout(
+        title="Tasso di Completamento per File",
+        xaxis_title="File",
+        yaxis_title="Percentuale Completamento (%)",
+        height=400,
+        xaxis_tickangle=-45
+    )
+    
+    charts['completion_overview'] = json.dumps(fig_completion, cls=plotly.utils.PlotlyJSONEncoder)
+    
+    # Distribuzione generale delle etichette (tutti i file)
+    all_labels = defaultdict(int)
+    label_colors = {}
+    
+    for stat in file_stats:
+        for label_stat in stat['label_stats']:
+            all_labels[label_stat.name] += label_stat.count
+            label_colors[label_stat.name] = label_stat.color
+    
+    if all_labels:
+        labels = list(all_labels.keys())
+        values = list(all_labels.values())
+        colors = [label_colors.get(label, '#cccccc') for label in labels]
+        
+        fig_all_labels = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            marker_colors=colors,
+            hole=0.3
+        )])
+        
+        fig_all_labels.update_layout(
+            title="Distribuzione Generale delle Etichette",
+            height=500
+        )
+        
+        charts['all_labels_pie'] = json.dumps(fig_all_labels, cls=plotly.utils.PlotlyJSONEncoder)
+    
+    return charts
