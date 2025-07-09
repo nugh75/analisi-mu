@@ -268,7 +268,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Content-Type': 'application/json',
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                // Controlla se la risposta è redirect (non autenticato)
+                if (response.status === 302 || response.redirected) {
+                    throw new Error('Non autenticato - effettua il login come admin');
+                }
+                
+                // Controlla se la risposta è JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Risposta non valida dal server');
+                }
+                
+                return response.json();
+            })
             .then(data => {
                 resultDiv.className = `test-result ${data.success ? 'test-success' : 'test-error'}`;
                 resultDiv.textContent = data.message;
@@ -276,8 +289,9 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 resultDiv.className = 'test-result test-error';
-                resultDiv.textContent = 'Errore nella connessione: ' + error.message;
+                resultDiv.textContent = 'Errore: ' + error.message;
                 resultDiv.style.display = 'block';
+                console.error('Test connection error:', error);
             })
             .finally(() => {
                 spinner.style.display = 'none';

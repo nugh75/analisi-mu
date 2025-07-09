@@ -208,12 +208,11 @@ def add_new_openrouter_models():
             # Crea nuovo modello
             new_model = OpenRouterModel(
                 model_id=model_id,
-                display_name=model_data['display_name'],
+                name=model_data['display_name'],
                 description=model_data['description'],
                 context_length=model_data['context_length'],
-                parameters=model_data['parameters'],
-                modality=model_data['modality'],
-                pricing=model_data['pricing'],
+                pricing_prompt=model_data['pricing'].get('prompt', 0.0) if model_data['pricing'] else 0.0,
+                pricing_completion=model_data['pricing'].get('completion', 0.0) if model_data['pricing'] else 0.0,
                 is_free=model_data['is_free']
             )
             
@@ -246,14 +245,14 @@ def list_all_free_models():
     
     app = create_app()
     with app.app_context():
-        free_models = OpenRouterModel.query.filter_by(is_free=True).order_by(OpenRouterModel.display_name).all()
+        free_models = OpenRouterModel.query.filter_by(is_free=True).order_by(OpenRouterModel.name).all()
         
         print(f"\n📋 TUTTI I MODELLI GRATUITI ({len(free_models)})")
         print("="*60)
         
         for model in free_models:
             ctx_str = f"{model.context_length:,}" if model.context_length else "N/A"
-            print(f"• {model.display_name}")
+            print(f"• {model.name}")
             print(f"  ID: {model.model_id}")
             print(f"  Params: {model.parameters} | Ctx: {ctx_str}")
             print(f"  {model.description[:80]}{'...' if len(model.description) > 80 else ''}")

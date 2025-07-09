@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 import json
 
-from models import db, TextCell, CellAnnotation, ExcelFile, Label
+from models import db, TextCell, CellAnnotation, ExcelFile, Label, AIConfiguration
 from services.ai_annotator import AIAnnotatorService
 
 ai_bp = Blueprint('ai', __name__)
@@ -146,75 +146,67 @@ def review_file_annotations(file_id):
         flash(f'Errore nel caricamento: {str(e)}', 'error')
         return redirect(url_for('excel.list_files'))
 
-@ai_bp.route('/status/<int:file_id>')
-@login_required
-def get_ai_status(file_id):
-    """Ottiene lo stato dell'elaborazione AI per un file"""
+@ai_bp.route('/config/current')
+def get_current_ai_config():
+    """Ottiene la configurazione AI attualmente attiva"""
     try:
-        # Statistiche generali
-        total_cells = TextCell.query.filter_by(excel_file_id=file_id).count()
+        active_config = AIConfiguration.query.filter_by(is_active=True).first()
         
-        # Annotazioni totali (umane + AI accettate)
-        annotated_cells = db.session.query(CellAnnotation.text_cell_id).join(TextCell).filter(
-            TextCell.excel_file_id == file_id,
-            CellAnnotation.status == 'active'
-        ).distinct().count()
+        if not active_config:
+            return jsonify({
+                'success': False, 
+                'message': 'Nessuna configurazione AI attiva'
+            })
         
-        # Annotazioni AI
-        ai_pending = CellAnnotation.query.join(TextCell).filter(
-            TextCell.excel_file_id == file_id,
-            CellAnnotation.is_ai_generated == True,
-            CellAnnotation.status == 'pending_review'
-        ).count()
-        
-        ai_accepted = CellAnnotation.query.join(TextCell).filter(
-            TextCell.excel_file_id == file_id,
-            CellAnnotation.is_ai_generated == True,
-            CellAnnotation.status == 'active'
-        ).count()
-        
-        ai_rejected = CellAnnotation.query.join(TextCell).filter(
-            TextCell.excel_file_id == file_id,
-            CellAnnotation.is_ai_generated == True,
-            CellAnnotation.status == 'rejected'
-        ).count()
+        # Determina il modello in base al provider
+        if active_config.provider == 'ollama':
+            model_name = active_config.ollama_model
+        elif active_config.provider == 'openrouter':
+            model_name = active_config.openrouter_model
+        else:
+            model_name = 'Unknown'
         
         return jsonify({
             'success': True,
-            'total_cells': total_cells,
-            'annotated_cells': annotated_cells,
-            'completion_percentage': round((annotated_cells / total_cells) * 100, 1) if total_cells > 0 else 0,
-            'ai_stats': {
-                'pending': ai_pending,
-                'accepted': ai_accepted,
-                'rejected': ai_rejected,
-                'total': ai_pending + ai_accepted + ai_rejected
+            'config': {
+                'id': active_config.id,
+                'name': active_config.name,
+                'provider': active_config.provider,
+                'model': model_name
             }
         })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@ai_bp.route('/config/current')
-@login_required
-def get_current_config():
-    """Ottiene la configurazione AI attiva"""
+@ai_bp.route('/status/<int:file_id>')
+def get_ai_status(file_id):
+    """Ottiene lo status delle annotazioni AI per un file"""
     try:
-        ai_service = AIAnnotatorService()
-        config = ai_service.get_active_configuration()
+        # Verifica che il file esista
+        excel_file = ExcelFile.query.get_or_404(file_id)
         
-        if not config:
-            return jsonify({'success': False, 'error': 'Nessuna configurazione AI attiva'})
+        # Conta le annotazioni AI per questo file
+        ai_annotations = CellAnnotation.query.join(TextCell).filter(
+            TextCell.excel_file_id == file_id,
+            CellAnnotation.is_ai_generated == True
+        ).all()
+        
+        # Conta quelle in attesa di revisione
+        pending_annotations = [ann for ann in ai_annotations if not ann.is_reviewed]
+        
+        # Conta quelle approvate/rifiutate
+        reviewed_annotations = [ann for ann in ai_annotations if ann.is_reviewed]
+        approved_annotations = [ann for ann in reviewed_annotations if ann.is_approved]
         
         return jsonify({
             'success': True,
-            'config': {
-                'id': config.id,
-                'provider': config.provider,
-                'name': config.name,
-                'model': config.ollama_model or config.openrouter_model,
-                'temperature': config.temperature,
-                'max_tokens': config.max_tokens
+            'ai_stats': {
+                'total': len(ai_annotations),
+                'pending': len(pending_annotations),
+                'reviewed': len(reviewed_annotations),
+                'approved': len(approved_annotations),
+                'rejected': len(reviewed_annotations) - len(approved_annotations)
             }
         })
         
