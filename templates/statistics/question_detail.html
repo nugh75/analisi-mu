@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiche Quesito - {{ question }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-question-circle me-2"></i>Quesito: {{ question }}</h2>
+                <div>
+                    <a href="{{ url_for('statistics.question_compare', file_id=file.id, question=question) }}" 
+                       class="btn btn-success">
+                        <i class="bi bi-people"></i> Confronta Annotatori
+                    </a>
+                    <a href="{{ url_for('statistics.file_detail', file_id=file.id) }}" 
+                       class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Torna al File
+                    </a>
+                </div>
+            </div>
+
+            <!-- Breadcrumb -->
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('statistics.overview') }}">Statistiche</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('statistics.file_detail', file_id=file.id) }}">{{ file.filename }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ question }}</li>
+                </ol>
+            </nav>
+
+            <!-- Statistiche Generali -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card border-primary">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">{{ cells|length }}</h3>
+                            <p class="mb-0">Celle Totali</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-body text-center">
+                            <h3 class="text-success">{{ cells_with_annotations|length }}</h3>
+                            <p class="mb-0">Celle Annotate</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-info">
+                        <div class="card-body text-center">
+                            <h3 class="text-info">{{ annotator_stats|length }}</h3>
+                            <p class="mb-0">Annotatori</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-warning">
+                        <div class="card-body text-center">
+                            <h3 class="text-warning">{{ label_stats|length }}</h3>
+                            <p class="mb-0">Etichette</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistiche Annotatori -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-people me-2"></i>Annotatori
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Annotatore</th>
+                                            <th>Annotazioni</th>
+                                            <th>Celle</th>
+                                            <th>Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for user in annotator_stats %}
+                                        <tr>
+                                            <td>{{ user.username }}</td>
+                                            <td>{{ user.annotation_count }}</td>
+                                            <td>{{ user.cell_count }}</td>
+                                            <td>
+                                                <a href="{{ url_for('statistics.user_detail', user_id=user.id) }}" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i> Dettagli
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-tags me-2"></i>Etichette Utilizzate
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Etichetta</th>
+                                            <th>Categoria</th>
+                                            <th>Utilizzi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for label in label_stats %}
+                                        <tr>
+                                            <td>
+                                                <span class="badge" style="background-color: {{ label.color }}">
+                                                    {{ label.name }}
+                                                </span>
+                                            </td>
+                                            <td>{{ label.category_name or 'Senza categoria' }}</td>
+                                            <td>{{ label.usage_count }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Annotazioni per Cella -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-table me-2"></i>Annotazioni per Cella
+                                <small class="text-muted">(Raggruppamento Etichetta + AI Info con ID)</small>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>ID Cella</th>
+                                            <th>Contenuto</th>
+                                            <th>Annotazioni</th>
+                                            <th>Annotatori</th>
+                                            <th>Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for cell_id, annotations in cells_with_annotations.items() %}
+                                        <tr>
+                                            <td><code>{{ cell_id }}</code></td>
+                                            <td>
+                                                {% set cell_content = annotations[0].content %}
+                                                <div class="text-truncate" style="max-width: 200px;" 
+                                                     title="{{ cell_content }}">
+                                                    {{ cell_content }}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {% for ann in annotations %}
+                                                <div class="mb-1">
+                                                    <span class="badge me-1" 
+                                                          style="background-color: {{ ann.label_color }}">
+                                                        {{ ann.label_name }}
+                                                    </span>
+                                                    <small class="text-muted">(ID: {{ ann.annotation_id }})</small>
+                                                    {% if ann.is_ai_generated %}
+                                                    <br>
+                                                    <small class="text-info">🤖 AI Generated 
+                                                        {% if ann.ai_confidence %}
+                                                        - {{ "%.0f"|format(ann.ai_confidence * 100) }}%
+                                                        {% endif %}
+                                                    </small>
+                                                    {% endif %}
+                                                    {% if ann.status != 'active' %}
+                                                    <br>
+                                                    <small class="text-warning">Status: {{ ann.status }}</small>
+                                                    {% endif %}
+                                                </div>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% for ann in annotations %}
+                                                <small class="d-block">{{ ann.annotator }}</small>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                <a href="{{ url_for('annotation.annotate_cell', cell_id=cell_id) }}" 
+                                                   class="btn btn-sm btn-outline-primary" target="_blank">
+                                                    <i class="bi bi-pencil"></i> Modifica
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

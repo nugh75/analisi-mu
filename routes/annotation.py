@@ -527,7 +527,7 @@ def file_statistics(file_id):
     
     if not current_file_stats:
         flash('Nessuna statistica trovata per questo file.', 'warning')
-        return redirect(url_for('annotation.statistics'))
+        return redirect(url_for('statistics.overview'))
     
     return render_template('annotation/file_statistics.html',
                          file_stats=current_file_stats)

@@ -2,7 +2,7 @@
 Routes per le statistiche di annotazione
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func, desc, distinct
 from collections import defaultdict, Counter
@@ -37,6 +37,19 @@ def overview():
         func.count(CellAnnotation.id).label('usage_count')
     ).join(CellAnnotation).group_by(Label.id).order_by(desc('usage_count')).limit(10).all()
     
+    # Statistiche per file
+    file_stats = db.session.query(
+        ExcelFile.id,
+        ExcelFile.filename,
+        func.count(distinct(TextCell.id)).label('total_cells'),
+        func.count(CellAnnotation.id).label('total_annotations'),
+        func.count(distinct(CellAnnotation.user_id)).label('annotator_count')
+    ).outerjoin(TextCell, ExcelFile.id == TextCell.excel_file_id)\
+     .outerjoin(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+     .group_by(ExcelFile.id)\
+     .order_by(desc('total_annotations'))\
+     .all()
+    
     # Dati per grafici
     # Annotazioni per utente (per grafico)
     user_chart_data = db.session.query(
@@ -64,6 +77,7 @@ def overview():
                          total_labels=total_labels,
                          top_annotators=top_annotators,
                          top_labels=top_labels,
+                         file_stats=file_stats,
                          user_chart_data=user_chart_data,
                          label_chart_data=label_chart_data,
                          timeline_data=timeline_data)
@@ -260,6 +274,10 @@ def _calculate_comparison(user1, user2):
     chart_data = _prepare_chart_data(user1.id, user2.id)
     timeline_data = _prepare_timeline_data(user1.id, user2.id)
     
+    # Confronto per quesito - TODO: implementare
+    # question_comparison = _compare_by_question(user1.id, user2.id)
+    question_comparison = []
+    
     return {
         'user1_stats': user1_stats,
         'user2_stats': user2_stats,
@@ -269,7 +287,8 @@ def _calculate_comparison(user1, user2):
         'user1_only_labels': user1_only,
         'user2_only_labels': user2_only,
         'chart_data': chart_data,
-        'timeline_data': timeline_data
+        'timeline_data': timeline_data,
+        'question_comparison': question_comparison
     }
 
 def _get_user_basic_stats(user_id):
@@ -581,3 +600,260 @@ def api_global_stats():
             'total_labels': total_labels
         }
     })
+
+@statistics_bp.route('/file/<int:file_id>')
+@login_required
+def file_detail(file_id):
+    """Statistiche dettagliate per un file specifico"""
+    file_obj = ExcelFile.query.get_or_404(file_id)
+    
+    # Statistiche generali del file
+    total_cells = TextCell.query.filter_by(excel_file_id=file_id).count()
+    annotated_cells = db.session.query(TextCell.id)\
+        .filter(TextCell.excel_file_id == file_id)\
+        .join(CellAnnotation)\
+        .distinct().count()
+    
+    # Annotazioni per utente in questo file
+    user_stats = db.session.query(
+        User.username,
+        User.id,
+        func.count(CellAnnotation.id).label('annotation_count')
+    ).join(CellAnnotation, User.id == CellAnnotation.user_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .group_by(User.id)\
+     .order_by(desc('annotation_count'))\
+     .all()
+    
+    # Etichette più utilizzate in questo file
+    label_stats = db.session.query(
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        func.count(CellAnnotation.id).label('usage_count')
+    ).join(CellAnnotation)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .group_by(Label.id)\
+     .order_by(desc('usage_count'))\
+     .all()
+    
+    # Statistiche per quesito
+    question_stats = db.session.query(
+        TextCell.column_name,
+        func.count(distinct(TextCell.id)).label('total_cells'),
+        func.count(CellAnnotation.id).label('total_annotations'),
+        func.count(distinct(CellAnnotation.user_id)).label('annotator_count')
+    ).outerjoin(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .group_by(TextCell.column_name)\
+     .order_by(TextCell.column_name)\
+     .all()
+    
+    return render_template('statistics/file_detail.html',
+                         file=file_obj,
+                         total_cells=total_cells,
+                         annotated_cells=annotated_cells,
+                         user_stats=user_stats,
+                         label_stats=label_stats,
+                         question_stats=question_stats)
+
+@statistics_bp.route('/question/<int:file_id>/<question>')
+@login_required
+def question_detail(file_id, question):
+    """Statistiche dettagliate per un quesito specifico"""
+    file_obj = ExcelFile.query.get_or_404(file_id)
+    
+    # Verifica che il quesito esista
+    question_exists = TextCell.query.filter_by(
+        excel_file_id=file_id, 
+        column_name=question
+    ).first()
+    
+    if not question_exists:
+        flash('Quesito non trovato.', 'error')
+        return redirect(url_for('statistics.file_detail', file_id=file_id))
+    
+    # Celle del quesito
+    cells = TextCell.query.filter_by(
+        excel_file_id=file_id, 
+        column_name=question
+    ).all()
+    
+    # Statistiche annotatori per questo quesito
+    annotator_stats = db.session.query(
+        User.username,
+        User.id,
+        func.count(CellAnnotation.id).label('annotation_count'),
+        func.count(distinct(CellAnnotation.text_cell_id)).label('cell_count')
+    ).join(CellAnnotation, User.id == CellAnnotation.user_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(User.id)\
+     .order_by(desc('annotation_count'))\
+     .all()
+    
+    # Etichette più utilizzate
+    label_stats = db.session.query(
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        func.count(CellAnnotation.id).label('usage_count')
+    ).join(CellAnnotation)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(Label.id)\
+     .order_by(desc('usage_count'))\
+     .all()
+    
+    # Raggruppamento etichetta + commento con ID
+    cell_annotations = db.session.query(
+        TextCell.id.label('cell_id'),
+        TextCell.text_content.label('content'),
+        CellAnnotation.id.label('annotation_id'),
+        CellAnnotation.status,
+        CellAnnotation.is_ai_generated,
+        CellAnnotation.ai_confidence,
+        Label.name.label('label_name'),
+        Label.color.label('label_color'),
+        Category.name.label('category_name'),
+        User.username.label('annotator')
+    ).join(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+     .join(Label, Label.id == CellAnnotation.label_id)\
+     .join(User, User.id == CellAnnotation.user_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .order_by(TextCell.id, Label.name)\
+     .all()
+    
+    # Raggruppa per cella
+    cells_with_annotations = defaultdict(list)
+    for ann in cell_annotations:
+        cells_with_annotations[ann.cell_id].append(ann)
+    
+    return render_template('statistics/question_detail.html',
+                         file=file_obj,
+                         question=question,
+                         cells=cells,
+                         annotator_stats=annotator_stats,
+                         label_stats=label_stats,
+                         cells_with_annotations=dict(cells_with_annotations))
+
+@statistics_bp.route('/question/<int:file_id>/<question>/compare')
+@login_required
+def question_compare(file_id, question):
+    """Confronto annotatori per un quesito specifico"""
+    file_obj = ExcelFile.query.get_or_404(file_id)
+    
+    # Ottieni tutti gli annotatori che hanno lavorato su questo quesito
+    annotators = db.session.query(User)\
+        .join(CellAnnotation, User.id == CellAnnotation.user_id)\
+        .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+        .filter(TextCell.excel_file_id == file_id)\
+        .filter(TextCell.column_name == question)\
+        .distinct()\
+        .all()
+    
+    user1_id = request.args.get('user1_id', type=int)
+    user2_id = request.args.get('user2_id', type=int)
+    
+    comparison_data = None
+    user1 = None
+    user2 = None
+    
+    if user1_id and user2_id and user1_id != user2_id:
+        user1 = User.query.get(user1_id)
+        user2 = User.query.get(user2_id)
+        
+        if user1 and user2:
+            comparison_data = calculate_question_comparison(file_id, question, user1_id, user2_id)
+    
+    return render_template('statistics/question_compare.html',
+                         file=file_obj,
+                         question=question,
+                         annotators=annotators,
+                         user1=user1,
+                         user2=user2,
+                         comparison=comparison_data)
+
+def calculate_question_comparison(file_id, question, user1_id, user2_id):
+    """Calcola il confronto tra due annotatori per un quesito specifico"""
+    # Annotazioni utente 1
+    user1_annotations = db.session.query(
+        CellAnnotation.text_cell_id,
+        CellAnnotation.label_id,
+        CellAnnotation.status,
+        CellAnnotation.is_ai_generated,
+        Label.name.label('label_name'),
+        Label.color.label('label_color')
+    ).join(Label, Label.id == CellAnnotation.label_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .filter(CellAnnotation.user_id == user1_id)\
+     .all()
+    
+    # Annotazioni utente 2
+    user2_annotations = db.session.query(
+        CellAnnotation.text_cell_id,
+        CellAnnotation.label_id,
+        CellAnnotation.status,
+        CellAnnotation.is_ai_generated,
+        Label.name.label('label_name'),
+        Label.color.label('label_color')
+    ).join(Label, Label.id == CellAnnotation.label_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .filter(CellAnnotation.user_id == user2_id)\
+     .all()
+    
+    # Raggruppa per cella
+    user1_by_cell = defaultdict(list)
+    user2_by_cell = defaultdict(list)
+    
+    for ann in user1_annotations:
+        user1_by_cell[ann.text_cell_id].append(ann)
+    
+    for ann in user2_annotations:
+        user2_by_cell[ann.text_cell_id].append(ann)
+    
+    # Calcola statistiche
+    user1_cells = set(user1_by_cell.keys())
+    user2_cells = set(user2_by_cell.keys())
+    common_cells = user1_cells & user2_cells
+    
+    agreements = 0
+    conflicts = []
+    
+    for cell_id in common_cells:
+        user1_labels = set(ann.label_id for ann in user1_by_cell[cell_id])
+        user2_labels = set(ann.label_id for ann in user2_by_cell[cell_id])
+        
+        if user1_labels == user2_labels:
+            agreements += 1
+        else:
+            conflicts.append({
+                'cell_id': cell_id,
+                'user1_annotations': user1_by_cell[cell_id],
+                'user2_annotations': user2_by_cell[cell_id]
+            })
+    
+    agreement_percentage = (agreements / len(common_cells) * 100) if common_cells else 0
+    
+    return {
+        'user1_total': len(user1_cells),
+        'user2_total': len(user2_cells),
+        'common_cells': len(common_cells),
+        'agreements': agreements,
+        'conflicts': conflicts,
+        'agreement_percentage': agreement_percentage,
+        'user1_annotations': user1_annotations,
+        'user2_annotations': user2_annotations
+    }

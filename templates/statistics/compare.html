@@ -267,6 +267,67 @@
             </div>
             {% endif %}
 
+            <!-- Confronto per Quesito -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-question-circle"></i> Confronto per Quesito
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Quesito</th>
+                                            <th>Celle Totali</th>
+                                            <th>{{ user1.username }}</th>
+                                            <th>{{ user2.username }}</th>
+                                            <th>Celle in Comune</th>
+                                            <th>Accordi</th>
+                                            <th>Conflitti</th>
+                                            <th>% Accordo</th>
+                                            <th>Etichette più usate ({{ user1.username }})</th>
+                                            <th>Etichette più usate ({{ user2.username }})</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for question in comparison.question_comparison %}
+                                        <tr>
+                                            <td>{{ question.question }}</td>
+                                            <td>{{ question.total_cells }}</td>
+                                            <td>{{ question.user1_annotations }}</td>
+                                            <td>{{ question.user2_annotations }}</td>
+                                            <td>{{ question.common_cells }}</td>
+                                            <td>{{ question.agreement_count }}</td>
+                                            <td>{{ question.conflicts_count }}</td>
+                                            <td>{{ "%.1f"|format(question.agreement_percentage) }}%</td>
+                                            <td>
+                                                {% for label in question.top_labels_user1 %}
+                                                <span class="badge me-1" style="background-color: {{ label.color }}">
+                                                    {{ label.name }} ({{ label.count }})
+                                                </span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% for label in question.top_labels_user2 %}
+                                                <span class="badge me-1" style="background-color: {{ label.color }}">
+                                                    {{ label.name }} ({{ label.count }})
+                                                </span>
+                                                {% endfor %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tabella Etichette Comuni e Specifiche -->
             <div class="row">
                 <div class="col-md-6">
