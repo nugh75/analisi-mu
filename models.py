@@ -229,3 +229,31 @@ class CellAnnotation(db.Model):
     
     def __repr__(self):
         return f'<CellAnnotation {self.id}: Cell {self.text_cell_id} -> Label {self.label_id}>'
+
+class AnnotationAction(db.Model):
+    """Modello per tracciare le azioni sulle annotazioni"""
+    id = db.Column(db.Integer, primary_key=True)
+    text_cell_id = db.Column(db.Integer, db.ForeignKey('text_cell.id'), nullable=False)
+    label_id = db.Column(db.Integer, db.ForeignKey('label.id'), nullable=False)
+    action_type = db.Column(db.String(20), nullable=False)  # 'added', 'removed', 'approved', 'rejected'
+    performed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Chi ha eseguito l'azione
+    target_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Su quale annotazione utente (può essere diverso da performed_by)
+    annotation_id = db.Column(db.Integer, db.ForeignKey('cell_annotation.id'))  # L'annotazione interessata (se esiste ancora)
+    notes = db.Column(db.Text)  # Note aggiuntive
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Campi per tracciare annotazioni AI
+    was_ai_generated = db.Column(db.Boolean, default=False)
+    ai_confidence = db.Column(db.Float)
+    ai_model = db.Column(db.String(100))
+    ai_provider = db.Column(db.String(20))
+    
+    # Relazioni
+    text_cell = db.relationship('TextCell', foreign_keys=[text_cell_id])
+    label = db.relationship('Label', foreign_keys=[label_id])
+    performer = db.relationship('User', foreign_keys=[performed_by])
+    target_user = db.relationship('User', foreign_keys=[target_user_id])
+    annotation = db.relationship('CellAnnotation', foreign_keys=[annotation_id])
+    
+    def __repr__(self):
+        return f'<AnnotationAction {self.id}: {self.action_type} on Cell {self.text_cell_id} by User {self.performed_by}>'

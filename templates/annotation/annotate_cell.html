@@ -3,7 +3,16 @@
 {% block title %}Etichetta Cella - Analisi MU{% endblock %}
 
 {% block head %}
+{# Includi gli stili specifici della pagina #}
 <style>
+/* Stili per il toast */
+#toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9999;
+}
+
 .label-badge {
     display: inline-block;
     padding: 0.5rem 1rem;
@@ -11,7 +20,7 @@
     border-radius: 20px;
     cursor: pointer;
     transition: all 0.2s;
-    border: 2px solid transparent;
+    border: 2px solid transparent !important;
 }
 
 .label-badge:hover {
@@ -20,8 +29,8 @@
 }
 
 .label-badge.selected {
-    border-color: #fff;
-    box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
+    border-color: #fff !important;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.2) !important;
 }
 
 .cell-content {
@@ -45,6 +54,7 @@
     border-left: 3px solid #6c757d;
 }
 </style>
+{{ super() }} {# Importa stili da base.html #}
 {% endblock %}
 
 {% block content %}
@@ -175,9 +185,18 @@
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="text-end">
-                                <small class="text-muted d-block">{{ item.user.username }}</small>
-                                <small class="text-muted">{{ item.annotation.created_at.strftime('%d/%m %H:%M') }}</small>
+                            <div class="text-end d-flex flex-column align-items-end">
+                                <div class="mb-1">
+                                    <small class="text-muted d-block">{{ item.user.username }}</small>
+                                    <small class="text-muted">{{ item.annotation.created_at.strftime('%d/%m %H:%M') }}</small>
+                                </div>
+                                <button type="button" class="btn btn-danger btn-sm remove-annotation-btn" 
+                                        data-annotation-id="{{ item.annotation.id }}"
+                                        data-label-name="{{ item.label.name }}"
+                                        data-user-name="{{ item.user.username }}"
+                                        title="Rimuovi questa annotazione">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </div>
                         {% if item.label.description %}
@@ -228,22 +247,172 @@
         <span class="visually-hidden">Caricamento...</span>
     </div>
 </div>
+
+<!-- Contenitore per i toast -->
+<div id="toast-container"></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const cellId = {{ cell.id }};
+    const userLabelIds = new Set({{ user_label_ids | tojson | safe }});
     const loadingSpinner = document.getElementById('loadingSpinner');
     const categoryFilter = document.getElementById('categoryFilter');
     const selectAllBtn = document.getElementById('selectAllBtn');
     const clearAllBtn = document.getElementById('clearAllBtn');
 
+    // Funzione per ottenere il token CSRF
+    function getCSRFToken() {
+        return document.querySelector('meta[name=csrf-token]').getAttribute('content');
+    }
+
     // Gestione click sulle etichette
     document.querySelectorAll('.label-badge').forEach(badge => {
         badge.addEventListener('click', function() {
             const labelId = this.dataset.labelId;
-            const isSelected = this.classList.contains('selected');
+            const isSelected = userLabelIds.has(parseInt(labelId));
+            
+            if (isSelected) {
+                removeAnnotation(labelId, this);
+            } else {
+                addAnnotation(labelId, this);
+            }
+        });
+    });
+
+    // Filtra etichette per categoria
+    categoryFilter.addEventListener('change', function() {
+        const selectedCategory = this.value;
+        document.querySelectorAll('.category-group').forEach(group => {
+            const groupCategory = group.dataset.category;
+            if (selectedCategory === '' || groupCategory === selectedCategory) {
+                group.style.display = 'block';
+            } else {
+                group.style.display = 'none';
+            }
+        });
+    });
+
+    // Seleziona tutte le etichette visibili
+    selectAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.category-group:not([style*="display: none"]) .label-badge:not(.selected)').forEach(badge => {
+            const labelId = badge.dataset.labelId;
+            addAnnotation(labelId, badge);
+        });
+    });
+
+    // Rimuovi tutte le etichette
+    clearAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.label-badge.selected').forEach(badge => {
+            const labelId = badge.dataset.labelId;
+            removeAnnotation(labelId, badge);
+        });
+    });
+
+    // Funzione per mostrare i toast
+    function showToast(message, type) {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            console.error('Toast container not found');
+            return;
+        }
+
+        const toastElement = document.createElement('div');
+        toastElement.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible fade show`;
+        toastElement.role = 'alert';
+        toastElement.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        toastContainer.appendChild(toastElement);
+        
+        setTimeout(() => {
+            if (toastElement) {
+                const bsAlert = new bootstrap.Alert(toastElement);
+                bsAlert.close();
+            }
+        }, 5000);
+    }
+
+    // Funzione per aggiornare lo storico delle annotazioni e il conteggio
+    function updateAnnotationHistory(cellId) {
+        fetch(`/annotation/cell/${cellId}?ajax=1`)
+            .then(response => response.json())
+            .then(data => {
+                const annotationHistoryDiv = document.querySelector('.annotation-history');
+                annotationHistoryDiv.innerHTML = '';
+
+                if (data.annotations && data.annotations.length > 0) {
+                    console.log('🔍 DEBUG: Ricevute', data.annotations.length, 'annotazioni');
+                    data.annotations.forEach((item, index) => {
+                        console.log(`🔍 DEBUG: Annotazione ${index}:`, item);
+                        console.log(`🔍 DEBUG: item.annotation.id:`, item.annotation.id);
+                        
+                        const annotationClass = item.annotation.user_id === {{ current_user.id }} ? 'user-annotation' : 'other-annotation';
+                        const labelDescription = item.label.description ? `<div class="mt-1"><small class="text-muted">${item.label.description}</small></div>` : '';
+                        const labelCategory = item.label.category ? `<br><small class="text-muted">${item.label.category}</small>` : '';
+
+                        const annotationHtml = `
+                            <div class="card mb-2 ${annotationClass}">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge me-2" style="background-color: ${item.label.color};">
+                                                &nbsp;
+                                            </span>
+                                            <div>
+                                                <small class="fw-bold">${item.label.name}</small>
+                                                ${labelCategory}
+                                            </div>
+                                        </div>
+                                        <div class="text-end d-flex flex-column align-items-end">
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block">${item.user.username}</small>
+                                                <small class="text-muted">${new Date(item.annotation.created_at).toLocaleDateString()} ${new Date(item.annotation.created_at).toLocaleTimeString().substring(0, 5)}</small>
+                                            </div>
+                                            <button type="button" class="btn btn-danger btn-sm remove-annotation-btn" 
+                                                    data-annotation-id="${item.annotation.id}"
+                                                    data-label-name="${item.label.name}"
+                                                    data-user-name="${item.user.username}"
+                                                    title="Rimuovi questa annotazione">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    ${labelDescription}
+                                </div>
+                            </div>
+                        `;
+                        console.log('🔍 DEBUG: HTML generato per annotazione:', annotationHtml);
+                        annotationHistoryDiv.insertAdjacentHTML('beforeend', annotationHtml);
+                    });
+                } else {
+                    annotationHistoryDiv.innerHTML = `
+                        <div class="text-center text-muted">
+                            <i class="bi bi-info-circle display-4 mb-2"></i>
+                            <p>Nessuna annotazione ancora.<br>Inizia assegnando alcune etichette!</p>
+                        </div>
+                    `;
+                }
+                
+                // Riattiva i listener per i nuovi pulsanti di rimozione
+                attachRemoveAnnotationListeners();
+            })
+            .catch(error => console.error('Errore nel recupero storico annotazioni:', error));
+    }
+    
+    // Funzione per aggiornare il conteggio delle etichette dell'utente
+    function updateUserLabelCount() {
+        document.querySelector('.col-6:last-child h4').textContent = userLabelIds.size;
+    }
+
+    // Gestione click sulle etichette
+    document.querySelectorAll('.label-badge').forEach(badge => {
+        badge.addEventListener('click', function() {
+            const labelId = this.dataset.labelId;
+            const isSelected = userLabelIds.has(parseInt(labelId));
             
             if (isSelected) {
                 removeAnnotation(labelId, this);
@@ -289,7 +458,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/annotation/api/add_annotation', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
                 cell_id: cellId,
@@ -301,8 +471,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 badgeElement.classList.add('selected');
                 showToast('Etichetta aggiunta con successo', 'success');
-                // Ricarica la pagina per aggiornare lo storico
-                setTimeout(() => location.reload(), 1000);
+                userLabelIds.add(parseInt(labelId));
+                updateAnnotationHistory(cellId);
+                updateUserLabelCount();
             } else {
                 showToast(data.message, 'error');
             }
@@ -321,7 +492,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/annotation/api/remove_annotation', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
             },
             body: JSON.stringify({
                 cell_id: cellId,
@@ -333,8 +505,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 badgeElement.classList.remove('selected');
                 showToast('Etichetta rimossa con successo', 'success');
-                // Ricarica la pagina per aggiornare lo storico
-                setTimeout(() => location.reload(), 1000);
+                userLabelIds.delete(parseInt(labelId));
+                updateAnnotationHistory(cellId);
+                updateUserLabelCount();
             } else {
                 showToast(data.message, 'error');
             }
@@ -355,19 +528,103 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingSpinner.classList.add('d-none');
     }
 
-    function showToast(message, type) {
-        // Crea un toast semplice
-        const toast = document.createElement('div');
-        toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} position-fixed top-0 end-0 m-3`;
-        toast.style.zIndex = '9999';
-        toast.textContent = message;
+    // Gestione rimozione annotazioni dallo storico
+    function attachRemoveAnnotationListeners() {
+        const buttons = document.querySelectorAll('.remove-annotation-btn');
+        console.log('🔍 DEBUG: Trovati', buttons.length, 'pulsanti di rimozione');
         
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
+        buttons.forEach((btn, index) => {
+            console.log(`🔍 DEBUG: Pulsante ${index}:`, btn);
+            console.log(`🔍 DEBUG: data-annotation-id:`, btn.getAttribute('data-annotation-id'));
+            console.log(`🔍 DEBUG: data-label-name:`, btn.getAttribute('data-label-name'));
+            console.log(`🔍 DEBUG: data-user-name:`, btn.getAttribute('data-user-name'));
+            
+            btn.addEventListener('click', function() {
+                const annotationId = this.getAttribute('data-annotation-id');
+                const labelName = this.getAttribute('data-label-name');
+                const userName = this.getAttribute('data-user-name');
+                
+                console.log('🗑️ Click su pulsante rimozione:', {
+                    annotationId: annotationId,
+                    labelName: labelName,
+                    userName: userName
+                });
+                
+                if (confirm(`Vuoi davvero rimuovere l'annotazione "${labelName}" di ${userName}?`)) {
+                    removeAnnotationById(annotationId);
+                }
+            });
+        });
     }
+
+    // Funzione per rimuovere annotazione per ID
+    function removeAnnotationById(annotationId) {
+        console.log('🗑️ removeAnnotationById called with:', annotationId);
+        console.log('🗑️ Type of annotationId:', typeof annotationId);
+        
+        if (!annotationId) {
+            console.error('❌ No annotation ID provided!');
+            showToast('Errore: ID annotazione mancante', 'error');
+            return;
+        }
+        
+        showLoading();
+        
+        fetch('/annotation/api/remove_annotation_by_id', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                annotation_id: parseInt(annotationId)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Annotazione rimossa con successo', 'success');
+                updateAnnotationHistory(cellId);
+                // Aggiorna anche i badge selezionati
+                updateSelectedLabels();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Errore:', error);
+            showToast('Errore di connessione', 'error');
+        })
+        .finally(() => hideLoading());
+    }
+
+    // Funzione per aggiornare i badge selezionati
+    function updateSelectedLabels() {
+        // Ricarica le etichette selezionate dall'utente corrente
+        fetch(`/annotation/cell/${cellId}?ajax=1`)
+            .then(response => response.json())
+            .then(data => {
+                // Aggiorna userLabelIds
+                userLabelIds.clear();
+                data.user_label_ids.forEach(id => userLabelIds.add(id));
+                
+                // Aggiorna visualmente i badge
+                document.querySelectorAll('.label-badge').forEach(badge => {
+                    const labelId = parseInt(badge.dataset.labelId);
+                    if (userLabelIds.has(labelId)) {
+                        badge.classList.add('selected');
+                    } else {
+                        badge.classList.remove('selected');
+                    }
+                });
+                
+                updateUserLabelCount();
+            })
+            .catch(error => console.error('Errore nel recupero etichette:', error));
+    }
+
+    // Attiva i listener al caricamento iniziale
+    attachRemoveAnnotationListeners();
 });
 </script>
 {% endblock %}

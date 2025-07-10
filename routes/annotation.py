@@ -9,9 +9,10 @@ import plotly.graph_objs as go
 import plotly.utils
 import json
 import os
+import logging
 from collections import defaultdict
 
-from models import TextCell, Label, CellAnnotation, ExcelFile, User, db
+from models import TextCell, Label, CellAnnotation, ExcelFile, User, AnnotationAction, db
 
 annotation_bp = Blueprint('annotation', __name__)
 
@@ -57,6 +58,30 @@ def annotate_cell(cell_id):
     
     next_url = request.args.get('next') or request.form.get('next')
 
+    # Gestione richiesta AJAX per aggiornare lo storico
+    ajax = request.args.get('ajax', type=int)
+    if ajax == 1:
+        return jsonify({
+            'annotations': [
+                {
+                    'annotation': {
+                        'id': item['annotation'].id,
+                        'created_at': item['annotation'].created_at.isoformat(),
+                        'user_id': item['annotation'].user_id
+                    },
+                    'label': {
+                        'name': item['label'].name,
+                        'color': item['label'].color,
+                        'category': item['label'].category
+                    },
+                    'user': {
+                        'username': item['user'].username
+                    }
+                } for item in annotation_data
+            ],
+            'user_label_ids': list(user_label_ids)
+        })
+
     if request.method == 'POST':
         # Esempio: gestione di una form classica (aggiungi qui la logica di salvataggio se serve)
         # ...
@@ -68,19 +93,25 @@ def annotate_cell(cell_id):
                          labels=labels,
                          categories=categories,
                          annotations=annotation_data,
-                         user_label_ids=user_label_ids,
+                         user_label_ids=list(user_label_ids),
                          next_url=next_url)
 
 @annotation_bp.route('/api/add_annotation', methods=['POST'])
 @login_required
 def api_add_annotation():
     """API per aggiungere un'annotazione"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     data = request.get_json()
     
-    cell_id = data.get('cell_id')
-    label_id = data.get('label_id')
+    cell_id = data.get('cell_id') if data else None
+    label_id = data.get('label_id') if data else None
+    
+    logger.info(f"ADD_ANNOTATION: User {current_user.id} ({current_user.username}) trying to add label {label_id} to cell {cell_id}")
     
     if not cell_id or not label_id:
+        logger.error(f"ADD_ANNOTATION: Missing parameters - cell_id: {cell_id}, label_id: {label_id}")
         return jsonify({'success': False, 'message': 'Parametri mancanti'}), 400
     
     # Verifica che la cella e l'etichetta esistano
@@ -88,9 +119,15 @@ def api_add_annotation():
     label = Label.query.get(label_id)
     
     if not cell or not label:
+        logger.error(f"ADD_ANNOTATION: Cell {cell_id} or Label {label_id} not found - cell: {cell}, label: {label}")
         return jsonify({'success': False, 'message': 'Cella o etichetta non trovata'}), 404
     
+    logger.info(f"ADD_ANNOTATION: Found cell '{cell.text_content[:50]}...' and label '{label.name}'")
+    
     try:
+        # Permettiamo annotazioni multiple della stessa etichetta da parte dello stesso utente
+        # Questo consente maggiore flessibilità nella gestione delle annotazioni
+        
         # Crea l'annotazione
         annotation = CellAnnotation(
             text_cell_id=cell_id,
@@ -99,7 +136,25 @@ def api_add_annotation():
         )
         
         db.session.add(annotation)
+        db.session.flush()  # Per ottenere l'ID dell'annotazione
+        
+        logger.info(f"ADD_ANNOTATION: Created new annotation with ID {annotation.id}")
+        
+        # Traccia l'azione
+        action = AnnotationAction(
+            text_cell_id=cell_id,
+            label_id=label_id,
+            action_type='added',
+            performed_by=current_user.id,
+            target_user_id=current_user.id,
+            annotation_id=annotation.id,
+            notes=f"Aggiunta etichetta '{label.name}' dall'utente {current_user.username}"
+        )
+        db.session.add(action)
+        
         db.session.commit()
+        
+        logger.info(f"ADD_ANNOTATION: Successfully added annotation {annotation.id} and logged action {action.id}")
         
         return jsonify({
             'success': True,
@@ -107,14 +162,16 @@ def api_add_annotation():
             'annotation_id': annotation.id
         })
         
-    except IntegrityError:
+    except IntegrityError as e:
         db.session.rollback()
+        logger.error(f"ADD_ANNOTATION: IntegrityError - {str(e)}")
         return jsonify({
             'success': False,
             'message': 'Hai già assegnato questa etichetta a questa cella'
         }), 400
     except Exception as e:
         db.session.rollback()
+        logger.error(f"ADD_ANNOTATION: Unexpected error - {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Errore del server: {str(e)}'
@@ -124,30 +181,142 @@ def api_add_annotation():
 @login_required
 def api_remove_annotation():
     """API per rimuovere un'annotazione"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     data = request.get_json()
     
     cell_id = data.get('cell_id')
     label_id = data.get('label_id')
     
+    logger.info(f"REMOVE_ANNOTATION: User {current_user.id} ({current_user.username}) trying to remove label {label_id} from cell {cell_id}")
+    
     if not cell_id or not label_id:
+        logger.error(f"REMOVE_ANNOTATION: Missing parameters - cell_id: {cell_id}, label_id: {label_id}")
         return jsonify({'success': False, 'message': 'Parametri mancanti'}), 400
     
-    # Trova l'annotazione dell'utente corrente
-    annotation = CellAnnotation.query.filter_by(
-        text_cell_id=cell_id,
-        label_id=label_id,
-        user_id=current_user.id
-    ).first()
+    # Verifica che la cella e l'etichetta esistano
+    cell = TextCell.query.get(cell_id)
+    label = Label.query.get(label_id)
     
-    if not annotation:
+    if not cell or not label:
+        logger.error(f"REMOVE_ANNOTATION: Cell {cell_id} or Label {label_id} not found - cell: {cell}, label: {label}")
+        return jsonify({'success': False, 'message': 'Cella o etichetta non trovata'}), 404
+    
+    logger.info(f"REMOVE_ANNOTATION: Found cell '{cell.text_content[:50]}...' and label '{label.name}'")
+    
+    # Trova TUTTE le annotazioni per questa cella/label (non solo dell'utente corrente)
+    annotations = CellAnnotation.query.filter_by(
+        text_cell_id=cell_id,
+        label_id=label_id
+    ).all()
+    
+    if not annotations:
+        logger.warning(f"REMOVE_ANNOTATION: No annotations found for cell {cell_id} and label {label_id}")
         return jsonify({
             'success': False,
-            'message': 'Annotazione non trovata'
+            'message': 'Nessuna annotazione trovata per questa etichetta'
         }), 404
     
+    logger.info(f"REMOVE_ANNOTATION: Found {len(annotations)} annotations to remove")
+    
     try:
-        db.session.delete(annotation)
+        removed_count = 0
+        # Rimuovi tutte le annotazioni per questa cella/label e traccia le azioni
+        for annotation in annotations:
+            logger.info(f"REMOVE_ANNOTATION: Removing annotation {annotation.id} (user: {annotation.user_id}, ai_generated: {annotation.is_ai_generated})")
+            
+            # Crea un record dell'azione prima di eliminare l'annotazione
+            action = AnnotationAction(
+                text_cell_id=cell_id,
+                label_id=label_id,
+                action_type='removed',
+                performed_by=current_user.id,
+                target_user_id=annotation.user_id,
+                annotation_id=annotation.id,
+                was_ai_generated=annotation.is_ai_generated,
+                ai_confidence=annotation.ai_confidence,
+                ai_model=annotation.ai_model,
+                ai_provider=annotation.ai_provider,
+                notes=f'Rimossa annotazione di {annotation.user.username}' if annotation.user_id != current_user.id else 'Rimossa propria annotazione'
+            )
+            db.session.add(action)
+            db.session.delete(annotation)
+            db.session.flush()  # Sincronizza le modifiche prima di continuare
+            removed_count += 1
+            
+            logger.info(f"REMOVE_ANNOTATION: Removed annotation {annotation.id} and logged action {action.id}")
+        
         db.session.commit()
+        
+        logger.info(f"REMOVE_ANNOTATION: Successfully removed {removed_count} annotations")
+        
+        message = f'Rimosse {removed_count} annotazione/i con successo'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'removed_count': removed_count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"REMOVE_ANNOTATION: Unexpected error - {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Errore del server: {str(e)}'
+        }), 500
+
+@annotation_bp.route('/api/remove_annotation_by_id', methods=['POST'])
+@login_required
+def api_remove_annotation_by_id():
+    """API per rimuovere un'annotazione specifica tramite ID"""
+    logger = logging.getLogger(__name__)
+    data = request.get_json()
+    
+    annotation_id = data.get('annotation_id')
+    
+    logger.info(f"REMOVE_ANNOTATION_BY_ID: User {current_user.id} ({current_user.username}) trying to remove annotation {annotation_id}")
+    
+    if not annotation_id:
+        logger.error(f"REMOVE_ANNOTATION_BY_ID: Missing annotation_id")
+        return jsonify({'success': False, 'message': 'ID annotazione mancante'}), 400
+    
+    try:
+        # Trova l'annotazione
+        annotation = CellAnnotation.query.get(annotation_id)
+        
+        if not annotation:
+            logger.error(f"REMOVE_ANNOTATION_BY_ID: Annotation {annotation_id} not found")
+            return jsonify({'success': False, 'message': 'Annotazione non trovata'}), 404
+        
+        logger.info(f"REMOVE_ANNOTATION_BY_ID: Found annotation {annotation_id} - Cell: {annotation.text_cell_id}, Label: {annotation.label_id}, User: {annotation.user_id}")
+        
+        # Traccia l'azione di rimozione
+        action = AnnotationAction(
+            text_cell_id=annotation.text_cell_id,
+            label_id=annotation.label_id,
+            action_type='removed',
+            performed_by=current_user.id,
+            target_user_id=annotation.user_id,
+            annotation_id=annotation_id,
+            was_ai_generated=annotation.is_ai_generated,
+            ai_confidence=annotation.ai_confidence,
+            ai_model=annotation.ai_model,
+            ai_provider=annotation.ai_provider,
+            notes=f"Rimossa annotazione di {annotation.user.username}"
+        )
+        
+        db.session.add(action)
+        logger.info(f"REMOVE_ANNOTATION_BY_ID: AnnotationAction created for removal")
+        
+        # Rimuovi l'annotazione
+        db.session.delete(annotation)
+        db.session.flush()
+        logger.info(f"REMOVE_ANNOTATION_BY_ID: Annotation {annotation_id} deleted")
+        
+        db.session.commit()
+        logger.info(f"REMOVE_ANNOTATION_BY_ID: Successfully removed annotation {annotation_id}")
         
         return jsonify({
             'success': True,
@@ -156,6 +325,7 @@ def api_remove_annotation():
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"REMOVE_ANNOTATION_BY_ID: Error removing annotation {annotation_id}: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Errore del server: {str(e)}'
@@ -295,8 +465,8 @@ def statistics():
     
     # Annotazioni per utente
     user_stats = db.session.query(User.username, db.func.count(CellAnnotation.id))\
-        .join(CellAnnotation)\
-        .group_by(User.id)\
+        .join(CellAnnotation, User.id == CellAnnotation.user_id)\
+            .group_by(User.id)\
         .order_by(db.desc(db.func.count(CellAnnotation.id)))\
         .all()
     
@@ -322,15 +492,23 @@ def statistics():
     # Nuove statistiche dettagliate per file
     file_label_stats = get_file_label_statistics()
     overview_charts = create_overview_charts(file_label_stats)
+
+    # Genera i grafici per le statistiche generali
+    user_stats_chart = create_user_stats_chart(user_stats)
+    label_stats_chart = create_label_stats_chart(label_stats)
+    file_progress_chart = create_file_progress_chart(file_progress)
     
     return render_template('annotation/statistics.html',
-                         total_cells=total_cells,
-                         annotated_cells=annotated_cells,
-                         user_stats=user_stats,
-                         label_stats=label_stats,
-                         file_progress=file_progress,
-                         file_label_stats=file_label_stats,
-                         overview_charts=overview_charts)
+                          total_cells=total_cells,
+                          annotated_cells=annotated_cells,
+                          user_stats=user_stats,
+                          label_stats=label_stats,
+                          file_progress=file_progress,
+                          file_label_stats=file_label_stats,
+                          overview_charts=overview_charts,
+                          user_stats_chart=user_stats_chart,
+                          label_stats_chart=label_stats_chart,
+                          file_progress_chart=file_progress_chart)
 
 @annotation_bp.route('/file_statistics/<int:file_id>')
 @login_required
@@ -548,3 +726,88 @@ def create_overview_charts(file_stats):
         charts['all_labels_pie'] = json.dumps(fig_all_labels, cls=plotly.utils.PlotlyJSONEncoder)
     
     return charts
+
+def create_user_stats_chart(user_stats):
+    """Crea un grafico a barre per le annotazioni per utente."""
+    if not user_stats:
+        return None
+
+    users = [stat.username for stat in user_stats]
+    counts = [stat[1] for stat in user_stats] # stat[1] is the count from the query
+
+    fig = go.Figure(data=[go.Bar(
+        x=counts,
+        y=users,
+        orientation='h',
+        marker_color='rgb(93, 164, 214)'
+    )])
+
+    fig.update_layout(
+        title="Annotazioni per Utente",
+        xaxis_title="Numero di Annotazioni",
+        yaxis_title="Utente",
+        height=max(400, len(users) * 30),
+        yaxis=dict(autorange="reversed") # Per avere l'utente con più annotazioni in alto
+    )
+
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+def create_label_stats_chart(label_stats):
+    """Crea un grafico a barre per le etichette più utilizzate."""
+    if not label_stats:
+        return None
+
+    labels = [stat.name for stat in label_stats]
+    counts = [stat[2] for stat in label_stats] # stat[2] is the count from the query
+    colors = [stat.color for stat in label_stats]
+
+    fig = go.Figure(data=[go.Bar(
+        x=labels,
+        y=counts,
+        marker_color=colors
+    )])
+
+    fig.update_layout(
+        title="Etichette più Utilizzate",
+        xaxis_title="Etichetta",
+        yaxis_title="Numero di Annotazioni",
+        height=400,
+        xaxis_tickangle=-45
+    )
+
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+def create_file_progress_chart(file_progress):
+    """Crea un grafico a barre per il progresso di annotazione per file."""
+    if not file_progress:
+        return None
+
+    file_names = [stat.original_filename for stat in file_progress]
+    total_cells = [stat.total_cells for stat in file_progress]
+    annotated_cells = [stat.annotated_cells for stat in file_progress]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            name='Celle Totali',
+            x=file_names,
+            y=total_cells,
+            marker_color='rgb(26, 118, 255)'
+        ),
+        go.Bar(
+            name='Celle Annotate',
+            x=file_names,
+            y=annotated_cells,
+            marker_color='rgb(55, 128, 200)'
+        )
+    ])
+
+    fig.update_layout(
+        barmode='group',
+        title="Progresso Annotazione per File",
+        xaxis_title="File",
+        yaxis_title="Numero di Celle",
+        height=450,
+        xaxis_tickangle=-45
+    )
+
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)

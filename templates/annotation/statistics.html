@@ -108,92 +108,39 @@
 
 
 <div class="row mb-4">
-    <!-- Annotazioni per utente -->
+    {% if user_stats_chart %}
     <div class="col-md-6">
-        <div class="card h-100">
+        <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-people me-2"></i>Contributi per Utente
                 </h5>
             </div>
             <div class="card-body">
-                {% if user_stats %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Utente</th>
-                                <th class="text-end">Annotazioni</th>
-                                <th class="text-end">%</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set total_annotations = 0 %}
-                            {% for u in user_stats %}
-                              {% set total_annotations = total_annotations + u[1] %}
-                            {% endfor %}
-                            {% for username, count in user_stats %}
-                            <tr>
-                                <td>
-                                    <span class="badge bg-secondary">{{ username }}</span>
-                                </td>
-                                <td class="text-end">
-                                    <strong>{{ count }}</strong>
-                                </td>
-                                <td class="text-end">
-                                    <small class="text-muted">
-                                        {{ "%.1f"|format(count / total_annotations * 100) if total_annotations > 0 else 0 }}%
-                                    </small>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center text-muted py-3">
-                    <i class="bi bi-info-circle mb-2"></i>
-                    <p>Nessuna annotazione ancora</p>
-                </div>
-                {% endif %}
+                <div id="user-stats-chart" class="chart-container"></div>
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Etichette più utilizzate -->
+    {% if label_stats_chart %}
     <div class="col-md-6">
-        <div class="card h-100">
+        <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-star me-2"></i>Etichette Più Utilizzate
                 </h5>
             </div>
             <div class="card-body">
-                {% if label_stats %}
-                <div class="list-group list-group-flush">
-                    {% for name, color, count in label_stats %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <div class="d-flex align-items-center">
-                            <span class="badge me-2" style="background-color: {{ color }};">&nbsp;</span>
-                            <span>{{ name }}</span>
-                        </div>
-                        <span class="badge bg-primary rounded-pill">{{ count }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center text-muted py-3">
-                    <i class="bi bi-info-circle mb-2"></i>
-                    <p>Nessuna etichetta utilizzata</p>
-                </div>
-                {% endif %}
+                <div id="label-stats-chart" class="chart-container"></div>
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
-<!-- Progresso per file -->
-<div class="row">
+{% if file_progress_chart %}
+<div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
@@ -202,67 +149,12 @@
                 </h5>
             </div>
             <div class="card-body">
-                {% if file_progress %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Nome File</th>
-                                <th class="text-center">Celle Totali</th>
-                                <th class="text-center">Celle Annotate</th>
-                                <th class="text-center">Progresso</th>
-                                <th>Completamento</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for filename, total, annotated in file_progress %}
-                            {% set file_percentage = (annotated / total * 100) if total > 0 %}
-                            <tr>
-                                <td>
-                                    <i class="bi bi-file-earmark-excel text-success me-2"></i>
-                                    {{ filename }}
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-secondary">{{ total }}</span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge bg-primary">{{ annotated }}</span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="fw-bold">{{ "%.1f"|format(file_percentage) }}%</span>
-                                </td>
-                                <td>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar 
-                                            {% if file_percentage == 100 %}bg-success
-                                            {% elif file_percentage >= 75 %}bg-info
-                                            {% elif file_percentage >= 50 %}bg-warning
-                                            {% else %}bg-danger{% endif %}" 
-                                             role="progressbar" 
-                                             style="width: {{ file_percentage }}%"
-                                             data-animate="true">
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-folder-x display-4 mb-3"></i>
-                    <h6>Nessun File Caricato</h6>
-                    <p>Carica alcuni file Excel per iniziare il processo di annotazione</p>
-                    <a href="{{ url_for('excel.upload') }}" class="btn btn-primary">
-                        <i class="bi bi-cloud-upload me-2"></i>Carica File
-                    </a>
-                </div>
-                {% endif %}
+                <div id="file-progress-chart" class="chart-container"></div>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Statistiche Dettagliate per File -->
 <div class="row mb-4">
@@ -403,45 +295,50 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Anima le progress bar
+    // Anima le progress bar esistenti
     const progressBars = document.querySelectorAll('.progress-bar[data-animate]');
     progressBars.forEach(bar => {
-        const targetWidth = bar.style.width;
-        bar.style.width = '0%';
-        setTimeout(() => {
-            bar.style.transition = 'width 1s ease-in-out';
-            bar.style.width = targetWidth;
-        }, 200);
+      const targetWidth = bar.style.width;
+      bar.style.width = '0%';
+      setTimeout(() => {
+        bar.style.transition = 'width 1s ease-in-out';
+        bar.style.width = targetWidth;
+      }, 200);
     });
-    
+
+    // Funzione generica per renderizzare i grafici
+    function renderPlotlyChart(elementId, chartDataJson) {
+        if (chartDataJson && chartDataJson.trim()) { // Controlla che non sia vuoto o solo spazi bianchi
+            try {
+                const chartData = JSON.parse(chartDataJson);
+                Plotly.newPlot(elementId, chartData.data, chartData.layout, {
+                    responsive: true,
+                    displayModeBar: false
+                });
+            } catch (e) {
+                console.error("Errore nel parsing dei dati del grafico per l'elemento " + elementId + ":", e, "Dati ricevuti:", chartDataJson);
+            }
+        } else {
+            console.warn("Nessun dato del grafico per l'elemento " + elementId);
+        }
+    }
+
     // Renderizza i grafici di panoramica
-    {% if overview_charts.completion_overview %}
-    const completionData = {{ overview_charts.completion_overview|safe }};
-    Plotly.newPlot('completion-chart', completionData.data, completionData.layout, {
-        responsive: true,
-        displayModeBar: false
-    });
-    {% endif %}
+    renderPlotlyChart('completion-chart', `{{ overview_charts.completion_overview|safe }}`);
+    renderPlotlyChart('all-labels-chart', `{{ overview_charts.all_labels_pie|safe }}`);
     
-    {% if overview_charts.all_labels_pie %}
-    const allLabelsData = {{ overview_charts.all_labels_pie|safe }};
-    Plotly.newPlot('all-labels-chart', allLabelsData.data, allLabelsData.layout, {
-        responsive: true,
-        displayModeBar: false
-    });
-    {% endif %}
+    // Renderizza i nuovi grafici
+    renderPlotlyChart('user-stats-chart', `{{ user_stats_chart|safe }}`);
+    renderPlotlyChart('label-stats-chart', `{{ label_stats_chart|safe }}`);
+    renderPlotlyChart('file-progress-chart', `{{ file_progress_chart|safe }}`);
     
     // Renderizza i grafici per file individuali
     {% for file_stat in file_label_stats %}
     {% if file_stat.charts.labels_pie %}
-    const fileLabelsData{{ file_stat.file.id }} = {{ file_stat.charts.labels_pie|safe }};
-    Plotly.newPlot('file-labels-{{ file_stat.file.id }}', fileLabelsData{{ file_stat.file.id }}.data, fileLabelsData{{ file_stat.file.id }}.layout, {
-        responsive: true,
-        displayModeBar: false
-    });
+    renderPlotlyChart('file-labels-{{ file_stat.file.id }}', `{{ file_stat.charts.labels_pie|safe }}`);
     {% endif %}
     {% endfor %}
-    
+
     // Aggiorna le statistiche ogni 30 secondi (opzionale)
     // setInterval(() => {
     //     location.reload();
