@@ -90,9 +90,12 @@
                             </div>
                         </div>
                         
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap">
                             <button id="generate-ai-labels" class="btn btn-primary" data-file-id="{{ excel_file.id }}" disabled>
                                 <i class="bi bi-magic"></i> Genera Etichette AI
+                            </button>
+                            <button id="re-annotate-ai-labels" class="btn btn-warning" data-file-id="{{ excel_file.id }}" disabled>
+                                <i class="bi bi-arrow-clockwise"></i> Ri-etichetta Tutto
                             </button>
                             <button id="review-ai-labels" class="btn btn-outline-info" data-file-id="{{ excel_file.id }}" disabled>
                                 <i class="bi bi-eye"></i> Rivedi Suggerimenti (<span id="pending-count">0</span>)

@@ -16,9 +16,6 @@
                 <a href="{{ url_for('labels.list_categories') }}" class="btn btn-info me-2">
                     <i class="bi bi-collection me-2"></i>Gestisci Categorie
                 </a>
-                <a href="{{ url_for('labels.merge_labels') }}" class="btn btn-warning me-2">
-                    <i class="fas fa-code-branch me-2"></i>Merge Etichette
-                </a>
                 <a href="{{ url_for('labels.create_label') }}" class="btn btn-primary">
                     <i class="bi bi-plus-circle me-2"></i>Crea Nuova Etichetta
                 </a>
@@ -50,6 +47,14 @@
                         </select>
                     </div>
                     <div class="col-md-6 d-flex align-items-center">
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" name="show_inactive" value="true" 
+                                   id="show_inactive" onchange="this.form.submit()" 
+                                   {% if show_inactive %}checked{% endif %}>
+                            <label class="form-check-label" for="show_inactive">
+                                Mostra anche etichette inattive
+                            </label>
+                        </div>
                         <button type="submit" class="btn btn-primary me-2">
                             <i class="bi bi-search me-1"></i>Applica
                         </button>
@@ -65,6 +70,55 @@
 {% endif %}
 
 {% if labels.items %}
+<!-- Azioni in blocco -->
+{% if current_user.is_admin %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-check-square me-2"></i>Azioni in Blocco
+                </h6>
+            </div>
+            <div class="card-body">
+                <form id="bulkActionForm" method="POST" action="{{ url_for('labels.bulk_actions') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <select name="action" id="bulkAction" class="form-select" required>
+                                <option value="">Seleziona azione...</option>
+                                <option value="delete">Elimina selezionate</option>
+                                <option value="assign_category">Assegna categoria</option>
+                                <option value="change_color">Cambia colore</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3" id="categorySelect" style="display: none;">
+                            <select name="category_id" class="form-select">
+                                <option value="0">Nessuna categoria</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3" id="colorSelect" style="display: none;">
+                            <input type="color" name="color" class="form-control form-control-color" value="#007bff">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-warning" disabled id="bulkActionBtn">
+                                <i class="bi bi-play-fill me-1"></i>Esegui
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="toggleAllLabels()">
+                                <i class="bi bi-check-all me-1"></i>Seleziona tutto
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -74,6 +128,7 @@
                     {% if current_category %}
                     <span class="badge bg-primary">{{ current_category }}</span>
                     {% endif %}
+                    <span id="selectedCount" class="badge bg-success ms-2" style="display: none;">0 selezionate</span>
                 </h5>
                 <small class="text-muted">
                     Pagina {{ labels.page }} di {{ labels.pages }} ({{ labels.total }} etichette totali)
@@ -84,10 +139,16 @@
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
+                                {% if current_user.is_admin %}
+                                <th width="40">
+                                    <input type="checkbox" id="selectAll" onchange="toggleAllLabels()">
+                                </th>
+                                {% endif %}
                                 <th>Etichetta</th>
                                 <th>Categoria</th>
                                 <th>Descrizione</th>
                                 <th>Utilizzo</th>
+                                <th>Stato</th>
                                 <th>Creata</th>
                                 <th>Azioni</th>
                             </tr>
@@ -95,6 +156,12 @@
                         <tbody>
                             {% for label in labels.items %}
                             <tr>
+                                {% if current_user.is_admin %}
+                                <td>
+                                    <input type="checkbox" name="selected_labels" value="{{ label.id }}" 
+                                           class="label-checkbox" onchange="updateBulkActions()">
+                                </td>
+                                {% endif %}
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <span class="badge me-2" style="background-color: {{ label.color }}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
@@ -121,6 +188,13 @@
                                     <span class="badge bg-primary">{{ label.annotations|length }} annotazioni</span>
                                 </td>
                                 <td>
+                                    {% if label.is_active %}
+                                    <span class="badge bg-success">Attiva</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inattiva</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <small class="text-muted">{{ label.created_at.strftime('%d/%m/%Y') }}</small>
                                 </td>
                                 <td>
@@ -130,19 +204,51 @@
                                            title="Modifica etichetta">
                                             <i class="bi bi-pencil"></i>
                                         </a>
+                                        
+                                        {% if label.is_active %}
+                                        <!-- Etichetta attiva -->
+                                        <form method="POST" action="{{ url_for('labels.toggle_label_active', label_id=label.id) }}" 
+                                              style="display: inline;">
+                                            <button type="submit" class="btn btn-outline-warning" 
+                                                    title="Disattiva etichetta">
+                                                <i class="bi bi-eye-slash"></i>
+                                            </button>
+                                        </form>
+                                        
                                         {% if label.annotations|length == 0 %}
                                         <button type="button" 
                                                 class="btn btn-outline-danger"
-                                                title="Elimina etichetta"
+                                                title="Elimina etichetta definitivamente"
                                                 onclick="confirmDelete('{{ label.name }}', '{{ url_for('labels.delete_label', label_id=label.id) }}')">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                         {% else %}
                                         <button type="button" 
-                                                class="btn btn-outline-secondary disabled"
-                                                title="Non può essere eliminata: in uso in {{ label.annotations|length }} annotazioni">
-                                            <i class="bi bi-lock"></i>
+                                                class="btn btn-outline-secondary"
+                                                title="Disattiva etichetta (in uso in {{ label.annotations|length }} annotazioni)"
+                                                onclick="confirmSoftDelete('{{ label.name }}', '{{ url_for('labels.delete_label', label_id=label.id) }}')">
+                                            <i class="bi bi-archive"></i>
                                         </button>
+                                        {% endif %}
+                                        
+                                        {% else %}
+                                        <!-- Etichetta inattiva -->
+                                        <form method="POST" action="{{ url_for('labels.toggle_label_active', label_id=label.id) }}" 
+                                              style="display: inline;">
+                                            <button type="submit" class="btn btn-outline-success" 
+                                                    title="Riattiva etichetta">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </form>
+                                        
+                                        {% if label.annotations|length == 0 %}
+                                        <button type="button" 
+                                                class="btn btn-outline-danger"
+                                                title="Elimina etichetta definitivamente"
+                                                onclick="confirmDelete('{{ label.name }}', '{{ url_for('labels.delete_label', label_id=label.id) }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
                                         {% endif %}
                                     </div>
                                 </td>
@@ -296,5 +402,186 @@ function confirmDelete(labelName, deleteUrl) {
         form.submit();
     }
 }
+
+function confirmSoftDelete(labelName, deleteUrl) {
+    if (confirm(`Sei sicuro di voler disattivare l'etichetta "${labelName}"?\n\nL'etichetta sarà nascosta ma le annotazioni esistenti rimarranno intatte.`)) {
+        // Crea un form per il soft delete
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        
+        // Aggiungi token CSRF
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                         document.querySelector('input[name="csrf_token"]')?.value;
+        
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+        
+        // Aggiungi il flag per indicare che è solo un soft delete
+        const softDeleteInput = document.createElement('input');
+        softDeleteInput.type = 'hidden';
+        softDeleteInput.name = 'force_delete';
+        softDeleteInput.value = 'false';
+        form.appendChild(softDeleteInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Gestione azioni in blocco
+function toggleAllLabels() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.label-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.label-checkbox:checked');
+    const bulkActionBtn = document.getElementById('bulkActionBtn');
+    const bulkAction = document.getElementById('bulkAction');
+    
+    if (checkedBoxes.length > 0) {
+        bulkActionBtn.disabled = false;
+        bulkActionBtn.innerHTML = `<i class="bi bi-play-fill me-1"></i>Esegui (${checkedBoxes.length})`;
+    } else {
+        bulkActionBtn.disabled = true;
+        bulkActionBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Esegui';
+    }
+    
+    // Aggiorna checkbox "seleziona tutto"
+    const selectAll = document.getElementById('selectAll');
+    const allCheckboxes = document.querySelectorAll('.label-checkbox');
+    selectAll.checked = allCheckboxes.length > 0 && checkedBoxes.length === allCheckboxes.length;
+}
+
+// Gestione cambio azione
+document.getElementById('bulkAction')?.addEventListener('change', function() {
+    const action = this.value;
+    const categorySelect = document.getElementById('categorySelect');
+    const colorSelect = document.getElementById('colorSelect');
+    
+    // Nascondi tutti i selettori
+    categorySelect.style.display = 'none';
+    colorSelect.style.display = 'none';
+    
+    // Mostra il selettore appropriato
+    if (action === 'assign_category') {
+        categorySelect.style.display = 'block';
+    } else if (action === 'change_color') {
+        colorSelect.style.display = 'block';
+    }
+});
+
+// Conferma azioni in blocco
+document.getElementById('bulkActionForm')?.addEventListener('submit', function(e) {
+    const action = document.getElementById('bulkAction').value;
+    const checkedBoxes = document.querySelectorAll('.label-checkbox:checked');
+    
+    if (checkedBoxes.length === 0) {
+        e.preventDefault();
+        alert('Seleziona almeno una etichetta.');
+        return;
+    }
+    
+    let message = '';
+    if (action === 'delete') {
+        message = `Sei sicuro di voler eliminare ${checkedBoxes.length} etichette selezionate?`;
+    } else if (action === 'assign_category') {
+        const categoryName = document.querySelector('select[name="category_id"] option:checked').text;
+        message = `Sei sicuro di voler assegnare la categoria "${categoryName}" a ${checkedBoxes.length} etichette?`;
+    } else if (action === 'change_color') {
+        message = `Sei sicuro di voler cambiare il colore di ${checkedBoxes.length} etichette?`;
+    }
+    
+    if (message && !confirm(message)) {
+        e.preventDefault();
+    }
+});
+
+// Copia delle etichette selezionate negli input hidden del form
+document.getElementById('bulkActionForm')?.addEventListener('submit', function(e) {
+    const checkedBoxes = document.querySelectorAll('.label-checkbox:checked');
+    
+    // Rimuovi eventuali input hidden precedenti
+    const oldInputs = this.querySelectorAll('input[name="selected_labels"]');
+    oldInputs.forEach(input => input.remove());
+    
+    // Aggiungi i nuovi input hidden
+    checkedBoxes.forEach(checkbox => {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'selected_labels';
+        hiddenInput.value = checkbox.value;
+        this.appendChild(hiddenInput);
+    });
+});
+
+// Gestione del tasto "Seleziona tutto"
+function toggleAllLabels() {
+    const checkboxes = document.querySelectorAll('.label-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = !allChecked;
+    });
+    
+    // Aggiorna il testo del pulsante
+    const button = document.querySelector('button[onclick="toggleAllLabels()"]');
+    if (button) {
+        button.innerHTML = allChecked ? 
+            '<i class="bi bi-check-all me-1"></i>Seleziona tutto' : 
+            '<i class="bi bi-check-all me-1"></i>Deseleziona tutto';
+    }
+    
+    // Aggiorna il counter
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkedBoxes = document.querySelectorAll('.label-checkbox:checked');
+    const counter = document.getElementById('selectedCount');
+    if (counter) {
+        if (checkedBoxes.length > 0) {
+            counter.textContent = `${checkedBoxes.length} selezionate`;
+            counter.style.display = 'inline';
+        } else {
+            counter.style.display = 'none';
+        }
+    }
+    
+    // Abilita/disabilita il pulsante Esegui invece di nascondere tutto il form
+    const executeButton = document.querySelector('#bulkActionForm button[type="submit"]');
+    if (executeButton) {
+        executeButton.disabled = checkedBoxes.length === 0;
+        if (checkedBoxes.length === 0) {
+            executeButton.classList.add('disabled');
+            executeButton.title = 'Seleziona almeno una etichetta per eseguire azioni';
+        } else {
+            executeButton.classList.remove('disabled');
+            executeButton.title = '';
+        }
+    }
+}
+
+// Inizializza il counter al caricamento della pagina
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectedCount();
+    
+    // Aggiungi listener a tutte le checkbox
+    document.querySelectorAll('.label-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
+});
 </script>
 {% endblock %}

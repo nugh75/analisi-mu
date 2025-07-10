@@ -30,6 +30,7 @@
                     
                     <h6>Cambia Password</h6>
                     <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="form-group">
                             <label for="current_password">Password Attuale</label>
                             <input type="password" class="form-control" id="current_password" 

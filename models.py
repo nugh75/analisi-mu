@@ -61,6 +61,7 @@ class Category(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text)
     color = db.Column(db.String(7), default='#6c757d')  # Colore HEX
+    is_active = db.Column(db.Boolean, default=True)  # Soft delete
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -78,6 +79,7 @@ class Label(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
     category = db.Column(db.String(50))  # Manteniamo per compatibilità, sarà deprecato
     color = db.Column(db.String(7), default='#007bff')  # Colore HEX
+    is_active = db.Column(db.Boolean, default=True)  # Soft delete
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -65,6 +65,12 @@ def create_app():
         from models import User, db
         return db.session.get(User, int(user_id))
     
+    # Context processor per il token CSRF
+    @app.context_processor
+    def inject_csrf_token():
+        from flask_wtf.csrf import generate_csrf
+        return dict(csrf_token=generate_csrf)
+    
     # Creazione delle tabelle del database
     with app.app_context():
         from models import User, Label, ExcelFile, TextCell, CellAnnotation
@@ -147,4 +153,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5005)

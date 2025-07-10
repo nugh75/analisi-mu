@@ -176,6 +176,7 @@
                                 
                                 <form method="POST" action="{{ url_for('admin.toggle_ai_config', config_id=config.id) }}" 
                                       style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     {% if config.is_active %}
                                     <button type="submit" class="btn btn-sm btn-warning">
                                         <i class="fas fa-pause"></i> Disattiva
@@ -190,6 +191,7 @@
                                 <form method="POST" action="{{ url_for('admin.delete_ai_config', config_id=config.id) }}" 
                                       style="display: inline;"
                                       onsubmit="return confirm('Sei sicuro di voler eliminare questa configurazione?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="fas fa-trash"></i> Elimina
                                     </button>

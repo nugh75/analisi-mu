@@ -228,10 +228,21 @@ def view_file(file_id):
                          questions_stats=questions_stats,
                          label_comments=label_comments)
 
+@excel_bp.route('/file/<int:file_id>/question/')
+@excel_bp.route('/file/<int:file_id>/question')
+@login_required
+def view_question_empty(file_id):
+    """Gestisce il caso di question_name vuoto - reindirizza alla vista delle domande"""
+    return redirect(url_for('excel.view_file', file_id=file_id, view='questions'))
+
 @excel_bp.route('/file/<int:file_id>/question/<question_name>')
 @login_required
 def view_question(file_id, question_name):
     """Visualizza tutte le risposte a una specifica domanda"""
+    # Gestisce il caso di question_name vuoto anche qui
+    if not question_name or question_name.strip() == "":
+        return redirect(url_for('excel.view_file', file_id=file_id, view='questions'))
+    
     excel_file = ExcelFile.query.get_or_404(file_id)
     
     # Ottieni tutte le risposte per questa domanda

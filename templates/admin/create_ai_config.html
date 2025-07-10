@@ -88,6 +88,7 @@
                 
                 <div class="card-body">
                     <form method="POST" id="ai-config-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <!-- Informazioni Generali -->
                         <div class="form-group">
                             <label for="name">Nome Configurazione</label>

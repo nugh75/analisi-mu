@@ -230,6 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // AI labeling assistant initialization
     // Sets up AI status, enables buttons, and binds generate/review actions
     const generateBtn = document.getElementById('generate-ai-labels');
+    const reAnnotateBtn = document.getElementById('re-annotate-ai-labels');
     const reviewBtn = document.getElementById('review-ai-labels');
     const statusBadge = document.getElementById('ai-config-status');
     const pendingCountElem = document.getElementById('pending-count');
@@ -248,6 +249,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusBadge.textContent = `${cfg.provider.toUpperCase()} (${cfg.model})`;
                 statusBadge.className = 'badge bg-success';
                 generateBtn.disabled = false;
+                if (reAnnotateBtn) reAnnotateBtn.disabled = false;
             } else {
                 statusBadge.textContent = data.message || 'Nessuna configurazione AI attiva';
                 statusBadge.className = 'badge bg-danger';
@@ -347,6 +349,54 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
             }
         });
+
+        // Re-annotate AI labels (new functionality)
+        if (reAnnotateBtn) {
+            reAnnotateBtn.addEventListener('click', function() {
+                if (!confirm('⚠️ ATTENZIONE: Questa operazione ri-etichetterà TUTTE le celle del file (anche quelle già annotate).\n\nTutte le annotazioni AI esistenti verranno rimosse e ricreate con le etichette correnti del sistema.\n\nVuoi continuare?')) {
+                    return;
+                }
+                
+                // Update UI
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-hourglass-split"></i> Ri-etichettando...';
+                
+                if (progressDiv && progressBar && progressText) {
+                    progressDiv.style.display = 'block';
+                    progressBar.style.width = '0%';
+                    progressText.textContent = 'Ri-etichettatura in corso...';
+                }
+                
+                window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { 
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        batch_size: 10,  // Batch più piccoli per ri-etichettatura
+                        re_annotate: true 
+                    })
+                })
+                .then(res => {
+                    if (progressDiv && progressBar && progressText) {
+                        progressBar.style.width = '100%';
+                        progressText.textContent = 'Ri-etichettatura completata!';
+                        
+                        setTimeout(() => {
+                            progressDiv.style.display = 'none';
+                        }, 2000);
+                    }
+                    
+                    window.AnalisiMU.showToast(`Ri-etichettatura completata!\n\nProcessate: ${res.total_processed} celle\nNuove annotazioni: ${res.annotations_count}`, 'success', 7000);
+                    refreshStatus();
+                })
+                .catch(() => {
+                    window.AnalisiMU.showToast('Errore durante la ri-etichettatura', 'error');
+                })
+                .finally(() => {
+                    this.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Ri-etichetta Tutto';
+                    this.disabled = false;
+                    if (progressDiv) progressDiv.style.display = 'none';
+                });
+            });
+        }
 
         // Review AI labels
         if (reviewBtn) {
