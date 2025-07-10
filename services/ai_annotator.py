@@ -106,96 +106,113 @@ TESTI DA ETICHETTARE:
         
         return prompt
     
-    def generate_annotations(self, file_id: int, batch_size: int = 10, re_annotate: bool = False) -> Dict:
+    def generate_annotations(self, file_id: int, batch_size: int = 10, mode: str = 'new', 
+                           template_id: int = None, selected_categories: List[str] = None) -> Dict:
         """
         Genera annotazioni AI per un file
         
         Args:
             file_id: ID del file Excel
             batch_size: Numero di testi per batch (ridotto per evitare timeout)
-            re_annotate: Se True, ri-etichetta anche le celle già annotate
+            mode: Modalità di etichettatura ('new', 'additional', 'replace')
+            template_id: ID del template prompt da usare
+            selected_categories: Lista delle categorie selezionate per il prompt
         """
         try:
             # Ottiene la configurazione attiva
             config = self.get_active_configuration()
             if not config:
                 return {"error": "Nessuna configurazione AI attiva"}
-            
+
             self.initialize_clients(config)
+
+            # Ottiene le etichette disponibili
+            if selected_categories:
+                # Filtra per categorie selezionate
+                from models import Category
+                categories = Category.query.filter(Category.name.in_(selected_categories)).all()
+                labels = []
+                for cat in categories:
+                    labels.extend(Label.query.filter_by(category_id=cat.id, is_active=True).all())
+            else:
+                labels = Label.query.filter_by(is_active=True).order_by(Label.category, Label.name).all()
             
-            # Ottiene le etichette disponibili (sempre aggiornate dal sistema)
-            labels = Label.query.filter_by(is_active=True).order_by(Label.category, Label.name).all()
             if not labels:
                 return {"error": "Nessuna etichetta attiva disponibile"}
-            
-            # Ottiene i testi da annotare
-            if re_annotate:
-                # Se re_annotate=True, prende tutte le celle del file
+
+            # Ottiene i testi da annotare in base alla modalità
+            if mode == 'replace':
+                # Ri-etichettatura: tutte le celle
                 target_cells = TextCell.query.filter_by(excel_file_id=file_id).all()
-                print(f"🔄 Modalità ri-etichettatura: {len(target_cells)} celle totali")
-            else:
-                # Altrimenti solo quelle non ancora annotate
+                print(f"🔄 Modalità sostituzione: {len(target_cells)} celle totali")
+            elif mode == 'additional':
+                # Etichettatura aggiuntiva: tutte le celle (anche quelle già annotate)
+                target_cells = TextCell.query.filter_by(excel_file_id=file_id).all()
+                print(f"➕ Modalità aggiuntiva: {len(target_cells)} celle totali")
+            else:  # mode == 'new'
+                # Modalità normale: solo celle non annotate
                 target_cells = TextCell.query.filter(
                     TextCell.excel_file_id == file_id,
                     ~TextCell.id.in_(
                         db.session.query(CellAnnotation.text_cell_id).distinct()
                     )
                 ).all()
-                print(f"🆕 Modalità normale: {len(target_cells)} celle non annotate")
-            
+                print(f"🆕 Modalità nuove: {len(target_cells)} celle non annotate")
+
             if not target_cells:
-                message = "Nessuna cella da ri-etichettare" if re_annotate else "Nessun testo da annotare"
+                message = f"Nessuna cella da elaborare per modalità '{mode}'"
                 return {"message": message, "annotations": []}
-            
+
             # Processa in batch più piccoli per evitare timeout
             all_annotations = []
             total_processed = 0
-            max_cells_per_session = 20  # Ridotto da 50 per performance migliori
-            
+            max_cells_per_session = 20  # Ridotto per performance migliori
+
             # Limita il numero di celle da processare
             cells_to_process = target_cells[:max_cells_per_session]
-            
+
             for i in range(0, len(cells_to_process), batch_size):
                 batch_cells = cells_to_process[i:i + batch_size]
                 batch_texts = [cell.text_content for cell in batch_cells]
-                
+
                 print(f"📝 Processando batch {i//batch_size + 1}: {len(batch_cells)} celle")
-                
-                # Genera le annotazioni per questo batch con etichette aggiornate
+
+                # Genera le annotazioni per questo batch
                 batch_annotations = self._process_batch(
-                    batch_texts, batch_cells, labels, config, re_annotate
+                    batch_texts, batch_cells, labels, config, mode, template_id
                 )
-                
+
                 all_annotations.extend(batch_annotations)
                 total_processed += len(batch_cells)
-                
+
                 # Pausa tra i batch per evitare overload
                 import time
                 time.sleep(1)
-            
-            action_type = "ri-etichettate" if re_annotate else "create"
+
             return {
-                "message": f"Generate {len(all_annotations)} annotazioni ({action_type})",
+                "message": f"Generate {len(all_annotations)} annotazioni (modalità: {mode})",
                 "annotations": all_annotations,
                 "total_processed": total_processed,
-                "re_annotate": re_annotate
+                "mode": mode
             }
-            
+
         except Exception as e:
             print(f"❌ Errore in generate_annotations: {e}")
             return {"error": str(e)}
     
     def _process_batch(self, texts: List[str], cells: List[TextCell], 
-                      labels: List[Label], config: AIConfiguration, re_annotate: bool = False) -> List[Dict]:
+                      labels: List[Label], config: AIConfiguration, mode: str = 'new', 
+                      template_id: int = None) -> List[Dict]:
         """
         Processa un batch di testi
         
         Args:
             texts: Lista dei testi da annotare
             cells: Lista delle celle corrispondenti
-            labels: Lista delle etichette disponibili (aggiornate dal sistema)
+            labels: Lista delle etichette disponibili (filtrate per categorie)
             config: Configurazione AI
-            re_annotate: Se True, permette di ri-etichettare celle già annotate
+            mode: Modalità di etichettatura ('new', 'additional', 'replace')
+            template_id: ID del template prompt da usare
         """
         annotations = []
         

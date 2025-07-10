@@ -259,3 +259,57 @@ class AnnotationAction(db.Model):
     
     def __repr__(self):
         return f'<AnnotationAction {self.id}: {self.action_type} on Cell {self.text_cell_id} by User {self.performed_by}>'
+
+class AIPromptTemplate(db.Model):
+    """Template per prompt AI dinamici"""
+    __tablename__ = 'ai_prompt_template'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    base_prompt = db.Column(db.Text, nullable=False)  # Parte generica del prompt
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def build_prompt_with_categories(self, selected_categories, labels, texts):
+        """Costruisce il prompt finale con le categorie selezionate"""
+        from collections import defaultdict
+        
+        # Filtra le etichette per le categorie selezionate
+        filtered_labels = [
+            label for label in labels 
+            if label.category_obj and label.category_obj.name in selected_categories
+        ]
+        
+        if not filtered_labels:
+            # Se nessuna categoria, usa tutte le etichette
+            filtered_labels = labels
+        
+        # Organizza per categoria
+        categories_dict = defaultdict(list)
+        for label in filtered_labels:
+            if label.is_active:
+                category_name = label.category_obj.name if label.category_obj else 'Generale'
+                categories_dict[category_name].append(label)
+        
+        # Costruisce la sezione etichette
+        categories_text = "ETICHETTE DISPONIBILI (categorie selezionate):\n"
+        for category, cat_labels in categories_dict.items():
+            categories_text += f"\n=== {category} ===\n"
+            for label in cat_labels:
+                desc = f" - {label.description}" if label.description else ""
+                categories_text += f"• {label.name}{desc}\n"
+        
+        # Costruisce la sezione testi
+        texts_section = "\nTESTI DA ANALIZZARE:\n"
+        for i, text in enumerate(texts):
+            texts_section += f"{i}. {text}\n"
+        
+        # Combina tutto
+        full_prompt = f"{self.base_prompt}\n\n{categories_text}\n{texts_section}"
+        
+        return full_prompt
+    
+    def __repr__(self):
+        return f'<AIPromptTemplate {self.name}>'
