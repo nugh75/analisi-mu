@@ -4,6 +4,10 @@
 
 {% block extra_css %}
 <style>
+/* Fix per warning CSS browser */
+input::-moz-placeholder { opacity: 1; }
+input:-moz-placeholder { opacity: 1; }
+
 .annotation-card {
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -126,6 +130,22 @@
     margin-bottom: 20px;
     opacity: 0.5;
 }
+
+/* ✅ FIX: Rende le icone nei pulsanti trasparenti ai click */
+.accept-btn i,
+.reject-btn i,
+.view-full-text i,
+.btn i {
+    pointer-events: none;
+}
+
+/* ✅ FIX: Assicura che i pulsanti batch siano cliccabili */
+#select-all i,
+#select-none i,
+#batch-accept i,
+#batch-reject i {
+    pointer-events: none;
+}
 </style>
 {% endblock %}
 
@@ -134,6 +154,25 @@
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
+            <!-- DEBUG INFO -->
+            <div class="alert alert-info" id="debug-info">
+                <h5>🔍 INFO DEBUG:</h5>
+                <p><strong>File:</strong> {{ excel_file.original_filename }}</p>
+                <p><strong>File ID:</strong> {{ excel_file.id }}</p>
+                <p><strong>Annotazioni pending:</strong> {{ pending_annotations|length }}</p>
+                <p><strong>Total cells:</strong> {{ total_cells }}</p>
+                <p><strong>AI annotations count:</strong> {{ ai_annotations_count }}</p>
+            </div>
+            
+            <!-- DEBUG LOG AREA -->
+            <div class="alert alert-warning" id="debug-log-container">
+                <h6>📋 LOG DEBUG EVENTI:</h6>
+                <div id="debug-log" style="max-height: 300px; overflow-y: auto; background-color: #000; color: #0f0; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 14px; white-space: pre-wrap;">
+                    Inizializzazione...\n
+                </div>
+                <button onclick="clearDebugLog()" class="btn btn-sm btn-secondary mt-2">Pulisci Log</button>
+            </div>
+            
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2><i class="bi bi-eye-fill me-2"></i>Revisione Annotazioni AI</h2>
@@ -340,314 +379,167 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 DOM caricato, inizializzazione...');
-    try {
-        initializeEventListeners();
-        updateSelectedCount();
-        console.log('✅ Inizializzazione completata');
-    } catch (error) {
-        console.error('❌ Errore durante inizializzazione:', error);
-    }
-});
+// TEST: Aggiunto alert per verificare l'esecuzione dello script JS
+alert("Script JS di review_annotations.html caricato!");
 
-function initializeEventListeners() {
-    console.log('🔧 Inizializzazione event listeners...');
+// Funzione per loggare direttamente nella pagina
+function logToPage(message) {
+    const logArea = document.getElementById('debug-log');
+    if (logArea) {
+        const timestamp = new Date().toLocaleTimeString();
+        logArea.innerHTML += `[${timestamp}] ${message}\n`;
+        logArea.scrollTop = logArea.scrollHeight;
+    } else {
+        console.error('❌ ERRORE: debug-log area non trovata! Messaggio: ' + message);
+    }
+    console.log(message);
+}
+
+// Funzione per gestire la revisione delle annotazioni
+async function reviewAnnotation(annotationId, action) {
+    try {
+        logToPage(`⏳ Invio richiesta ${action} per annotazione ${annotationId}...`);
+        
+        const response = await fetch(`/ai/review/${annotationId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                action: action,
+                reviewer_id: {{ current_user.id }}
+            })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            logToPage(`✅ Annotazione ${annotationId} ${action === 'accept' ? 'accettata' : 'rifiutata'}`);
+            
+            // Rimuove la card dall'interfaccia
+            const card = document.querySelector(`.annotation-card[data-annotation-id="${annotationId}"]`);
+            if (card) {
+                card.style.opacity = '0.5';
+                card.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => card.remove(), 500);
+                
+                // Aggiorna il contatore
+                const pendingCount = document.querySelectorAll('.annotation-card').length;
+                if (pendingCount === 0) {
+                    window.location.reload(); // Ricarica se non ci sono più annotazioni
+                }
+            }
+        } else {
+            throw new Error(data.error || 'Errore sconosciuto');
+        }
+    } catch (error) {
+        logToPage(`❌ ERRORE durante ${action} annotazione ${annotationId}: ${error.message}`);
+        alert(`Errore: ${error.message}`);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    logToPage('🔥 DOM LOADED!');
     
-    // Verifica esistenza elementi
-    console.log('📊 Elementi trovati:');
-    console.log('- annotation-checkbox:', document.querySelectorAll('.annotation-checkbox').length);
-    console.log('- accept-btn:', document.querySelectorAll('.accept-btn').length);
-    console.log('- reject-btn:', document.querySelectorAll('.reject-btn').length);
-    console.log('- select-all:', document.getElementById('select-all'));
-    console.log('- batch-accept:', document.getElementById('batch-accept'));
+    // Gestione selezione/deselezione
+    const selectAllBtn = document.getElementById('select-all');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('.annotation-checkbox');
+            checkboxes.forEach(checkbox => checkbox.checked = true);
+            updateSelectedCount();
+        });
+    }
     
-    // Checkbox singole
+    const selectNoneBtn = document.getElementById('select-none');
+    if (selectNoneBtn) {
+        selectNoneBtn.addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('.annotation-checkbox');
+            checkboxes.forEach(checkbox => checkbox.checked = false);
+            updateSelectedCount();
+        });
+    }
+    
+    // Aggiorna contatore selezione
+    function updateSelectedCount() {
+        const selected = document.querySelectorAll('.annotation-checkbox:checked').length;
+        document.getElementById('selected-count').textContent = `${selected} selezionati`;
+        
+        // Abilita/disabilita pulsanti batch
+        document.getElementById('batch-accept').disabled = selected === 0;
+        document.getElementById('batch-reject').disabled = selected === 0;
+    }
+    
+    // Listener per checkbox
     document.querySelectorAll('.annotation-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectedCount);
     });
     
-    // Controlli batch
-    const selectAllBtn = document.getElementById('select-all');
-    const selectNoneBtn = document.getElementById('select-none');
-    const batchAcceptBtn = document.getElementById('batch-accept');
-    const batchRejectBtn = document.getElementById('batch-reject');
-    
-    if (selectAllBtn) selectAllBtn.addEventListener('click', selectAll);
-    if (selectNoneBtn) selectNoneBtn.addEventListener('click', selectNone);
-    if (batchAcceptBtn) batchAcceptBtn.addEventListener('click', batchAccept);
-    if (batchRejectBtn) batchRejectBtn.addEventListener('click', batchReject);
-    
-    // Azioni singole
+    // Gestione accetta/rifiuta singolo
     document.querySelectorAll('.accept-btn').forEach(btn => {
-        console.log('Adding accept listener to button:', btn);
-        btn.addEventListener('click', e => {
-            console.log('Accept button clicked!', e.target.dataset.annotationId);
-            reviewAnnotation(e.target.dataset.annotationId, 'accept');
+        btn.addEventListener('click', function() {
+            const annotationId = this.dataset.annotationId;
+            if (annotationId) {
+                reviewAnnotation(annotationId, 'accept');
+            }
         });
     });
     
     document.querySelectorAll('.reject-btn').forEach(btn => {
-        console.log('Adding reject listener to button:', btn);
-        btn.addEventListener('click', e => {
-            console.log('Reject button clicked!', e.target.dataset.annotationId);
-            reviewAnnotation(e.target.dataset.annotationId, 'reject');
+        btn.addEventListener('click', function() {
+            const annotationId = this.dataset.annotationId;
+            if (annotationId) {
+                reviewAnnotation(annotationId, 'reject');
+            }
         });
+    });
+    
+    // Gestione accetta/rifiuta batch
+    document.getElementById('batch-accept')?.addEventListener('click', function() {
+        const selected = document.querySelectorAll('.annotation-checkbox:checked');
+        if (confirm(`Accettare ${selected.length} annotazioni selezionate?`)) {
+            selected.forEach(checkbox => {
+                reviewAnnotation(checkbox.value, 'accept');
+            });
+        }
+    });
+    
+    document.getElementById('batch-reject')?.addEventListener('click', function() {
+        const selected = document.querySelectorAll('.annotation-checkbox:checked');
+        if (confirm(`Rifiutare ${selected.length} annotazioni selezionate?`)) {
+            selected.forEach(checkbox => {
+                reviewAnnotation(checkbox.value, 'reject');
+            });
+        }
     });
     
     // Visualizza testo completo
+    const fullTextModal = new bootstrap.Modal('#fullTextModal');
     document.querySelectorAll('.view-full-text').forEach(btn => {
-        btn.addEventListener('click', e => {
-            document.getElementById('full-text-content').textContent = e.target.dataset.text;
-            new bootstrap.Modal(document.getElementById('fullTextModal')).show();
+        btn.addEventListener('click', function() {
+            document.getElementById('full-text-content').textContent = this.dataset.text;
+            fullTextModal.show();
         });
     });
-    
-    // Filtri
-    const confidenceFilter = document.getElementById('confidence-filter');
-    const labelFilter = document.getElementById('label-filter');
-    const sortBy = document.getElementById('sort-by');
-    
-    if (confidenceFilter) confidenceFilter.addEventListener('change', applyFilters);
-    if (labelFilter) labelFilter.addEventListener('change', applyFilters);
-    if (sortBy) sortBy.addEventListener('change', applyFilters);
-}
-
-function updateSelectedCount() {
-    const selected = document.querySelectorAll('.annotation-checkbox:checked');
-    const count = selected.length;
-    
-    console.log(`📊 Selected count: ${count}`);
-    
-    const countElement = document.getElementById('selected-count');
-    const batchAcceptBtn = document.getElementById('batch-accept');
-    const batchRejectBtn = document.getElementById('batch-reject');
-    
-    if (countElement) countElement.textContent = `${count} selezionati`;
-    if (batchAcceptBtn) batchAcceptBtn.disabled = count === 0;
-    if (batchRejectBtn) batchRejectBtn.disabled = count === 0;
-    
-    console.log(`🎛️ Buttons disabled: ${count === 0}`);
-}
-
-function selectAll() {
-    console.log('🔄 Selecting all checkboxes...');
-    const checkboxes = document.querySelectorAll('.annotation-checkbox');
-    console.log(`📋 Found ${checkboxes.length} checkboxes`);
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = true;
-    });
-    updateSelectedCount();
-}
-
-function selectNone() {
-    console.log('🔄 Deselecting all checkboxes...');
-    const checkboxes = document.querySelectorAll('.annotation-checkbox');
-    console.log(`📋 Found ${checkboxes.length} checkboxes`);
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    updateSelectedCount();
-}
-
-function reviewAnnotation(annotationId, action) {
-    console.log(`🔥 REVIEW: annotation ${annotationId} with action ${action}`);
-    
-    // Rimuoviamo temporaneamente il CSRF per il debug
-    fetch(`/ai/review/${annotationId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: action })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Rimuovi l'annotazione dalla vista
-            const card = document.querySelector(`[data-annotation-id="${annotationId}"]`);
-            card.style.transition = 'all 0.3s ease';
-            card.style.opacity = '0.5';
-            card.style.transform = 'translateX(' + (action === 'accept' ? '100px' : '-100px') + ')';
-            
-            setTimeout(() => {
-                card.remove();
-                updateSelectedCount();
-                
-                // Controlla se non ci sono più annotazioni
-                if (document.querySelectorAll('.annotation-card').length === 0) {
-                    location.reload();
-                }
-            }, 300);
-            
-            // Mostra notifica
-            showNotification(`Annotazione ${action === 'accept' ? 'accettata' : 'rifiutata'}`, 'success');
-        } else {
-            showNotification('Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Review error:', error);
-        showNotification('Errore di connessione: ' + error.message, 'error');
-    });
-}
-
-function batchAccept() {
-    batchReview('accept');
-}
-
-function batchReject() {
-    batchReview('reject');
-}
-
-function batchReview(action) {
-    console.log(`🚀 BATCH REVIEW: action=${action}`);
-    
-    const selected = Array.from(document.querySelectorAll('.annotation-checkbox:checked'))
-                          .map(checkbox => parseInt(checkbox.value));
-    
-    console.log(`📋 Selected annotations:`, selected);
-    
-    if (selected.length === 0) {
-        console.log('❌ No annotations selected');
-        return;
+});
+// Funzione per pulire il log di debug
+function clearDebugLog() {
+    const logArea = document.getElementById('debug-log');
+    if (logArea) {
+        logArea.innerHTML = '';
+        logToPage('🧹 Log pulito!');
     }
-    
-    if (!confirm(`Vuoi ${action === 'accept' ? 'accettare' : 'rifiutare'} ${selected.length} annotazioni?`)) {
-        console.log('❌ User cancelled action');
-        return;
-    }
-    
-    console.log(`📡 Sending batch request...`);
-    fetch('/ai/review/batch', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            annotation_ids: selected,
-            action: action
-        })
-    })
-    .then(response => {
-        console.log(`📨 Batch response status:`, response.status);
-        return response.json();
-    })
-    .then(data => {
-        console.log(`📨 Batch response data:`, data);
-        if (data.success) {
-            showNotification(data.message, 'success');
-            
-            // Rimuovi le annotazioni processate
-            selected.forEach(id => {
-                console.log(`🗑️ Removing card for annotation ${id}`);
-                const card = document.querySelector(`[data-annotation-id="${id}"]`);
-                if (card) card.remove();
-            });
-            
-            updateSelectedCount();
-            
-            // Ricarica se non ci sono più annotazioni
-            if (document.querySelectorAll('.annotation-card').length === 0) {
-                console.log(`🔄 No more annotations, reloading...`);
-                setTimeout(() => location.reload(), 1000);
-            }
-        } else {
-            showNotification('Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
-        }
-    })
-    .catch(error => {
-        console.error('💥 Batch review error:', error);
-        showNotification('Errore di connessione: ' + error.message, 'error');
-    });
 }
 
-function applyFilters() {
-    const confidenceFilter = document.getElementById('confidence-filter').value;
-    const labelFilter = document.getElementById('label-filter').value;
-    const sortBy = document.getElementById('sort-by').value;
-    
-    let cards = Array.from(document.querySelectorAll('.annotation-card'));
-    
-    // Filtra
-    cards.forEach(card => {
-        let show = true;
-        
-        // Filtro confidence
-        if (confidenceFilter) {
-            const confidence = parseFloat(card.dataset.confidence);
-            if (confidenceFilter === 'high' && confidence <= 0.8) show = false;
-            if (confidenceFilter === 'medium' && (confidence <= 0.5 || confidence > 0.8)) show = false;
-            if (confidenceFilter === 'low' && confidence > 0.5) show = false;
-        }
-        
-        // Filtro etichetta
-        if (labelFilter && card.dataset.label !== labelFilter) {
-            show = false;
-        }
-        
-        card.style.display = show ? 'block' : 'none';
+// Inizializza Bootstrap tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
-    // Ordina
-    const visibleCards = cards.filter(card => card.style.display !== 'none');
-    visibleCards.sort((a, b) => {
-        switch (sortBy) {
-            case 'confidence-desc':
-                return parseFloat(b.dataset.confidence) - parseFloat(a.dataset.confidence);
-            case 'confidence-asc':
-                return parseFloat(a.dataset.confidence) - parseFloat(b.dataset.confidence);
-            case 'created-desc':
-                return new Date(b.dataset.created) - new Date(a.dataset.created);
-            case 'created-asc':
-                return new Date(a.dataset.created) - new Date(b.dataset.created);
-            default:
-                return 0;
-        }
-    });
-    
-    const container = document.getElementById('annotations-container');
-    visibleCards.forEach(card => container.appendChild(card));
-}
-
-function showNotification(message, type) {
-    // Semplice sistema di notifiche
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
-    notification.style.position = 'fixed';
-    notification.style.top = '20px';
-    notification.style.right = '20px';
-    notification.style.zIndex = '9999';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-}
-
-function getCSRFToken() {
-    const metaTag = document.querySelector('meta[name=csrf-token]');
-    if (metaTag) {
-        return metaTag.getAttribute('content');
-    }
-    
-    const hiddenInput = document.querySelector('input[name="csrf_token"]');
-    if (hiddenInput) {
-        return hiddenInput.value;
-    }
-    
-    return null;
-}
+});
 </script>
 {% endblock %}
