@@ -73,7 +73,7 @@ class LabelForm(FlaskForm):
         super(LabelForm, self).__init__(*args, **kwargs)
         from models import Category
         # Popola le scelte delle categorie
-        categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+        categories = Category.query.order_by(Category.name).all()
         self.category_id.choices = [(0, 'Nessuna categoria')] + [(cat.id, cat.name) for cat in categories]
 
 class CategoryForm(FlaskForm):
