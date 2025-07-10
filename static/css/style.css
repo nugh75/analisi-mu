@@ -244,6 +244,66 @@ body {
     padding: 0.5em 0.75em;
 }
 
+/* Statistiche nella sidebar */
+.statistics-section {
+    font-size: 0.9rem;
+}
+
+.statistics-section .card-body {
+    padding: 1rem;
+}
+
+.statistics-section .text-center strong {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.statistics-section .text-center small {
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.statistics-section hr {
+    margin: 0.75rem 0;
+    border-color: #dee2e6;
+}
+
+.statistics-section .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+.statistics-section .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.statistics-section .row.text-center .col-4,
+.statistics-section .row.text-center .col-6 {
+    padding: 0.25rem;
+}
+
+.statistics-section .border-end {
+    border-right: 1px solid #dee2e6 !important;
+}
+
+/* Animazione per i numeri delle statistiche */
+.statistics-section strong {
+    transition: all 0.3s ease;
+}
+
+.statistics-section strong:hover {
+    transform: scale(1.1);
+}
+
+/* Stili per i loading delle statistiche */
+.statistics-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 2rem;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .jumbotron {

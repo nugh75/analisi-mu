@@ -45,6 +45,7 @@ def create_app():
     from routes.annotation import annotation_bp
     from routes.admin import admin_bp
     from routes.ai import ai_bp
+    from routes.statistics import statistics_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp, url_prefix='/')
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(annotation_bp, url_prefix='/annotation')
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(ai_bp, url_prefix='/ai')
+    app.register_blueprint(statistics_bp, url_prefix='/statistics')
     
     # Creazione delle cartelle necessarie
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
