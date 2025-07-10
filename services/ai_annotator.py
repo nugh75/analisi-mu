@@ -20,7 +20,84 @@ class AIAnnotatorService:
         self.ollama_client = None
         self.openrouter_client = None
         self.ai_user = None
-        
+        self.prompt_templates = self._load_prompt_templates()
+
+    def _load_prompt_templates(self) -> Dict[int, Dict]:
+        """
+        Carica i template di prompt disponibili. In futuro può essere esteso per caricare da DB.
+        Ogni template ha: 'name', 'description', 'template_text'.
+        """
+        return {
+            1: {
+                'name': 'Standard',
+                'description': 'Template base per etichettatura educativa',
+                'template_text': (
+                    "Sei un assistente esperto nell'etichettatura di testi educativi e questionari.\n\n"
+                    "ISTRUZIONI:\n"
+                    "1. Analizza ogni testo fornito\n"
+                    "2. Assegna SOLO etichette dalla lista sotto (nomi ESATTI)\n"
+                    "3. Puoi assegnare multiple etichette se appropriato\n"
+                    "4. Se un testo non è rilevante o non ha etichette appropriate, usa etichetta vuota: \"\"\n"
+                    "5. Rispondi SOLO in formato JSON valido con questa struttura:\n"
+                    "[\n  {\"index\": 0, \"label\": \"NomeEsattoDallaLista\", \"confidence\": 0.95},\n  {\"index\": 1, \"label\": \"AltroNomeEsatto\", \"confidence\": 0.87},\n  {\"index\": 2, \"label\": \"\", \"confidence\": 1.0}\n]\n"
+                )
+            },
+            2: {
+                'name': 'Analisi Commenti',
+                'description': 'Template focalizzato sull’analisi dei commenti ai quesiti',
+                'template_text': (
+                    "Sei un assistente AI specializzato nell'analisi dei commenti ai quesiti.\n\n"
+                    "ISTRUZIONI:\n"
+                    "1. Analizza ogni commento fornito\n"
+                    "2. Assegna SOLO etichette dalla lista sotto (nomi ESATTI)\n"
+                    "3. Puoi assegnare più etichette se necessario\n"
+                    "4. Se il commento non è rilevante, usa etichetta vuota: \"\"\n"
+                    "5. Rispondi SOLO in formato JSON valido come da esempio.\n"
+                )
+            },
+            # Altri template possono essere aggiunti qui
+        }
+
+    def get_prompt_template(self, template_id: int = None) -> str:
+        """Restituisce il testo del template selezionato, o quello standard se non specificato."""
+        if template_id and template_id in self.prompt_templates:
+            return self.prompt_templates[template_id]['template_text']
+        return self.prompt_templates[1]['template_text']
+
+    def build_annotation_prompt(self, texts: List[str], labels: List[Label], template_id: int = None) -> str:
+        """
+        Costruisce il prompt per l'annotazione AI usando un template e le etichette correnti del sistema
+        Args:
+            texts: Lista dei testi da annotare
+            labels: Lista delle etichette correnti del sistema (sempre aggiornate)
+            template_id: ID del template da usare
+        """
+        from collections import defaultdict
+        categories_dict = defaultdict(list)
+        for label in labels:
+            if label.is_active:
+                category_name = label.category_obj.name if label.category_obj else 'Generale'
+                categories_dict[category_name].append(label)
+
+        # Costruisce la lista delle categorie ed etichette
+        categories_text = "ETICHETTE DISPONIBILI (sempre aggiornate dal sistema):\n"
+        for category, cat_labels in categories_dict.items():
+            categories_text += f"\n=== {category} ===\n"
+            for label in cat_labels:
+                desc = f" - {label.description}" if label.description else ""
+                categories_text += f"• {label.name}{desc}\n"
+
+        # Parte generale dal template
+        prompt = self.get_prompt_template(template_id)
+        prompt += f"\n\n{categories_text}\n\nTESTI DA ETICHETTARE:\n"
+
+        for i, text in enumerate(texts):
+            clean_text = re.sub(r'\s+', ' ', text.strip())[:800]
+            prompt += f"{i}: {clean_text}\n"
+
+        prompt += f"\nRispondi solo con il JSON. Usa SOLO i nomi delle etichette dalla lista sopra (case-sensitive):"
+        return prompt
+
     def get_or_create_ai_user(self) -> User:
         """Ottiene o crea l'utente AI"""
         if not self.ai_user:
@@ -53,59 +130,6 @@ class AIAnnotatorService:
         elif config.provider == 'openrouter':
             self.openrouter_client = OpenRouterClient(config.openrouter_api_key)
     
-    def build_annotation_prompt(self, texts: List[str], labels: List[Label]) -> str:
-        """
-        Costruisce il prompt per l'annotazione AI usando le etichette correnti del sistema
-        
-        Args:
-            texts: Lista dei testi da annotare
-            labels: Lista delle etichette correnti del sistema (sempre aggiornate)
-        """
-        # Organizza le etichette per categoria per un prompt più strutturato
-        from collections import defaultdict
-        categories_dict = defaultdict(list)
-        
-        for label in labels:
-            if label.is_active:  # Solo etichette attive
-                category_name = label.category_obj.name if label.category_obj else 'Generale'
-                categories_dict[category_name].append(label)
-        
-        # Costruisce la lista delle categorie ed etichette
-        categories_text = "ETICHETTE DISPONIBILI (sempre aggiornate dal sistema):\n"
-        for category, cat_labels in categories_dict.items():
-            categories_text += f"\n=== {category} ===\n"
-            for label in cat_labels:
-                desc = f" - {label.description}" if label.description else ""
-                categories_text += f"• {label.name}{desc}\n"
-        
-        prompt = f"""Sei un assistente esperto nell'etichettatura di testi educativi e questionari.
-
-{categories_text}
-
-ISTRUZIONI:
-1. Analizza ogni testo fornito
-2. Assegna SOLO etichette dalla lista sopra (nomi ESATTI)
-3. Puoi assegnare multiple etichette se appropriato
-4. Se un testo non è rilevante o non ha etichette appropriate, usa etichetta vuota: ""
-5. Rispondi SOLO in formato JSON valido con questa struttura:
-[
-  {{"index": 0, "label": "NomeEsattoDallaLista", "confidence": 0.95}},
-  {{"index": 1, "label": "AltroNomeEsatto", "confidence": 0.87}},
-  {{"index": 2, "label": "", "confidence": 1.0}}
-]
-
-TESTI DA ETICHETTARE:
-"""
-        
-        for i, text in enumerate(texts):
-            # Pulisce il testo e lo tronca se troppo lungo
-            clean_text = re.sub(r'\s+', ' ', text.strip())[:800]
-            prompt += f"{i}: {clean_text}\n"
-        
-        prompt += f"\nRispondi solo con il JSON. Usa SOLO i nomi delle etichette dalla lista sopra (case-sensitive):"
-        
-        return prompt
-    
     def generate_annotations(self, file_id: int, batch_size: int = 10, mode: str = 'new', 
                            template_id: int = None, selected_categories: List[str] = None) -> Dict:
         """
@@ -128,7 +152,6 @@ TESTI DA ETICHETTARE:
 
             # Ottiene le etichette disponibili
             if selected_categories:
-                # Filtra per categorie selezionate
                 from models import Category
                 categories = Category.query.filter(Category.name.in_(selected_categories)).all()
                 labels = []
@@ -217,8 +240,8 @@ TESTI DA ETICHETTARE:
         annotations = []
         
         try:
-            # Costruisce il prompt con le etichette aggiornate
-            prompt = self.build_annotation_prompt(texts, labels)
+            # Costruisce il prompt con il template selezionato e le etichette aggiornate
+            prompt = self.build_annotation_prompt(texts, labels, template_id)
             
             # Prepara i messaggi
             messages = [
@@ -257,14 +280,15 @@ TESTI DA ETICHETTARE:
             # Parsifica le annotazioni
             ai_annotations = self._parse_ai_response(content)
             
+
             # Crea le annotazioni nel database
             ai_user = self.get_or_create_ai_user()
             label_map = {label.name.lower(): label for label in labels}
-            
+            re_annotate = mode == 'replace'
+
             for ai_ann in ai_annotations:
                 if ai_ann['index'] < len(cells):
                     cell = cells[ai_ann['index']]
-                    
                     # Gestisce il caso in cui label può essere stringa o lista
                     label_raw = ai_ann.get('label', '')
                     if isinstance(label_raw, list):
@@ -289,39 +313,39 @@ TESTI DA ETICHETTARE:
                             if label_name_clean == name.lower() or label_name_clean in name.lower() or name.lower() in label_name_clean:
                                 label = lbl
                                 break
-                    
-                    if label:
-                        # Se è modalità ri-etichettatura, rimuovi le annotazioni esistenti dell'utente AI
-                        if re_annotate:
-                            existing_ai_annotations = CellAnnotation.query.filter_by(
+                        
+                        if label:
+                            # Se è modalità ri-etichettatura, rimuovi le annotazioni esistenti dell'utente AI
+                            if re_annotate:
+                                existing_ai_annotations = CellAnnotation.query.filter_by(
+                                    text_cell_id=cell.id,
+                                    user_id=ai_user.id,
+                                    is_ai_generated=True
+                                ).all()
+                                for existing_ann in existing_ai_annotations:
+                                    db.session.delete(existing_ann)
+                            
+                            # Crea la nuova annotazione con status pending_review
+                            annotation = CellAnnotation(
                                 text_cell_id=cell.id,
+                                label_id=label.id,
                                 user_id=ai_user.id,
-                                is_ai_generated=True
-                            ).all()
-                            for existing_ann in existing_ai_annotations:
-                                db.session.delete(existing_ann)
-                        
-                        # Crea la nuova annotazione con status pending_review
-                        annotation = CellAnnotation(
-                            text_cell_id=cell.id,
-                            label_id=label.id,
-                            user_id=ai_user.id,
-                            is_ai_generated=True,
-                            ai_confidence=ai_ann.get('confidence', 0.5),
-                            ai_model=config.ollama_model or config.openrouter_model,
-                            ai_provider=config.provider,
-                            status='pending_review'  # SEMPRE pending_review
-                        )
-                        
-                        db.session.add(annotation)
-                        annotations.append({
-                            'text': cell.text_content[:100] + '...',
-                            'label': label.name,
-                            'confidence': ai_ann.get('confidence', 0.5)
-                        })
+                                is_ai_generated=True,
+                                ai_confidence=ai_ann.get('confidence', 0.5),
+                                ai_model=config.ollama_model or config.openrouter_model,
+                                ai_provider=config.provider,
+                                status='pending_review'  # SEMPRE pending_review
+                            )
+                            
+                            db.session.add(annotation)
+                            annotations.append({
+                                'text': cell.text_content[:100] + '...',
+                                'label': label.name,
+                                'confidence': ai_ann.get('confidence', 0.5)
+                            })
             
             db.session.commit()
-            
+        
         except Exception as e:
             print(f"Errore nel processamento batch: {e}")
             db.session.rollback()

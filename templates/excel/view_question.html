@@ -79,18 +79,43 @@
                 <div class="row">
                     <div class="col-md-8">
                         <p class="mb-3">
-                            Utilizza l'AI per generare automaticamente etichette per tutte le risposte non ancora annotate.
+                            Utilizza l'AI per generare automaticamente etichette per tutte le risposte non ancora annotate.<br>
                             Potrai poi rivedere e accettare/rifiutare ogni suggerimento.
                         </p>
-                        
-                        <div id="ai-status" class="mb-3">
+                        <form id="ai-options-form" class="mb-3">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label for="ai-template-select" class="form-label mb-1">Template AI</label>
+                                    <select id="ai-template-select" class="form-select form-select-sm">
+                                        <option value="1">Standard</option>
+                                        <option value="2">Analisi Commenti</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="ai-mode-select" class="form-label mb-1">Modalità</label>
+                                    <select id="ai-mode-select" class="form-select form-select-sm">
+                                        <option value="new">Solo nuove</option>
+                                        <option value="replace">Ri-etichetta tutte</option>
+                                        <option value="additional">Aggiungi a tutte</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="ai-categories-select" class="form-label mb-1">Categorie (opzionale)</label>
+                                    <select id="ai-categories-select" class="form-select form-select-sm" multiple>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat.name }}">{{ cat.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                        <div id="ai-status" class="mb-3 mt-2">
                             <div class="d-flex align-items-center">
                                 <span class="me-2">Stato:</span>
                                 <span id="ai-config-status" class="badge bg-secondary">Caricamento...</span>
                             </div>
                         </div>
-                        
-                        <div class="d-flex gap-2 flex-wrap">
+                        <div class="d-flex gap-2 flex-wrap mb-2">
                             <button id="generate-ai-labels" class="btn btn-primary" data-file-id="{{ excel_file.id }}" disabled>
                                 <i class="bi bi-magic"></i> Genera Etichette AI
                             </button>
@@ -104,6 +129,8 @@
                                 <i class="bi bi-gear"></i> Configurazione AI
                             </button>
                         </div>
+                        <label for="ai-prompt-preview" class="form-label mt-2">Prompt AI generato</label>
+                        <textarea id="ai-prompt-preview" class="form-control form-control-sm" rows="6" readonly style="font-family:monospace; background:#f8f9fa;"></textarea>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center">
@@ -329,6 +356,51 @@ document.addEventListener('DOMContentLoaded', function() {
             window.open('{{ url_for("admin.ai_configuration") }}', '_blank');
         });
     }
+
+    // --- PROMPT PREVIEW IN TEMPO REALE ---
+    const promptPreview = document.getElementById('ai-prompt-preview');
+    const templateSelect = document.getElementById('ai-template-select');
+    const modeSelect = document.getElementById('ai-mode-select');
+    const categoriesSelect = document.getElementById('ai-categories-select');
+    const fileId = {{ excel_file.id }};
+
+    function updatePromptPreview() {
+        if (!promptPreview) return;
+        const templateId = templateSelect?.value || 1;
+        let selectedCategories = [];
+        if (categoriesSelect) {
+            selectedCategories = Array.from(categoriesSelect.selectedOptions).map(opt => opt.value);
+        }
+        promptPreview.value = 'Generazione in corso...';
+        fetch('/ai/prompt/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_id: fileId,
+                template_id: templateId,
+                selected_categories: selectedCategories,
+                batch_size: 5
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                promptPreview.value = data.prompt;
+            } else {
+                promptPreview.value = 'Errore generazione prompt: ' + (data.error || '');
+            }
+        })
+        .catch(() => {
+            promptPreview.value = 'Errore di rete nella generazione del prompt.';
+        });
+    }
+
+    if (templateSelect) templateSelect.addEventListener('change', updatePromptPreview);
+    if (modeSelect) modeSelect.addEventListener('change', updatePromptPreview);
+    if (categoriesSelect) categoriesSelect.addEventListener('change', updatePromptPreview);
+
+    // Aggiorna subito al caricamento
+    updatePromptPreview();
 });
 </script>
 {% endblock %}

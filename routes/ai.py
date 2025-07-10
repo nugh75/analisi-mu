@@ -1,3 +1,4 @@
+
 """
 Routes per l'integrazione AI
 """
@@ -11,6 +12,44 @@ from services.ai_annotator import AIAnnotatorService
 from services.ai_label_service import AILabelService
 
 ai_bp = Blueprint('ai', __name__)
+
+# ...existing routes...
+
+@ai_bp.route('/prompt/preview', methods=['POST'])
+@login_required
+def preview_prompt():
+    """Restituisce il prompt AI generato in base ai parametri forniti (senza inviare all'AI)"""
+    try:
+        data = request.get_json() or {}
+        file_id = data.get('file_id')
+        template_id = int(data.get('template_id', 1))
+        selected_categories = data.get('selected_categories', [])
+        batch_size = int(data.get('batch_size', 5))
+        # Recupera le prime N celle da annotare (simulate)
+        if not file_id:
+            return jsonify({'success': False, 'error': 'file_id mancante'}), 400
+        from services.ai_annotator import AIAnnotatorService
+        from models import Label, TextCell, CellAnnotation
+        ai_service = AIAnnotatorService()
+        # Filtra le etichette
+        if selected_categories:
+            from models import Category
+            categories = Category.query.filter(Category.name.in_(selected_categories)).all()
+            labels = []
+            for cat in categories:
+                labels.extend(Label.query.filter_by(category_id=cat.id, is_active=True).all())
+        else:
+            labels = Label.query.filter_by(is_active=True).order_by(Label.category, Label.name).all()
+        # Prendi le prime N celle non annotate
+        cells = TextCell.query.filter(
+            TextCell.excel_file_id == file_id,
+            ~TextCell.id.in_(db.session.query(CellAnnotation.text_cell_id).distinct())
+        ).limit(batch_size).all()
+        texts = [cell.text_content for cell in cells]
+        prompt = ai_service.build_annotation_prompt(texts, labels, template_id)
+        return jsonify({'success': True, 'prompt': prompt})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @ai_bp.route('/generate/<int:file_id>', methods=['POST'])
 @login_required

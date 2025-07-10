@@ -289,17 +289,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!confirm('Vuoi generare etichette AI per tutte le risposte non ancora annotate?')) {
                 return;
             }
-            
-            // Update UI
+            // Raccogli parametri UI
+            const templateId = document.getElementById('ai-template-select')?.value || 1;
+            const mode = document.getElementById('ai-mode-select')?.value || 'new';
+            const categoriesSelect = document.getElementById('ai-categories-select');
+            let selectedCategories = [];
+            if (categoriesSelect) {
+                selectedCategories = Array.from(categoriesSelect.selectedOptions).map(opt => opt.value);
+            }
+            // Aggiorna UI
             this.disabled = true;
             this.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando...';
-            
             if (progressDiv && progressBar && progressText) {
                 progressDiv.style.display = 'block';
                 progressBar.style.width = '0%';
                 progressText.textContent = 'Inizializzazione...';
-                
-                // Progress simulation
                 let progressValue = 0;
                 const progressInterval = setInterval(() => {
                     progressValue += Math.random() * 10;
@@ -307,21 +311,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     progressBar.style.width = progressValue + '%';
                     progressText.textContent = `Elaborazione in corso... ${Math.round(progressValue)}%`;
                 }, 800);
-                
                 window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { 
                     method: 'POST',
-                    body: JSON.stringify({ batch_size: 50 })
+                    body: JSON.stringify({ 
+                        batch_size: 50,
+                        template_id: templateId,
+                        mode: mode,
+                        selected_categories: selectedCategories
+                    })
                 })
                 .then(res => {
                     clearInterval(progressInterval);
                     progressBar.style.width = '100%';
                     progressText.textContent = 'Completato!';
-                    
                     setTimeout(() => {
                         progressDiv.style.display = 'none';
                         generateBtn.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
                         generateBtn.disabled = false;
-                        
                         window.AnalisiMU.showToast(`Generazione completata!\n\nProcessate: ${res.total_processed} risposte\nAnnotazioni create: ${res.annotations_count}`, 'success', 5000);
                         refreshStatus();
                     }, 1000);
@@ -334,19 +340,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.AnalisiMU.showToast('Errore generazione etichette', 'error');
                 });
             } else {
-                // Fallback without progress bar
-                window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { method: 'POST' })
-                    .then(res => {
-                        window.AnalisiMU.showToast(res.message || 'Generazione completata', 'success');
-                        refreshStatus();
+                window.AnalisiMU.apiRequest(`/ai/generate/${fileId}`, { 
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        batch_size: 50,
+                        template_id: templateId,
+                        mode: mode,
+                        selected_categories: selectedCategories
                     })
-                    .catch(() => {
-                        window.AnalisiMU.showToast('Errore generazione etichette', 'error');
-                    })
-                    .finally(() => {
-                        this.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
-                        this.disabled = false;
-                    });
+                })
+                .then(res => {
+                    window.AnalisiMU.showToast(res.message || 'Generazione completata', 'success');
+                    refreshStatus();
+                })
+                .catch(() => {
+                    window.AnalisiMU.showToast('Errore generazione etichette', 'error');
+                })
+                .finally(() => {
+                    this.innerHTML = '<i class="bi bi-magic"></i> Genera Etichette AI';
+                    this.disabled = false;
+                });
             }
         });
 
