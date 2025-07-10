@@ -93,7 +93,7 @@ def user_detail(user_id):
         Label.color,
         Category.name.label('category_name'),
         func.count(CellAnnotation.id).label('count')
-    ).join(CellAnnotation).join(Category).filter(
+    ).select_from(CellAnnotation).join(Label).join(Category).filter(
         CellAnnotation.user_id == user_id
     ).group_by(Label.id).order_by(desc('count')).all()
     
@@ -111,7 +111,7 @@ def user_detail(user_id):
     
     # Attività recente (ultime 20 azioni)
     recent_actions = db.session.query(AnnotationAction).filter_by(
-        user_id=user_id
+        performed_by=user_id
     ).order_by(desc(AnnotationAction.timestamp)).limit(20).all()
     
     # Aggiungi info etichetta alle azioni
@@ -120,7 +120,7 @@ def user_detail(user_id):
         label = Label.query.get(action.label_id) if action.label_id else None
         recent_actions_with_labels.append({
             'timestamp': action.timestamp,
-            'action': action.action,
+            'action': action.action_type,
             'cell_id': action.text_cell_id,
             'label_name': label.name if label else 'N/A',
             'label_color': label.color if label else '#000000'
@@ -134,7 +134,21 @@ def user_detail(user_id):
         func.date(CellAnnotation.created_at)
     ).order_by('date').all()
     
-    timeline_dates = [item.date.strftime('%Y-%m-%d') for item in timeline_data]
+    timeline_dates = []
+    for item in timeline_data:
+        if isinstance(item.date, str):
+            # Se date è una stringa, verifica il formato e converti se necessario
+            try:
+                if '-' in item.date:  # Formato YYYY-MM-DD
+                    date_obj = datetime.strptime(item.date, '%Y-%m-%d').date()
+                    timeline_dates.append(date_obj.strftime('%Y-%m-%d'))
+                else:  # Altri formati di data come stringa
+                    timeline_dates.append(item.date)  # Usa la stringa originale
+            except ValueError:
+                timeline_dates.append(item.date)  # Fallback alla stringa originale
+        else:
+            # Altrimenti usa direttamente strftime
+            timeline_dates.append(item.date.strftime('%Y-%m-%d'))
     timeline_counts = [item.count for item in timeline_data]
     
     # Statistiche per categoria
@@ -142,7 +156,7 @@ def user_detail(user_id):
         Category.name,
         func.count(CellAnnotation.id).label('total_annotations'),
         func.count(distinct(CellAnnotation.label_id)).label('unique_labels')
-    ).join(Label).join(CellAnnotation).filter(
+    ).select_from(CellAnnotation).join(Label).join(Category).filter(
         CellAnnotation.user_id == user_id
     ).group_by(Category.id).all()
     
@@ -155,7 +169,7 @@ def user_detail(user_id):
             Label.name,
             Label.color,
             func.count(CellAnnotation.id).label('count')
-        ).join(CellAnnotation).join(Category).filter(
+        ).select_from(CellAnnotation).join(Label).join(Category).filter(
             CellAnnotation.user_id == user_id,
             Category.name == cat_stat.name
         ).group_by(Label.id).order_by(desc('count')).first()
@@ -451,22 +465,36 @@ def _prepare_timeline_data(user1_id, user2_id):
         (CellAnnotation.user_id == user1_id) | (CellAnnotation.user_id == user2_id)
     ).distinct().order_by('date').all()
     
-    dates = [d.date.strftime('%Y-%m-%d') for d in all_dates]
+    dates = []
+    for d in all_dates:
+        if isinstance(d.date, str):
+            # Se date è una stringa, usa direttamente
+            dates.append(d.date)
+        else:
+            # Altrimenti usa strftime
+            dates.append(d.date.strftime('%Y-%m-%d'))
+    
     user1_counts = []
     user2_counts = []
     
     for date_obj in all_dates:
+        # Estrai la data in formato corretto per il confronto
+        if isinstance(date_obj.date, str):
+            date_value = date_obj.date
+        else:
+            date_value = date_obj.date
+        
         # Count per utente 1
         count1 = CellAnnotation.query.filter(
             CellAnnotation.user_id == user1_id,
-            func.date(CellAnnotation.created_at) == date_obj.date
+            func.date(CellAnnotation.created_at) == date_value
         ).count()
         user1_counts.append(count1)
         
         # Count per utente 2
         count2 = CellAnnotation.query.filter(
             CellAnnotation.user_id == user2_id,
-            func.date(CellAnnotation.created_at) == date_obj.date
+            func.date(CellAnnotation.created_at) == date_value
         ).count()
         user2_counts.append(count2)
     

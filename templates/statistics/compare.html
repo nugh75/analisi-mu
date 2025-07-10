@@ -355,16 +355,16 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(labelsCtx, {
         type: 'bar',
         data: {
-            labels: {{ comparison.chart_data.label_names | tojsonfilter }},
+            labels: {{ comparison.chart_data.label_names | tojson }},
             datasets: [{
                 label: '{{ user1.username }}',
-                data: {{ comparison.chart_data.user1_counts | tojsonfilter }},
+                data: {{ comparison.chart_data.user1_counts | tojson }},
                 backgroundColor: 'rgba(0, 123, 255, 0.8)',
                 borderColor: 'rgba(0, 123, 255, 1)',
                 borderWidth: 1
             }, {
                 label: '{{ user2.username }}',
-                data: {{ comparison.chart_data.user2_counts | tojsonfilter }},
+                data: {{ comparison.chart_data.user2_counts | tojson }},
                 backgroundColor: 'rgba(40, 167, 69, 0.8)',
                 borderColor: 'rgba(40, 167, 69, 1)',
                 borderWidth: 1
@@ -394,17 +394,17 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(timelineCtx, {
         type: 'line',
         data: {
-            labels: {{ comparison.timeline_data.dates | tojsonfilter }},
+            labels: {{ comparison.timeline_data.dates | tojson }},
             datasets: [{
                 label: '{{ user1.username }}',
-                data: {{ comparison.timeline_data.user1_counts | tojsonfilter }},
+                data: {{ comparison.timeline_data.user1_counts | tojson }},
                 borderColor: '#007bff',
                 backgroundColor: 'rgba(0, 123, 255, 0.1)',
                 tension: 0.1,
                 fill: false
             }, {
                 label: '{{ user2.username }}',
-                data: {{ comparison.timeline_data.user2_counts | tojsonfilter }},
+                data: {{ comparison.timeline_data.user2_counts | tojson }},
                 borderColor: '#28a745',
                 backgroundColor: 'rgba(40, 167, 69, 0.1)',
                 tension: 0.1,

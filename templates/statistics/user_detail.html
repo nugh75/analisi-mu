@@ -252,10 +252,10 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(labelCtx, {
         type: 'doughnut',
         data: {
-            labels: {{ stats.label_names | tojsonfilter }},
+            labels: {{ stats.label_names | tojson }},
             datasets: [{
-                data: {{ stats.label_counts | tojsonfilter }},
-                backgroundColor: {{ stats.label_colors | tojsonfilter }},
+                data: {{ stats.label_counts | tojson }},
+                backgroundColor: {{ stats.label_colors | tojson }},
                 borderWidth: 2,
                 borderColor: '#fff'
             }]
@@ -276,10 +276,10 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(timelineCtx, {
         type: 'line',
         data: {
-            labels: {{ stats.timeline_dates | tojsonfilter }},
+            labels: {{ stats.timeline_dates | tojson }},
             datasets: [{
                 label: 'Annotazioni',
-                data: {{ stats.timeline_counts | tojsonfilter }},
+                data: {{ stats.timeline_counts | tojson }},
                 borderColor: '#007bff',
                 backgroundColor: 'rgba(0, 123, 255, 0.1)',
                 tension: 0.1,
