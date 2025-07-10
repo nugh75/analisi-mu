@@ -109,7 +109,8 @@
                     <div class="card">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
-                                <i class="bi bi-tags me-2"></i>Etichette Utilizzate
+                                <i class="bi bi-tags me-2"></i>Tutte le Etichette del Quesito
+                                <small class="text-muted">(Resoconto completo)</small>
                             </h5>
                         </div>
                         <div class="card-body">
@@ -131,12 +132,102 @@
                                                 </span>
                                             </td>
                                             <td>{{ label.category_name or 'Senza categoria' }}</td>
-                                            <td>{{ label.usage_count }}</td>
+                                            <td>
+                                                <strong>{{ label.usage_count }}</strong>
+                                                <small class="text-muted ms-1">utilizzi</small>
+                                            </td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
+                            {% if label_stats %}
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Totale etichette trovate: {{ label_stats|length }}
+                                </small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Etichette con Commenti -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-chat-text me-2"></i>Report Completo - Etichette con Tutti i Commenti
+                                <small class="text-muted">(Resoconto dettagliato per ogni etichetta)</small>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if labels_with_comments %}
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Questo è il resoconto completo di tutte le etichette utilizzate per questo quesito.</strong>
+                                <br>
+                                Ogni etichetta mostra tutti i commenti dove è stata applicata con il numero del rispondente (#).
+                                <br>
+                                <small class="text-muted">
+                                    Totale etichette: {{ labels_with_comments|length }} | 
+                                    Totale commenti: {{ labels_with_comments.values()|map('length')|sum }}
+                                </small>
+                            </div>
+                            
+                            <!-- Lista delle etichette con commenti -->
+                            {% for label_name, comments in labels_with_comments.items() %}
+                            <div class="mb-4">
+                                <h6>
+                                    <span class="badge me-2" style="background-color: {{ comments[0].color }}">
+                                        {{ label_name }}
+                                    </span>
+                                    <span class="text-muted">({{ comments|length }} commenti)</span>
+                                    {% if comments[0].category_name %}
+                                    <small class="text-muted ms-2">
+                                        - Categoria: {{ comments[0].category_name }}
+                                    </small>
+                                    {% endif %}
+                                </h6>
+                                
+                                <ul class="list-unstyled ms-3">
+                                    {% for comment in comments %}
+                                    <li class="mb-2">
+                                        <div class="d-flex">
+                                            <div class="me-2">
+                                                <strong class="text-primary">#{{ comment.row_number }}</strong>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                {{ comment.content }}
+                                                {% if comment.is_ai_generated %}
+                                                <small class="text-info ms-2">
+                                                    🤖 AI
+                                                    {% if comment.ai_confidence %}
+                                                    ({{ "%.0f"|format(comment.ai_confidence * 100) }}%)
+                                                    {% endif %}
+                                                </small>
+                                                {% endif %}
+                                                {% if comment.annotator %}
+                                                <small class="text-muted ms-2">
+                                                    - {{ comment.annotator }}
+                                                </small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Nessuna etichetta trovata per questo quesito.
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

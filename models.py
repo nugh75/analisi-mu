@@ -24,7 +24,7 @@ class User(UserMixin, db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relazioni
-    annotations = db.relationship('CellAnnotation', foreign_keys='CellAnnotation.user_id', backref='user', lazy=True, cascade='all, delete-orphan')
+    annotations = db.relationship('CellAnnotation', foreign_keys='CellAnnotation.user_id', backref='user', lazy=True)
     
     def set_password(self, password):
         """Imposta la password hashata"""

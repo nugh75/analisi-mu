@@ -696,8 +696,9 @@ def question_detail(file_id, question):
      .order_by(desc('annotation_count'))\
      .all()
     
-    # Etichette più utilizzate
+    # Tutte le etichette utilizzate per questo quesito (non solo le più usate)
     label_stats = db.session.query(
+        Label.id,
         Label.name,
         Label.color,
         Category.name.label('category_name'),
@@ -708,7 +709,7 @@ def question_detail(file_id, question):
      .filter(TextCell.excel_file_id == file_id)\
      .filter(TextCell.column_name == question)\
      .group_by(Label.id)\
-     .order_by(desc('usage_count'))\
+     .order_by(Label.name)\
      .all()
     
     # Raggruppamento etichetta + commento con ID
@@ -737,13 +738,42 @@ def question_detail(file_id, question):
     for ann in cell_annotations:
         cells_with_annotations[ann.cell_id].append(ann)
     
+    # Report delle etichette con i commenti completi
+    label_comments_report = db.session.query(
+        Label.id,
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        TextCell.id.label('cell_id'),
+        TextCell.row_index.label('row_number'),
+        TextCell.text_content.label('content'),
+        CellAnnotation.id.label('annotation_id'),
+        User.username.label('annotator'),
+        CellAnnotation.is_ai_generated,
+        CellAnnotation.ai_confidence,
+        CellAnnotation.status
+    ).join(CellAnnotation, Label.id == CellAnnotation.label_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .join(User, User.id == CellAnnotation.user_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .order_by(Label.name, TextCell.row_index)\
+     .all()
+    
+    # Raggruppa per etichetta
+    labels_with_comments = defaultdict(list)
+    for item in label_comments_report:
+        labels_with_comments[item.name].append(item)
+    
     return render_template('statistics/question_detail.html',
                          file=file_obj,
                          question=question,
                          cells=cells,
                          annotator_stats=annotator_stats,
                          label_stats=label_stats,
-                         cells_with_annotations=dict(cells_with_annotations))
+                         cells_with_annotations=dict(cells_with_annotations),
+                         labels_with_comments=dict(labels_with_comments))
 
 @statistics_bp.route('/question/<int:file_id>/<question>/compare')
 @login_required

@@ -201,12 +201,16 @@ def view_file(file_id):
         .filter(TextCell.excel_file_id == file_id)\
         .all()
 
-    # Raggruppa i commenti per etichetta
+    # Raggruppa i commenti per etichetta con tutte le info necessarie
     from collections import defaultdict
     label_comments_dict = defaultdict(list)
     label_objs = {}
     for annotation, label, text_cell in annotations:
-        label_comments_dict[label.id].append(text_cell.text_content)
+        label_comments_dict[label.id].append({
+            'text': text_cell.text_content,
+            'row_index': text_cell.row_index,
+            'annotation_id': annotation.id
+        })
         label_objs[label.id] = label
     label_comments = [(label_objs[lid], comments) for lid, comments in label_comments_dict.items()]
 

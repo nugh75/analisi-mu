@@ -382,10 +382,17 @@
                                     </h6>
                                     <div class="d-flex flex-wrap gap-1">
                                         {% for annotation in cell.annotations %}
-                                        <span class="label-display" 
+                                        <span class="label-display position-relative d-inline-flex align-items-center"
                                               style="background-color: {{ annotation.label.color }};"
                                               title="{{ annotation.label.description or annotation.label.name }} - {{ annotation.user.username }}">
                                             {{ annotation.label.name }}
+                                            <small class="text-white ms-1">(Riga {{ cell.row_index + 1 }})</small>
+                                            <button class="btn btn-sm btn-danger position-absolute top-0 end-0 p-0 m-0"
+                                                    style="transform: translate(50%, -50%); width: 16px; height: 16px; font-size: 8px; line-height: 1;"
+                                                    onclick="deleteAnnotation({{ annotation.id }})"
+                                                    data-bs-toggle="tooltip" data-bs-title="Elimina annotazione">
+                                                ×
+                                            </button>
                                         </span>
                                         {% endfor %}
                                     </div>
@@ -607,3 +614,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+<script>
+function deleteAnnotation(annotationId) {
+    if (confirm('Sei sicuro di voler eliminare questa annotazione?')) {
+        fetch(`/annotation/${annotationId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Errore durante l\'eliminazione');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Errore durante l\'eliminazione');
+        });
+    }
+}
+</script>

@@ -811,3 +811,72 @@ def create_file_progress_chart(file_progress):
     )
 
     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+@annotation_bp.route('/<int:annotation_id>', methods=['DELETE'])
+@login_required
+def delete_annotation(annotation_id):
+    """API per eliminare un'annotazione tramite ID (compatibile con frontend)"""
+    print(f"DELETE_ANNOTATION: User {current_user.id} ({current_user.username}) deleting annotation {annotation_id}")
+
+    try:
+        # Trova l'annotazione
+        annotation = CellAnnotation.query.get(annotation_id)
+        
+        if not annotation:
+            print(f"DELETE_ANNOTATION: Annotation {annotation_id} not found")
+            return jsonify({'success': False, 'message': 'Annotazione non trovata'}), 404
+        
+        print(f"DELETE_ANNOTATION: Found annotation {annotation_id} - Cell: {annotation.text_cell_id}, Label: {annotation.label_id}, User: {annotation.user_id}")
+        
+        # Verifica se l'annotazione ha un utente associato
+        user_username = "N/A"
+        if annotation.user_id:
+            user = User.query.get(annotation.user_id)
+            if user:
+                user_username = user.username
+            else:
+                print(f"DELETE_ANNOTATION: Warning - User {annotation.user_id} not found for annotation {annotation_id}")
+        
+        print(f"DELETE_ANNOTATION: User for annotation: {user_username}")
+        
+        # Traccia l'azione di rimozione
+        action = AnnotationAction(
+            text_cell_id=annotation.text_cell_id,
+            label_id=annotation.label_id,
+            action_type='removed',
+            performed_by=current_user.id,
+            target_user_id=annotation.user_id,
+            annotation_id=annotation_id,
+            was_ai_generated=annotation.is_ai_generated,
+            ai_confidence=annotation.ai_confidence,
+            ai_model=annotation.ai_model,
+            ai_provider=annotation.ai_provider,
+            notes=f"Rimossa annotazione di {user_username}"
+        )
+        
+        db.session.add(action)
+        print(f"DELETE_ANNOTATION: AnnotationAction created for removal")
+        
+        # Rimuovi l'annotazione
+        db.session.delete(annotation)
+        db.session.flush()
+        print(f"DELETE_ANNOTATION: Annotation {annotation_id} deleted from session")
+        
+        db.session.commit()
+        print(f"DELETE_ANNOTATION: Successfully committed removal of annotation {annotation_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Annotazione rimossa con successo'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"DELETE_ANNOTATION: Error removing annotation {annotation_id}: {str(e)}")
+        print(f"DELETE_ANNOTATION: Exception type: {type(e).__name__}")
+        import traceback
+        print(f"DELETE_ANNOTATION: Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': f'Errore del server: {str(e)}'
+        }), 500

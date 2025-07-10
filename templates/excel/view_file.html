@@ -473,7 +473,15 @@
                             </h6>
                             <ul class="list-group">
                                 {% for comment in comments %}
-                                <li class="list-group-item">{{ comment }}</li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{{ comment.text }}</span>
+                                    <small class="text-muted me-1">(Riga {{ comment.row_index + 1 }})</small>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            onclick="deleteAnnotation({{ comment.annotation_id }})"
+                                            data-bs-toggle="tooltip" data-bs-title="Elimina annotazione">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </li>
                                 {% endfor %}
                             </ul>
                         </div>
@@ -491,6 +499,36 @@
 
 {% block scripts %}
 <script>
+function deleteAnnotation(annotationId) {
+    if (confirm('Sei sicuro di voler eliminare questa annotazione?')) {
+        fetch(`/annotation/${annotationId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('Errore durante l\'eliminazione');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Errore durante l\'eliminazione');
+        });
+    }
+}
+
+// Inizializza i tooltip
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-submit del form quando cambia il foglio
     const sheetSelect = document.getElementById('sheet');
