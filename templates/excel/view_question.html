@@ -90,10 +90,23 @@
                                         <small class="text-muted">(Stile di analisi)</small>
                                     </label>
                                     <select id="ai-template-select" class="form-select">
-                                        <option value="1">📚 Standard Quesiti - Per domande e test educativi</option>
-                                        <option value="2">💬 Analisi Commenti - Per feedback e osservazioni</option>
-                                        <option value="3">🎯 Analisi Competenze - Per identificare abilità richieste</option>
+                                        <option value="">Caricamento template...</option>
                                     </select>
+                                    <small class="text-muted mt-1 d-block">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Seleziona il tipo di analisi più adatto al contenuto delle risposte
+                                    </small>
+                                    
+                                    <!-- Info Template Selezionato -->
+                                    <div id="template-info" class="mt-2 p-2 bg-light rounded" style="display: none;">
+                                        <small class="text-muted">
+                                            <strong>Descrizione:</strong> <span id="template-description">-</span>
+                                        </small>
+                                        <br>
+                                        <small class="text-muted">
+                                            <strong>Categoria:</strong> <span id="template-category">-</span>
+                                        </small>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -630,37 +643,104 @@ document.addEventListener('DOMContentLoaded', function() {
     const templateSelect = document.getElementById('ai-template-select');
     const fileId = {{ excel_file.id }};
 
-    // Carica i template disponibili dinamicamente
+    // Template hardcoded come fallback affidabile
+    const hardcodedTemplates = {
+        1: { name: 'Sentiment Analysis Educativo', category: 'Sentiment Analysis', icon: '😊' },
+        2: { name: 'Classificazione Utilizzo AI', category: 'Usage Patterns', icon: '🔄' },
+        3: { name: 'Analisi Benefici AI', category: 'Benefits Analysis', icon: '✅' },
+        4: { name: 'Identificazione Rischi e Preoccupazioni', category: 'Ethical Concerns', icon: '⚠️' },
+        5: { name: 'Valutazione Esperienza Educativa', category: 'Educational Experience', icon: '🎓' },
+        6: { name: 'Analisi Prospettive Future', category: 'Future Perspectives', icon: '🔮' }
+    };
+
+    // Carica i template disponibili dinamicamente con fallback sicuro
     async function loadAvailableTemplates() {
+        // Prima popola con i template hardcoded per garantire funzionalità
+        populateTemplateSelect(hardcodedTemplates);
+        
         try {
             const response = await fetch('/ai/templates/available', {
                 headers: {
                     'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 }
             });
-            const data = await response.json();
             
-            if (data.success && templateSelect) {
-                // Mantieni la selezione corrente
-                const currentValue = templateSelect.value;
-                templateSelect.innerHTML = '';
+            if (response.ok) {
+                const data = await response.json();
                 
-                // Popola con i template disponibili
-                for (const [id, template] of Object.entries(data.templates)) {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = template.name;
-                    option.title = template.description;
-                    templateSelect.appendChild(option);
+                if (data.success && data.templates && Object.keys(data.templates).length > 0) {
+                    // Merge template dal database con quelli hardcoded
+                    const mergedTemplates = { ...hardcodedTemplates };
+                    
+                    // Aggiungi o sovrascrivi con i template dal database
+                    for (const [id, template] of Object.entries(data.templates)) {
+                        const categoryIcons = {
+                            'Sentiment Analysis': '😊',
+                            'Usage Patterns': '🔄',
+                            'Benefits Analysis': '✅',
+                            'Ethical Concerns': '⚠️',
+                            'Educational Experience': '🎓',
+                            'Future Perspectives': '🔮'
+                        };
+                        
+                        mergedTemplates[id] = {
+                            name: template.name,
+                            category: template.category,
+                            description: template.description,
+                            icon: categoryIcons[template.category] || '📝'
+                        };
+                    }
+                    
+                    // Ripopola con i template combinati
+                    populateTemplateSelect(mergedTemplates);
+                    console.log(`✅ Caricati ${Object.keys(mergedTemplates).length} template AI (${Object.keys(data.templates).length} dal database + ${Object.keys(hardcodedTemplates).length} hardcoded)`);
+                } else {
+                    console.warn('⚠️ Risposta DB vuota, uso solo template hardcoded');
                 }
-                
-                // Ripristina la selezione se possibile
-                if (currentValue && document.querySelector(`option[value="${currentValue}"]`)) {
-                    templateSelect.value = currentValue;
-                }
+            } else {
+                console.warn('⚠️ Errore HTTP nel caricamento template, uso solo template hardcoded');
             }
         } catch (error) {
-            console.warn('Impossibile caricare i template AI:', error);
+            console.warn('⚠️ Errore di rete nel caricamento template:', error.message);
+            // I template hardcoded sono già caricati, quindi non facciamo nulla
+        }
+    }
+
+    // Funzione helper per popolare il select
+    function populateTemplateSelect(templates) {
+        if (!templateSelect) return;
+        
+        const currentValue = templateSelect.value;
+        templateSelect.innerHTML = '';
+        
+        // Aggiungi opzione di default
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleziona un template...';
+        defaultOption.disabled = true;
+        templateSelect.appendChild(defaultOption);
+        
+        // Aggiungi tutti i template
+        for (const [id, template] of Object.entries(templates)) {
+            const option = document.createElement('option');
+            option.value = id;
+            
+            const displayName = `${template.icon} ${template.name}`;
+            const categoryInfo = template.category ? ` - ${template.category}` : '';
+            
+            option.textContent = `${displayName}${categoryInfo}`;
+            option.title = template.description || `Template per ${template.category || 'analisi generale'}`;
+            templateSelect.appendChild(option);
+        }
+        
+        // Ripristina selezione o seleziona il primo disponibile
+        if (currentValue && document.querySelector(`option[value="${currentValue}"]`)) {
+            templateSelect.value = currentValue;
+        } else {
+            const firstTemplate = Object.keys(templates)[0];
+            if (firstTemplate) {
+                templateSelect.value = firstTemplate;
+            }
         }
     }
 
@@ -777,7 +857,30 @@ document.addEventListener('DOMContentLoaded', function() {
         templateSelect.addEventListener('change', () => {
             updateModeDisplay(currentMode);
             updatePromptPreview();
+            updateTemplateInfo();
         });
+    }
+    
+    // Funzione per aggiornare le info del template selezionato
+    function updateTemplateInfo() {
+        const templateInfo = document.getElementById('template-info');
+        const templateDescription = document.getElementById('template-description');
+        const templateCategory = document.getElementById('template-category');
+        
+        if (!templateSelect || !templateInfo) return;
+        
+        const selectedOption = templateSelect.selectedOptions[0];
+        if (selectedOption && selectedOption.value) {
+            templateInfo.style.display = 'block';
+            templateDescription.textContent = selectedOption.title || 'Nessuna descrizione disponibile';
+            
+            // Estrai categoria dal testo dell'opzione
+            const optionText = selectedOption.textContent;
+            const categoryMatch = optionText.match(/ - (.+)$/);
+            templateCategory.textContent = categoryMatch ? categoryMatch[1] : 'Categoria non specificata';
+        } else {
+            templateInfo.style.display = 'none';
+        }
     }
 
     // Controlli prompt
@@ -802,8 +905,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // Inizializza la modalità di default
         updateModeDisplay('new');
         updatePromptPreview();
+        updateTemplateInfo();
+        
+        // Debug: mostra stato template caricati
+        console.log('🔍 Template caricati nel dropdown:', templateSelect.options.length - 1); // -1 per escludere option placeholder
         
         // Abilita il pulsante generate dopo il caricamento
+        if (generateButton) {
+            generateButton.disabled = false;
+            console.log('✅ Pulsante generazione abilitato');
+        }
+    }).catch(error => {
+        console.error('❌ Errore durante l\'inizializzazione dei template:', error);
+        // Assicurati che il pulsante sia abilitato anche in caso di errore
         if (generateButton) {
             generateButton.disabled = false;
         }
@@ -813,7 +927,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (generateButton) {
         generateButton.addEventListener('click', async function() {
             const selectedCategories = updateCategoriesPreview();
-            const templateId = templateSelect?.value || 1;
+            const templateId = templateSelect?.value;
+            
+            // Validazione template selezionato
+            if (!templateId) {
+                alert('⚠️ Seleziona un template AI prima di procedere!');
+                return;
+            }
             
             // Ottieni parametri dinamici
             const maxTokens = parseInt(document.getElementById('max-tokens-select')?.value || 500);
@@ -821,9 +941,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const timeout = parseInt(document.getElementById('timeout-select')?.value || 90);
             
             // Conferma utente con parametri dettagliati
+            const templateName = templateSelect?.selectedOptions[0]?.textContent?.split(' - ')[0] || `Template ID ${templateId}`;
             const confirmation = confirm(
                 `Vuoi generare etichette AI con modalità "${currentModeText?.textContent || 'Solo Nuove'}"?\n\n` +
-                `Template: ${templateSelect?.selectedOptions[0]?.textContent?.split(' - ')[0]}\n` +
+                `Template: ${templateName}\n` +
                 `Categorie: ${selectedCategories.length > 0 ? selectedCategories.join(', ') : 'Tutte'}\n\n` +
                 `Configurazione:\n` +
                 `• Max Tokens: ${maxTokens}\n` +
@@ -887,6 +1008,12 @@ document.addEventListener('DOMContentLoaded', function() {
             } finally {
                 // Restore button
                 generateButton.disabled = false;
+                
+                const buttonTexts = {
+                    'new': 'Genera Etichette con AI',
+                    'replace': 'Ri-etichetta Tutto con AI', 
+                    'additional': 'Aggiungi Etichette con AI'
+                };
                 generateButtonText.textContent = buttonTexts[currentMode] || 'Genera Etichette con AI';
                 
                 setTimeout(() => {
