@@ -83,54 +83,183 @@
                             Potrai poi rivedere e accettare/rifiutare ogni suggerimento.
                         </p>
                         <form id="ai-options-form" class="mb-3">
-                            <div class="row g-2">
-                                <div class="col-md-4">
-                                    <label for="ai-template-select" class="form-label mb-1">Template AI</label>
-                                    <select id="ai-template-select" class="form-select form-select-sm">
-                                        <option value="1">Standard</option>
-                                        <option value="2">Analisi Commenti</option>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="ai-template-select" class="form-label mb-2">
+                                        <i class="bi bi-file-text me-1"></i>Template AI
+                                        <small class="text-muted">(Stile di analisi)</small>
+                                    </label>
+                                    <select id="ai-template-select" class="form-select">
+                                        <option value="1">📚 Standard Quesiti - Per domande e test educativi</option>
+                                        <option value="2">💬 Analisi Commenti - Per feedback e osservazioni</option>
+                                        <option value="3">🎯 Analisi Competenze - Per identificare abilità richieste</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <label for="ai-mode-select" class="form-label mb-1">Modalità</label>
-                                    <select id="ai-mode-select" class="form-select form-select-sm">
-                                        <option value="new">Solo nuove</option>
-                                        <option value="replace">Ri-etichetta tutte</option>
-                                        <option value="additional">Aggiungi a tutte</option>
+                                <div class="col-md-6">
+                                    <label for="ai-mode-select" class="form-label mb-2">
+                                        <i class="bi bi-gear me-1"></i>Modalità Etichettatura
+                                        <small class="text-muted">(Cosa etichettare)</small>
+                                    </label>
+                                    <select id="ai-mode-select" class="form-select">
+                                        <option value="new">🆕 Solo Nuove - Etichetta solo celle non annotate</option>
+                                        <option value="replace">🔄 Ri-etichetta Tutto - Sostituisce etichette esistenti</option>
+                                        <option value="additional">➕ Aggiungi - Aggiunge alle etichette esistenti</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <label for="ai-categories-select" class="form-label mb-1">Categorie (opzionale)</label>
-                                    <select id="ai-categories-select" class="form-select form-select-sm" multiple>
-                                        {% for cat in categories %}
-                                        <option value="{{ cat.name }}">{{ cat.name }}</option>
-                                        {% endfor %}
-                                    </select>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <label class="form-label mb-2">
+                                        <i class="bi bi-tags me-1"></i>Categorie da Considerare 
+                                        <small class="text-muted">(Lascia vuoto per usare tutte)</small>
+                                    </label>
+                                    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                        <div class="d-flex gap-2 mb-2">
+                                            <button type="button" id="select-all-categories" class="btn btn-outline-primary btn-sm">
+                                                <i class="bi bi-check-all me-1"></i>Seleziona Tutte
+                                            </button>
+                                            <button type="button" id="clear-all-categories" class="btn btn-outline-secondary btn-sm">
+                                                <i class="bi bi-x-circle me-1"></i>Deseleziona Tutte
+                                            </button>
+                                        </div>
+                                        <div id="categories-checkbox-list" class="row g-2">
+                                            {% for cat in categories %}
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input category-checkbox" type="checkbox" 
+                                                           value="{{ cat.name }}" id="cat-{{ loop.index }}">
+                                                    <label class="form-check-label" for="cat-{{ loop.index }}">
+                                                        <span class="badge" style="background-color: {{ cat.color }}; color: white;">
+                                                            {{ cat.name }}
+                                                        </span>
+                                                        <small class="text-muted ms-1">({{ cat.labels|length }} etichette)</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <div id="selected-categories-preview" class="mt-2 p-2 bg-light rounded" style="display: none;">
+                                            <small class="text-muted">Categorie selezionate:</small>
+                                            <div id="selected-categories-tags" class="mt-1"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </form>
-                        <div id="ai-status" class="mb-3 mt-2">
-                            <div class="d-flex align-items-center">
-                                <span class="me-2">Stato:</span>
-                                <span id="ai-config-status" class="badge bg-secondary">Caricamento...</span>
+                        <div id="ai-status" class="mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body py-2">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-robot me-2"></i>
+                                            <span class="fw-medium">Stato AI:</span>
+                                            <span id="ai-config-status" class="badge bg-secondary ms-2">Caricamento...</span>
+                                        </div>
+                                        <button id="ai-settings" class="btn btn-outline-secondary btn-sm">
+                                            <i class="bi bi-gear me-1"></i> Configurazione
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="d-flex gap-2 flex-wrap mb-2">
-                            <button id="generate-ai-labels" class="btn btn-primary" data-file-id="{{ excel_file.id }}" disabled>
-                                <i class="bi bi-magic"></i> Genera Etichette AI
+                        
+                        <!-- Pulsante Principale Unificato -->
+                        <div class="d-flex gap-2 align-items-center mb-3">
+                            <button id="generate-ai-labels" class="btn btn-primary btn-lg" data-file-id="{{ excel_file.id }}" disabled>
+                                <i class="bi bi-magic me-2"></i>
+                                <span id="generate-button-text">Genera Etichette con AI</span>
                             </button>
-                            <button id="re-annotate-ai-labels" class="btn btn-warning" data-file-id="{{ excel_file.id }}" disabled>
-                                <i class="bi bi-arrow-clockwise"></i> Ri-etichetta Tutto
-                            </button>
-                            <button id="review-ai-labels" class="btn btn-outline-info" data-file-id="{{ excel_file.id }}" disabled>
-                                <i class="bi bi-eye"></i> Rivedi Suggerimenti (<span id="pending-count">0</span>)
-                            </button>
-                            <button id="ai-settings" class="btn btn-outline-secondary">
-                                <i class="bi bi-gear"></i> Configurazione AI
+                            
+                            <!-- Opzioni Rapide -->
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" 
+                                        aria-expanded="false" title="Opzioni avanzate">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <h6 class="dropdown-header">
+                                            <i class="bi bi-gear me-1"></i>Modalità Avanzate
+                                        </h6>
+                                    </li>
+                                    <li><button class="dropdown-item" id="mode-replace" data-mode="replace">
+                                        <i class="bi bi-arrow-clockwise me-2"></i>Ri-etichetta Tutto
+                                        <small class="text-muted d-block">Sostituisce tutte le etichette esistenti</small>
+                                    </button></li>
+                                    <li><button class="dropdown-item" id="mode-additional" data-mode="additional">
+                                        <i class="bi bi-plus-circle me-2"></i>Aggiungi Etichette
+                                        <small class="text-muted d-block">Aggiunge alle etichette esistenti</small>
+                                    </button></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><button class="dropdown-item" id="test-prompt" disabled>
+                                        <i class="bi bi-play me-2"></i>Test Prompt su Campione
+                                    </button></li>
+                                </ul>
+                            </div>
+                            
+                            <button id="review-ai-labels" class="btn btn-outline-success" data-file-id="{{ excel_file.id }}" disabled>
+                                <i class="bi bi-eye me-1"></i> 
+                                Rivedi Suggerimenti 
+                                <span id="pending-count" class="badge bg-success">0</span>
                             </button>
                         </div>
-                        <label for="ai-prompt-preview" class="form-label mt-2">Prompt AI generato</label>
-                        <textarea id="ai-prompt-preview" class="form-control form-control-sm" rows="6" readonly style="font-family:monospace; background:#f8f9fa;"></textarea>
+                        <!-- Anteprima Prompt Migliorata -->
+                        <div class="card mt-3">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-eye me-2"></i>Anteprima Prompt Generato
+                                </h6>
+                                <div class="d-flex gap-2">
+                                    <button id="refresh-prompt" class="btn btn-outline-primary btn-sm" title="Aggiorna anteprima">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    <button id="edit-prompt" class="btn btn-outline-secondary btn-sm" title="Modifica prompt">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button id="copy-prompt" class="btn btn-outline-success btn-sm" title="Copia prompt">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Statistiche Prompt -->
+                                <div id="prompt-stats" class="row g-3 mb-3" style="display: none;">
+                                    <div class="col-md-3">
+                                        <div class="bg-primary bg-opacity-10 p-2 rounded text-center">
+                                            <div class="fw-bold text-primary" id="stats-labels">-</div>
+                                            <small class="text-muted">Etichette</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-info bg-opacity-10 p-2 rounded text-center">
+                                            <div class="fw-bold text-info" id="stats-cells">-</div>
+                                            <small class="text-muted">Celle da Processare</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-success bg-opacity-10 p-2 rounded text-center">
+                                            <div class="fw-bold text-success" id="stats-categories">-</div>
+                                            <small class="text-muted">Categorie</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="bg-warning bg-opacity-10 p-2 rounded text-center">
+                                            <div class="fw-bold text-warning" id="stats-template">-</div>
+                                            <small class="text-muted">Template</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Prompt Text -->
+                                <textarea id="ai-prompt-preview" class="form-control" rows="8" readonly 
+                                          style="font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; background: #f8f9fa;"
+                                          placeholder="Il prompt verrà generato automaticamente in base alle tue selezioni..."></textarea>
+                                
+                                <!-- Status/Error Messages -->
+                                <div id="prompt-messages" class="mt-2"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center">
@@ -357,50 +486,270 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- PROMPT PREVIEW IN TEMPO REALE ---
+    // --- GESTIONE CATEGORIE CON CHECKBOX ---
+    const categoriesCheckboxes = document.querySelectorAll('.category-checkbox');
+    const selectAllBtn = document.getElementById('select-all-categories');
+    const clearAllBtn = document.getElementById('clear-all-categories');
+    const selectedPreview = document.getElementById('selected-categories-preview');
+    const selectedTags = document.getElementById('selected-categories-tags');
+
+    function updateCategoriesPreview() {
+        const selected = Array.from(categoriesCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            selectedPreview.style.display = 'none';
+            return [];
+        }
+        
+        selectedPreview.style.display = 'block';
+        selectedTags.innerHTML = selected.map(cat => 
+            `<span class="badge bg-primary me-1">${cat}</span>`
+        ).join('');
+        
+        return selected;
+    }
+
+    // Event listeners per checkbox categorie
+    categoriesCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            updateCategoriesPreview();
+            updatePromptPreview();
+        });
+    });
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            categoriesCheckboxes.forEach(cb => cb.checked = true);
+            updateCategoriesPreview();
+            updatePromptPreview();
+        });
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', () => {
+            categoriesCheckboxes.forEach(cb => cb.checked = false);
+            updateCategoriesPreview();
+            updatePromptPreview();
+        });
+    }
+
+    // --- GESTIONE MODALITÀ DA DROPDOWN ---
+    const modeButtons = document.querySelectorAll('[data-mode]');
+    const generateButton = document.getElementById('generate-ai-labels');
+    const generateButtonText = document.getElementById('generate-button-text');
+
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const mode = btn.dataset.mode;
+            const modeSelect = document.getElementById('ai-mode-select');
+            
+            if (modeSelect) {
+                modeSelect.value = mode;
+                updateButtonText(mode);
+                updatePromptPreview();
+            }
+        });
+    });
+
+    function updateButtonText(mode) {
+        const texts = {
+            'new': 'Genera Etichette con AI',
+            'replace': 'Ri-etichetta Tutto con AI', 
+            'additional': 'Aggiungi Etichette con AI'
+        };
+        if (generateButtonText) {
+            generateButtonText.textContent = texts[mode] || texts['new'];
+        }
+    }
+
+    // --- ELEMENTI DOM UNIFICATI ---
     const promptPreview = document.getElementById('ai-prompt-preview');
     const templateSelect = document.getElementById('ai-template-select');
     const modeSelect = document.getElementById('ai-mode-select');
-    const categoriesSelect = document.getElementById('ai-categories-select');
     const fileId = {{ excel_file.id }};
+
+    // Carica i template disponibili dinamicamente
+    async function loadAvailableTemplates() {
+        try {
+            const response = await fetch('/ai/templates/available', {
+                headers: {
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            const data = await response.json();
+            
+            if (data.success && templateSelect) {
+                // Mantieni la selezione corrente
+                const currentValue = templateSelect.value;
+                templateSelect.innerHTML = '';
+                
+                // Popola con i template disponibili
+                for (const [id, template] of Object.entries(data.templates)) {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = template.name;
+                    option.title = template.description;
+                    templateSelect.appendChild(option);
+                }
+                
+                // Ripristina la selezione se possibile
+                if (currentValue && document.querySelector(`option[value="${currentValue}"]`)) {
+                    templateSelect.value = currentValue;
+                }
+            }
+        } catch (error) {
+            console.warn('Impossibile caricare i template AI:', error);
+        }
+    }
+
+    // Elementi per statistiche e controlli
+    const promptStats = document.getElementById('prompt-stats');
+    const statsLabels = document.getElementById('stats-labels');
+    const statsCells = document.getElementById('stats-cells');
+    const statsCategories = document.getElementById('stats-categories');
+    const statsTemplate = document.getElementById('stats-template');
+    const promptMessages = document.getElementById('prompt-messages');
+    const refreshPromptBtn = document.getElementById('refresh-prompt');
+    const copyPromptBtn = document.getElementById('copy-prompt');
 
     function updatePromptPreview() {
         if (!promptPreview) return;
+        
         const templateId = templateSelect?.value || 1;
-        let selectedCategories = [];
-        if (categoriesSelect) {
-            selectedCategories = Array.from(categoriesSelect.selectedOptions).map(opt => opt.value);
-        }
-        promptPreview.value = 'Generazione in corso...';
+        const selectedCategories = updateCategoriesPreview(); // Usa la nuova funzione checkbox
+        
+        promptPreview.value = 'Generazione prompt in corso...';
+        promptPreview.style.backgroundColor = '#f8f9fa';
+        promptMessages.innerHTML = '';
+        
+        // Nascondi statistiche durante il caricamento
+        if (promptStats) promptStats.style.display = 'none';
+        
         fetch('/ai/prompt/preview', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
             body: JSON.stringify({
                 file_id: fileId,
-                template_id: templateId,
+                template_id: parseInt(templateId),
                 selected_categories: selectedCategories,
                 batch_size: 5
             })
         })
-        .then(r => r.json())
-        .then(data => {
+        .then(async r => {
+            let data;
+            try {
+                data = await r.json();
+            } catch (e) {
+                promptPreview.value = 'Errore: Risposta non valida dal server. Verifica la sessione di login.';
+                promptPreview.style.backgroundColor = '#fee';
+                showMessage('Errore di comunicazione con il server', 'danger');
+                return;
+            }
+            
             if (data.success) {
                 promptPreview.value = data.prompt;
+                promptPreview.style.backgroundColor = '#f8f9fa';
+                
+                // Mostra statistiche se disponibili
+                if (data.stats) {
+                    updatePromptStats(data.stats);
+                    showMessage('Prompt generato con successo', 'success');
+                }
             } else {
-                promptPreview.value = 'Errore generazione prompt: ' + (data.error || '');
+                promptPreview.value = `Errore nella generazione del prompt:\n${data.error || 'Errore sconosciuto'}`;
+                promptPreview.style.backgroundColor = '#fee';
+                showMessage(data.error || 'Errore nella generazione del prompt', 'warning');
+                
+                // Mostra info aggiuntiva se disponibile
+                if (data.info) {
+                    showMessage(data.info, 'info');
+                }
             }
         })
-        .catch(() => {
-            promptPreview.value = 'Errore di rete nella generazione del prompt.';
+        .catch((error) => {
+            promptPreview.value = `Errore di rete nella generazione del prompt:\n${error.message}`;
+            promptPreview.style.backgroundColor = '#fee';
+            showMessage('Errore di connessione', 'danger');
         });
     }
 
-    if (templateSelect) templateSelect.addEventListener('change', updatePromptPreview);
-    if (modeSelect) modeSelect.addEventListener('change', updatePromptPreview);
-    if (categoriesSelect) categoriesSelect.addEventListener('change', updatePromptPreview);
+    function updatePromptStats(stats) {
+        if (promptStats && statsLabels && statsCells && statsCategories && statsTemplate) {
+            statsLabels.textContent = stats.labels_count || '-';
+            statsCells.textContent = stats.cells_count || '-';
+            statsCategories.textContent = stats.categories_used || '-';
+            
+            // Mostra nome template invece di ID
+            const templateName = templateSelect?.selectedOptions[0]?.textContent?.split(' - ')[0] || stats.template_id;
+            statsTemplate.textContent = templateName;
+            
+            promptStats.style.display = 'block';
+        }
+    }
 
-    // Aggiorna subito al caricamento
-    updatePromptPreview();
+    function showMessage(message, type = 'info') {
+        if (!promptMessages) return;
+        
+        const alertClass = `alert alert-${type} alert-dismissible fade show`;
+        promptMessages.innerHTML = `
+            <div class="${alertClass}" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        // Auto-hide success messages
+        if (type === 'success') {
+            setTimeout(() => {
+                const alert = promptMessages.querySelector('.alert');
+                if (alert) alert.remove();
+            }, 3000);
+        }
+    }
+
+    // Event listeners principali
+    if (templateSelect) {
+        templateSelect.addEventListener('change', () => {
+            const mode = modeSelect?.value || 'new';
+            updateButtonText(mode);
+            updatePromptPreview();
+        });
+    }
+    
+    if (modeSelect) {
+        modeSelect.addEventListener('change', () => {
+            updateButtonText(modeSelect.value);
+            updatePromptPreview();
+        });
+    }
+
+    // Controlli prompt
+    if (refreshPromptBtn) {
+        refreshPromptBtn.addEventListener('click', updatePromptPreview);
+    }
+
+    if (copyPromptBtn) {
+        copyPromptBtn.addEventListener('click', () => {
+            if (promptPreview && promptPreview.value) {
+                navigator.clipboard.writeText(promptPreview.value).then(() => {
+                    showMessage('Prompt copiato negli appunti!', 'success');
+                }).catch(() => {
+                    showMessage('Errore nella copia del prompt', 'warning');
+                });
+            }
+        });
+    }
+
+    // Carica i template disponibili all'avvio e aggiorna il prompt
+    loadAvailableTemplates().then(() => {
+        updatePromptPreview();
+    });
 });
 </script>
 {% endblock %}

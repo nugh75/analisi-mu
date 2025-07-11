@@ -6,6 +6,7 @@ import json
 import re
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+from sqlalchemy.orm import joinedload
 
 from models import (
     db, User, Label, TextCell, CellAnnotation, 
@@ -29,33 +30,69 @@ class AIAnnotatorService:
         """
         return {
             1: {
-                'name': 'Standard',
-                'description': 'Template base per etichettatura educativa',
+                'name': 'Standard Quesiti',
+                'description': 'Template ottimizzato per etichettare quesiti educativi e valutazioni',
                 'template_text': (
-                    "Sei un assistente esperto nell'etichettatura di testi educativi e questionari.\n\n"
-                    "ISTRUZIONI:\n"
-                    "1. Analizza ogni testo fornito\n"
-                    "2. Assegna SOLO etichette dalla lista sotto (nomi ESATTI)\n"
-                    "3. Puoi assegnare multiple etichette se appropriato\n"
-                    "4. Se un testo non è rilevante o non ha etichette appropriate, usa etichetta vuota: \"\"\n"
-                    "5. Rispondi SOLO in formato JSON valido con questa struttura:\n"
-                    "[\n  {\"index\": 0, \"label\": \"NomeEsattoDallaLista\", \"confidence\": 0.95},\n  {\"index\": 1, \"label\": \"AltroNomeEsatto\", \"confidence\": 0.87},\n  {\"index\": 2, \"label\": \"\", \"confidence\": 1.0}\n]\n"
+                    "Sei un assistente esperto nell'analisi e etichettatura di quesiti educativi e valutazioni.\n\n"
+                    "Il tuo compito è analizzare quesiti, domande e risposte per assegnare etichette tematiche appropriate.\n\n"
+                    "ISTRUZIONI SPECIFICHE:\n"
+                    "1. Analizza il contenuto di ogni testo (quesito, domanda o risposta)\n"
+                    "2. Identifica l'argomento principale, il livello di difficoltà e il tipo di competenza richiesta\n"
+                    "3. Assegna SOLO etichette dalla lista fornita (usa i nomi ESATTI)\n"
+                    "4. Puoi assegnare da 1 a 3 etichette per testo se appropriate\n"
+                    "5. Se un testo non è rilevante o non corrisponde a nessuna etichetta, usa etichetta vuota: \"\"\n"
+                    "6. Per quesiti complessi, privilegia le etichette più specifiche rispetto a quelle generiche\n"
+                    "7. Considera sia il contenuto esplicito che le competenze implicite richieste\n\n"
+                    "FORMATO RISPOSTA OBBLIGATORIO:\n"
+                    "Rispondi SOLO in formato JSON valido con questa struttura esatta:\n"
+                    "[\n  {\"index\": 0, \"label\": \"NomeEsattoDallaLista\", \"confidence\": 0.95},\n  {\"index\": 1, \"label\": \"AltroNomeEsatto\", \"confidence\": 0.87},\n  {\"index\": 2, \"label\": \"\", \"confidence\": 1.0}\n]\n\n"
+                    "IMPORTANTE: Il campo 'confidence' deve essere un numero da 0.1 a 1.0 che indica quanto sei sicuro dell'etichetta.\n"
                 )
             },
             2: {
                 'name': 'Analisi Commenti',
-                'description': 'Template focalizzato sull’analisi dei commenti ai quesiti',
+                'description': 'Template focalizzato sull\'analisi dei commenti e feedback sui quesiti',
                 'template_text': (
-                    "Sei un assistente AI specializzato nell'analisi dei commenti ai quesiti.\n\n"
-                    "ISTRUZIONI:\n"
-                    "1. Analizza ogni commento fornito\n"
-                    "2. Assegna SOLO etichette dalla lista sotto (nomi ESATTI)\n"
-                    "3. Puoi assegnare più etichette se necessario\n"
-                    "4. Se il commento non è rilevante, usa etichetta vuota: \"\"\n"
-                    "5. Rispondi SOLO in formato JSON valido come da esempio.\n"
+                    "Sei un assistente AI specializzato nell'analisi dei commenti e feedback relativi ai quesiti educativi.\n\n"
+                    "Il tuo compito è categorizzare commenti, osservazioni e feedback per facilitare l'analisi qualitativa.\n\n"
+                    "ISTRUZIONI SPECIFICHE:\n"
+                    "1. Analizza il tono, il contenuto e l'intento di ogni commento\n"
+                    "2. Identifica se il commento riguarda difficoltà, chiarezza, argomenti specifici, o aspetti metodologici\n"
+                    "3. Assegna SOLO etichette dalla lista fornita (usa i nomi ESATTI)\n"
+                    "4. Puoi assegnare multiple etichette se il commento tocca più aspetti\n"
+                    "5. Se il commento non è rilevante o non è categorizzabile, usa etichetta vuota: \"\"\n"
+                    "6. Considera sia il contenuto manifesto che quello latente del feedback\n\n"
+                    "FORMATO RISPOSTA:\n"
+                    "Rispondi SOLO in formato JSON valido come nell'esempio.\n"
                 )
             },
-            # Altri template possono essere aggiunti qui
+            3: {
+                'name': 'Analisi Competenze',
+                'description': 'Template per identificare competenze e abilità richieste dai quesiti',
+                'template_text': (
+                    "Sei un assistente esperto nell'analisi pedagogica per identificare competenze e abilità.\n\n"
+                    "Il tuo compito è analizzare quesiti per identificare le competenze cognitive e disciplinari richieste.\n\n"
+                    "ISTRUZIONI SPECIFICHE:\n"
+                    "1. Identifica il tipo di processo cognitivo richiesto (memoria, comprensione, applicazione, analisi, sintesi, valutazione)\n"
+                    "2. Riconosci l'area disciplinare e il livello di complessità\n"
+                    "3. Considera le competenze trasversali implicate (problem solving, comunicazione, pensiero critico)\n"
+                    "4. Assegna SOLO etichette dalla lista fornita (usa i nomi ESATTI)\n"
+                    "5. Privilegia etichette che descrivono competenze specifiche rispetto a quelle generiche\n"
+                    "6. Se non identifichi competenze chiare, usa etichetta vuota: \"\"\n\n"
+                    "FORMATO RISPOSTA:\n"
+                    "Rispondi SOLO in formato JSON valido come specificato.\n"
+                )
+            }
+        }
+
+    def get_available_templates(self) -> Dict[int, Dict]:
+        """Restituisce i template disponibili con metadati"""
+        return {
+            tid: {
+                'name': template['name'],
+                'description': template['description']
+            }
+            for tid, template in self.prompt_templates.items()
         }
 
     def get_prompt_template(self, template_id: int = None) -> str:
@@ -73,29 +110,56 @@ class AIAnnotatorService:
             template_id: ID del template da usare
         """
         from collections import defaultdict
+        
+        # Organizza le etichette per categoria per una presentazione più chiara
         categories_dict = defaultdict(list)
         for label in labels:
             if label.is_active:
                 category_name = label.category_obj.name if label.category_obj else 'Generale'
                 categories_dict[category_name].append(label)
 
-        # Costruisce la lista delle categorie ed etichette
+        # Costruisce la lista delle categorie ed etichette in modo più strutturato
         categories_text = "ETICHETTE DISPONIBILI (sempre aggiornate dal sistema):\n"
-        for category, cat_labels in categories_dict.items():
+        
+        # Ordina le categorie per nome per consistenza
+        for category in sorted(categories_dict.keys()):
+            cat_labels = categories_dict[category]
             categories_text += f"\n=== {category} ===\n"
-            for label in cat_labels:
-                desc = f" - {label.description}" if label.description else ""
-                categories_text += f"• {label.name}{desc}\n"
+            
+            # Ordina le etichette per nome all'interno della categoria
+            for label in sorted(cat_labels, key=lambda x: x.name):
+                # Aggiunge descrizione se disponibile e numero di utilizzi per contesto
+                desc_part = f" - {label.description}" if label.description else ""
+                usage_count = len(label.annotations) if hasattr(label, 'annotations') else 0
+                usage_info = f" (usata {usage_count} volte)" if usage_count > 0 else " (mai usata)"
+                categories_text += f"• {label.name}{desc_part}{usage_info}\n"
 
-        # Parte generale dal template
+        # Parte generale dal template selezionato
         prompt = self.get_prompt_template(template_id)
-        prompt += f"\n\n{categories_text}\n\nTESTI DA ETICHETTARE:\n"
+        prompt += f"\n\n{categories_text}\n\n"
+        
+        # Aggiunge informazioni di contesto sui testi
+        prompt += f"TESTI DA ETICHETTARE ({len(texts)} elementi):\n"
+        prompt += "Ogni testo è numerato progressivamente. Analizza attentamente ciascuno:\n\n"
 
+        # Aggiunge i testi con numerazione e pulizia migliorata
         for i, text in enumerate(texts):
-            clean_text = re.sub(r'\s+', ' ', text.strip())[:800]
-            prompt += f"{i}: {clean_text}\n"
+            # Pulisce il testo mantenendo la leggibilità
+            clean_text = re.sub(r'\s+', ' ', text.strip())
+            # Tronca se troppo lungo ma mantiene il contesto
+            if len(clean_text) > 800:
+                clean_text = clean_text[:800] + "... [TRONCATO]"
+            
+            prompt += f"[{i}] {clean_text}\n\n"
 
-        prompt += f"\nRispondi solo con il JSON. Usa SOLO i nomi delle etichette dalla lista sopra (case-sensitive):"
+        # Istruzioni finali più precise
+        prompt += (
+            "\nRispondi ESCLUSIVAMENTE con un JSON array valido.\n"
+            "Ogni elemento deve avere: index (numero), label (nome esatto dalla lista), confidence (0.1-1.0).\n"
+            "Non aggiungere testo prima o dopo il JSON.\n"
+            "Esempio formato: [{\"index\": 0, \"label\": \"NomeEsattoDallaLista\", \"confidence\": 0.95}]"
+        )
+        
         return prompt
 
     def get_or_create_ai_user(self) -> User:
@@ -150,15 +214,15 @@ class AIAnnotatorService:
 
             self.initialize_clients(config)
 
-            # Ottiene le etichette disponibili
+            # Ottiene le etichette disponibili con join per evitare problemi di lazy loading
             if selected_categories:
                 from models import Category
                 categories = Category.query.filter(Category.name.in_(selected_categories)).all()
                 labels = []
                 for cat in categories:
-                    labels.extend(Label.query.filter_by(category_id=cat.id, is_active=True).all())
+                    labels.extend(Label.query.options(db.joinedload(Label.category_obj)).filter_by(category_id=cat.id, is_active=True).all())
             else:
-                labels = Label.query.filter_by(is_active=True).order_by(Label.category, Label.name).all()
+                labels = Label.query.options(db.joinedload(Label.category_obj)).filter_by(is_active=True).order_by(Label.category, Label.name).all()
             
             if not labels:
                 return {"error": "Nessuna etichetta attiva disponibile"}
@@ -353,18 +417,89 @@ class AIAnnotatorService:
         return annotations
     
     def _parse_ai_response(self, content: str) -> List[Dict]:
-        """Parsifica la risposta JSON dell'AI"""
+        """
+        Parsifica la risposta JSON dell'AI con gestione migliorata degli errori
+        """
+        if not content or content.strip() == "":
+            print("Risposta AI vuota")
+            return []
+        
         try:
-            # Estrae il JSON dalla risposta (potrebbe esserci testo aggiuntivo)
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-                return json.loads(json_str)
-            else:
-                # Prova a parsificare l'intera risposta come JSON
-                return json.loads(content.strip())
-        except json.JSONDecodeError:
-            print(f"Errore nel parsing JSON: {content}")
+            # Pulisce la risposta da eventuali caratteri di controllo
+            content = content.strip()
+            
+            # Prova prima a estrarre il JSON dalla risposta (può esserci testo aggiuntivo)
+            json_patterns = [
+                r'\[.*?\]',  # Array JSON standard
+                r'\{.*?\}',  # Oggetto JSON singolo (lo convertiremo in array)
+                r'```json\s*(\[.*?\])\s*```',  # JSON in code block
+                r'```\s*(\[.*?\])\s*```',  # JSON in code block generico
+            ]
+            
+            json_str = None
+            for pattern in json_patterns:
+                match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
+                if match:
+                    json_str = match.group(1) if len(match.groups()) > 0 else match.group(0)
+                    break
+            
+            # Se non trova pattern specifici, prova l'intera risposta
+            if not json_str:
+                json_str = content
+            
+            # Parsifica il JSON
+            parsed = json.loads(json_str)
+            
+            # Se è un oggetto singolo, lo converte in array
+            if isinstance(parsed, dict):
+                parsed = [parsed]
+            elif not isinstance(parsed, list):
+                print(f"Formato risposta AI non valido: {type(parsed)}")
+                return []
+            
+            # Valida la struttura di ogni elemento
+            validated_annotations = []
+            for i, item in enumerate(parsed):
+                if not isinstance(item, dict):
+                    print(f"Elemento {i} non è un dizionario: {item}")
+                    continue
+                
+                # Validazione campi obbligatori
+                if 'index' not in item:
+                    print(f"Elemento {i} manca il campo 'index': {item}")
+                    continue
+                
+                if 'label' not in item:
+                    print(f"Elemento {i} manca il campo 'label': {item}")
+                    continue
+                
+                # Normalizza i valori
+                try:
+                    index = int(item['index'])
+                    label = str(item['label']).strip()
+                    confidence = float(item.get('confidence', 0.5))
+                    
+                    # Limita confidence tra 0.1 e 1.0
+                    confidence = max(0.1, min(1.0, confidence))
+                    
+                    validated_annotations.append({
+                        'index': index,
+                        'label': label,
+                        'confidence': confidence
+                    })
+                    
+                except (ValueError, TypeError) as e:
+                    print(f"Errore nella conversione dell'elemento {i}: {e}")
+                    continue
+            
+            return validated_annotations
+            
+        except json.JSONDecodeError as e:
+            print(f"Errore nel parsing JSON: {e}")
+            print(f"Contenuto originale: {content[:500]}...")
+            return []
+        except Exception as e:
+            print(f"Errore imprevisto nel parsing: {e}")
             return []
     
     def review_annotation(self, annotation_id: int, action: str, reviewer_id: int) -> bool:

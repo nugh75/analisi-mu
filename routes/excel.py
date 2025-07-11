@@ -273,13 +273,18 @@ def view_question(file_id, question_name):
         .limit(10)\
         .all()
     
+    # Ottieni tutte le categorie attive per la selezione AI
+    from models import Category
+    categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+    
     return render_template('excel/view_question.html',
                          excel_file=excel_file,
                          question_name=question_name,
                          responses=responses,
                          total_responses=total_responses,
                          annotated_responses=annotated_responses,
-                         popular_labels=popular_labels)
+                         popular_labels=popular_labels,
+                         categories=categories)
 
 @excel_bp.route('/file/<int:file_id>/questions')
 @login_required

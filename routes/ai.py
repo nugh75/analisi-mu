@@ -1,4 +1,3 @@
-
 """
 Routes per l'integrazione AI
 """
@@ -6,8 +5,9 @@ Routes per l'integrazione AI
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
 from flask_login import login_required, current_user
 import json
+from sqlalchemy.orm import joinedload
 
-from models import db, TextCell, CellAnnotation, ExcelFile, Label, AIConfiguration
+from models import db, TextCell, CellAnnotation, ExcelFile, Label, AIConfiguration, Category
 from services.ai_annotator import AIAnnotatorService
 from services.ai_label_service import AILabelService
 
@@ -25,31 +25,92 @@ def preview_prompt():
         template_id = int(data.get('template_id', 1))
         selected_categories = data.get('selected_categories', [])
         batch_size = int(data.get('batch_size', 5))
-        # Recupera le prime N celle da annotare (simulate)
+        
+        # Validazione parametri
         if not file_id:
-            return jsonify({'success': False, 'error': 'file_id mancante'}), 400
-        from services.ai_annotator import AIAnnotatorService
-        from models import Label, TextCell, CellAnnotation
+            return jsonify({'success': False, 'error': 'ID file mancante'}), 400
+        
+        if batch_size < 1 or batch_size > 20:
+            return jsonify({'success': False, 'error': 'Batch size deve essere tra 1 e 20'}), 400
+            
+        # Verifica che il file esista
+        excel_file = ExcelFile.query.get(file_id)
+        if not excel_file:
+            return jsonify({'success': False, 'error': 'File non trovato'}), 404
+        
         ai_service = AIAnnotatorService()
-        # Filtra le etichette
-        if selected_categories:
-            from models import Category
-            categories = Category.query.filter(Category.name.in_(selected_categories)).all()
-            labels = []
+        
+        # Gestione migliorata delle categorie selezionate
+        labels = []
+        if selected_categories and len(selected_categories) > 0:
+            # Filtra per categorie specifiche
+            categories = Category.query.filter(
+                Category.name.in_(selected_categories),
+                Category.is_active == True
+            ).all()
+            
+            if not categories:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Nessuna categoria attiva trovata tra: {", ".join(selected_categories)}'
+                }), 400
+            
             for cat in categories:
-                labels.extend(Label.query.filter_by(category_id=cat.id, is_active=True).all())
+                cat_labels = Label.query.options(db.joinedload(Label.category_obj)).filter_by(
+                    category_id=cat.id, 
+                    is_active=True
+                ).all()
+                labels.extend(cat_labels)
+                
+            if not labels:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Nessuna etichetta attiva trovata nelle categorie selezionate'
+                }), 400
         else:
-            labels = Label.query.filter_by(is_active=True).order_by(Label.category, Label.name).all()
-        # Prendi le prime N celle non annotate
+            # Prendi tutte le etichette attive
+            labels = Label.query.options(db.joinedload(Label.category_obj)).filter_by(
+                is_active=True
+            ).order_by(Label.category, Label.name).all()
+            
+            if not labels:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Nessuna etichetta attiva disponibile nel sistema'
+                }), 400
+        
+        # Prendi celle da annotare (migliore gestione dell'ordine)
         cells = TextCell.query.filter(
             TextCell.excel_file_id == file_id,
             ~TextCell.id.in_(db.session.query(CellAnnotation.text_cell_id).distinct())
-        ).limit(batch_size).all()
+        ).order_by(TextCell.row_index, TextCell.column_index).limit(batch_size).all()
+        
+        if not cells:
+            return jsonify({
+                'success': False, 
+                'error': 'Nessuna cella non annotata trovata',
+                'info': 'Tutte le celle di questo file sono già state annotate'
+            }), 200
+        
         texts = [cell.text_content for cell in cells]
         prompt = ai_service.build_annotation_prompt(texts, labels, template_id)
-        return jsonify({'success': True, 'prompt': prompt})
+        
+        return jsonify({
+            'success': True, 
+            'prompt': prompt,
+            'stats': {
+                'labels_count': len(labels),
+                'cells_count': len(cells),
+                'categories_used': len(selected_categories) if selected_categories else 'tutte',
+                'template_id': template_id
+            }
+        })
+        
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Parametro non valido: {str(e)}'}), 400
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"Errore in preview_prompt: {str(e)}")
+        return jsonify({'success': False, 'error': 'Errore interno del server'}), 500
 
 @ai_bp.route('/generate/<int:file_id>', methods=['POST'])
 @login_required
@@ -432,3 +493,81 @@ def ai_dashboard():
     except Exception as e:
         flash(f'Errore nel caricamento dashboard: {str(e)}', 'error')
         return redirect(url_for('main.dashboard'))
+
+@ai_bp.route('/templates/available')
+@login_required
+def get_available_templates():
+    """Restituisce i template di prompt disponibili"""
+    try:
+        ai_service = AIAnnotatorService()
+        templates = ai_service.get_available_templates()
+        
+        return jsonify({
+            'success': True,
+            'templates': templates,
+            'total_count': len(templates)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@ai_bp.route('/validate-configuration')
+@login_required
+def validate_ai_configuration():
+    """Valida la configurazione AI corrente"""
+    try:
+        ai_service = AIAnnotatorService()
+        config = ai_service.get_active_configuration()
+        
+        if not config:
+            return jsonify({
+                'success': False,
+                'error': 'Nessuna configurazione AI attiva',
+                'needs_setup': True
+            })
+        
+        # Verifica che il provider sia configurato correttamente
+        validation_errors = []
+        
+        if config.provider == 'ollama':
+            if not config.ollama_url:
+                validation_errors.append('URL Ollama non configurato')
+            if not config.ollama_model:
+                validation_errors.append('Modello Ollama non selezionato')
+        elif config.provider == 'openrouter':
+            if not config.openrouter_api_key:
+                validation_errors.append('API Key OpenRouter non configurata')
+            if not config.openrouter_model:
+                validation_errors.append('Modello OpenRouter non selezionato')
+        else:
+            validation_errors.append(f'Provider sconosciuto: {config.provider}')
+        
+        # Controlla che ci siano etichette attive
+        from models import Label
+        active_labels_count = Label.query.filter_by(is_active=True).count()
+        if active_labels_count == 0:
+            validation_errors.append('Nessuna etichetta attiva disponibile')
+        
+        if validation_errors:
+            return jsonify({
+                'success': False,
+                'error': 'Configurazione AI incompleta',
+                'validation_errors': validation_errors,
+                'needs_setup': True
+            })
+        
+        # Determina il modello in base al provider
+        model_name = config.ollama_model if config.provider == 'ollama' else config.openrouter_model
+        
+        return jsonify({
+            'success': True,
+            'config': {
+                'id': config.id,
+                'name': config.name,
+                'provider': config.provider,
+                'model': model_name,
+                'active_labels_count': active_labels_count
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
