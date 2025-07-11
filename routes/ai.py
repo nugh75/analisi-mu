@@ -6,12 +6,97 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 import json
 from sqlalchemy.orm import joinedload
+from datetime import datetime
 
-from models import db, TextCell, CellAnnotation, ExcelFile, Label, AIConfiguration, Category
+from models import db, TextCell, CellAnnotation, ExcelFile, Label, AIConfiguration, Category, PromptTemplate
 from services.ai_annotator import AIAnnotatorService
 from services.ai_label_service import AILabelService
 
 ai_bp = Blueprint('ai', __name__)
+
+# Route per gestione template
+@ai_bp.route('/templates/manage')
+@login_required
+def manage_templates():
+    """Pagina per gestire i template AI"""
+    try:
+        templates = PromptTemplate.query.order_by(PromptTemplate.category, PromptTemplate.name).all()
+        categories = db.session.query(PromptTemplate.category).distinct().filter(
+            PromptTemplate.category.isnot(None)
+        ).all()
+        categories = [cat[0] for cat in categories if cat[0]]
+        
+        active_count = PromptTemplate.query.filter_by(is_active=True).count()
+        
+        return render_template('ai/templates.html', 
+                             templates=templates,
+                             categories=categories,
+                             active_count=active_count)
+    except Exception as e:
+        flash(f'Errore nel caricamento dei template: {str(e)}', 'error')
+        return redirect(url_for('main.dashboard'))
+
+@ai_bp.route('/templates/create', methods=['POST'])
+@login_required
+def create_template():
+    """Crea un nuovo template"""
+    try:
+        data = request.get_json()
+        
+        template = PromptTemplate(
+            name=data['name'],
+            category=data['category'],
+            description=data.get('description'),
+            template_text=data['template_text'],
+            is_active=data.get('is_active', True),
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(template)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'template_id': template.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@ai_bp.route('/templates/<int:template_id>')
+@login_required
+def get_template(template_id):
+    """Recupera i dettagli di un template"""
+    try:
+        template = PromptTemplate.query.get_or_404(template_id)
+        
+        return jsonify({
+            'success': True,
+            'template': {
+                'id': template.id,
+                'name': template.name,
+                'category': template.category,
+                'description': template.description,
+                'template_text': template.template_text,
+                'is_active': template.is_active,
+                'created_at': template.created_at.isoformat() if template.created_at else None
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@ai_bp.route('/templates/<int:template_id>/toggle', methods=['POST'])
+@login_required
+def toggle_template(template_id):
+    """Attiva/disattiva un template"""
+    try:
+        data = request.get_json()
+        template = PromptTemplate.query.get_or_404(template_id)
+        
+        template.is_active = data['is_active']
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ...existing routes...
 

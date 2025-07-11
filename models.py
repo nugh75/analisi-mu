@@ -313,3 +313,19 @@ class AIPromptTemplate(db.Model):
     
     def __repr__(self):
         return f'<AIPromptTemplate {self.name}>'
+
+class PromptTemplate(db.Model):
+    """Template di prompt per analisi AI categorizzate"""
+    __tablename__ = 'prompt_templates'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    template_text = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<PromptTemplate {self.name} ({self.category})>'
