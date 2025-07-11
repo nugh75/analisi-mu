@@ -122,22 +122,41 @@ def generate_annotations(file_id):
         
         # Parametri opzionali dal JSON body
         request_data = request.get_json() if request.is_json else {}
-        batch_size = request_data.get('batch_size', 10)  # Ridotto a 10 per gestire meglio i timeout
-        re_annotate = request_data.get('re_annotate', False)
+        batch_size = request_data.get('batch_size', 3)  # Default ridotto a 3
+        mode = request_data.get('mode', 'new')  # new, replace, additional
+        template_id = request_data.get('template_id', 1)
+        selected_categories = request_data.get('selected_categories', [])
         
-        print(f"🚀 AI Generate: file_id={file_id}, batch_size={batch_size}, re_annotate={re_annotate}")
+        # Nuovi parametri dinamici
+        max_tokens = request_data.get('max_tokens', 500)  # Default aumentato a 500
+        timeout = request_data.get('timeout', 90)  # Default 90s
+        
+        # Converte mode in parametro legacy
+        re_annotate = (mode == 'replace')
+        
+        print(f"🚀 AI Generate: file_id={file_id}, batch_size={batch_size}, mode={mode}, template_id={template_id}")
+        print(f"   Categorie selezionate: {selected_categories}")
+        print(f"   Max tokens: {max_tokens}, Timeout: {timeout}s")
         
         # Inizializza il servizio AI
         ai_service = AIAnnotatorService()
         
-        # Genera le annotazioni
-        result = ai_service.generate_annotations(file_id, batch_size, re_annotate)
+        # Genera le annotazioni con i nuovi parametri
+        result = ai_service.generate_annotations(
+            file_id=file_id, 
+            batch_size=batch_size, 
+            mode=mode,
+            template_id=template_id,
+            selected_categories=selected_categories,
+            max_tokens=max_tokens,
+            timeout=timeout
+        )
         
         if 'error' in result:
             print(f"❌ Errore generazione: {result['error']}")
             return jsonify({'success': False, 'error': result['error']}), 400
         
-        action_type = "ri-etichettate" if re_annotate else "create"
+        action_type = "ri-etichettate" if mode == 'replace' else "generate"
         print(f"✅ Generazione completata: {len(result.get('annotations', []))} annotazioni {action_type}")
         
         return jsonify({
@@ -145,7 +164,8 @@ def generate_annotations(file_id):
             'message': result['message'],
             'total_processed': result.get('total_processed', 0),
             'annotations_count': len(result.get('annotations', [])),
-            're_annotate': re_annotate
+            'mode': mode,
+            're_annotate': (mode == 'replace')
         })
         
     except Exception as e:
@@ -292,6 +312,7 @@ def test_review_file_annotations(file_id):
         return redirect(url_for('excel.list_files'))
 
 @ai_bp.route('/config/current')
+@login_required
 def get_current_ai_config():
     """Ottiene la configurazione AI attualmente attiva"""
     try:
@@ -325,6 +346,7 @@ def get_current_ai_config():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @ai_bp.route('/status/<int:file_id>')
+@login_required
 def get_ai_status(file_id):
     """Ottiene lo status delle annotazioni AI per un file"""
     try:

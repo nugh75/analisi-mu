@@ -21,7 +21,7 @@ def test_ai_endpoints():
         print("=== Test Endpoint AI ===\n")
         
         # URL base
-        base_url = "http://localhost:5004"
+        base_url = "http://localhost:5005"
         
         # 1. Test /ai/config/current senza autenticazione
         print("1. Test /ai/config/current (senza autenticazione)...")

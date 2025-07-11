@@ -64,7 +64,7 @@ class OllamaClient:
             return False
     
     def generate_chat(self, model: str, messages: List[Dict], 
-                     temperature: float = 0.7, max_tokens: int = 1000) -> Dict:
+                     temperature: float = 0.7, max_tokens: int = 1000, timeout: int = 90) -> Dict:
         """Genera una risposta usando il modello"""
         try:
             payload = {
@@ -80,7 +80,7 @@ class OllamaClient:
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=60
+                timeout=timeout  # Usa timeout dinamico passato come parametro
             )
             response.raise_for_status()
             return response.json()

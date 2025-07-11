@@ -149,6 +149,35 @@
                                             <i class="bi bi-gear me-1"></i> Configurazione
                                         </button>
                                     </div>
+                                    
+                                    <!-- Controlli Rapidi AI -->
+                                    <div class="row mt-2 g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label text-muted small mb-1">Max Tokens Risposta</label>
+                                            <select id="max-tokens-select" class="form-select form-select-sm">
+                                                <option value="300">300 - Veloce (risposte brevi)</option>
+                                                <option value="500">500 - Bilanciato</option>
+                                                <option value="800">800 - Dettagliato</option>
+                                                <option value="1200">1200 - Molto dettagliato</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label text-muted small mb-1">Batch Size</label>
+                                            <select id="batch-size-select" class="form-select form-select-sm">
+                                                <option value="1">1 cella - Più sicuro</option>
+                                                <option value="3" selected>3 celle - Bilanciato</option>
+                                                <option value="5">5 celle - Veloce</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label text-muted small mb-1">Timeout (secondi)</label>
+                                            <select id="timeout-select" class="form-select form-select-sm">
+                                                <option value="60">60s - Veloce</option>
+                                                <option value="90" selected>90s - Standard</option>
+                                                <option value="120">120s - Esteso</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -773,7 +802,99 @@ document.addEventListener('DOMContentLoaded', function() {
         // Inizializza la modalità di default
         updateModeDisplay('new');
         updatePromptPreview();
+        
+        // Abilita il pulsante generate dopo il caricamento
+        if (generateButton) {
+            generateButton.disabled = false;
+        }
     });
+
+    // --- GESTIONE GENERAZIONE AI ---
+    if (generateButton) {
+        generateButton.addEventListener('click', async function() {
+            const selectedCategories = updateCategoriesPreview();
+            const templateId = templateSelect?.value || 1;
+            
+            // Ottieni parametri dinamici
+            const maxTokens = parseInt(document.getElementById('max-tokens-select')?.value || 500);
+            const batchSize = parseInt(document.getElementById('batch-size-select')?.value || 3);
+            const timeout = parseInt(document.getElementById('timeout-select')?.value || 90);
+            
+            // Conferma utente con parametri dettagliati
+            const confirmation = confirm(
+                `Vuoi generare etichette AI con modalità "${currentModeText?.textContent || 'Solo Nuove'}"?\n\n` +
+                `Template: ${templateSelect?.selectedOptions[0]?.textContent?.split(' - ')[0]}\n` +
+                `Categorie: ${selectedCategories.length > 0 ? selectedCategories.join(', ') : 'Tutte'}\n\n` +
+                `Configurazione:\n` +
+                `• Max Tokens: ${maxTokens}\n` +
+                `• Batch Size: ${batchSize} celle\n` +
+                `• Timeout: ${timeout}s`
+            );
+            
+            if (!confirmation) return;
+            
+            // Disable button e mostra progress
+            generateButton.disabled = true;
+            generateButtonText.textContent = 'Generazione in corso...';
+            const progressBar = document.querySelector('#ai-progress .progress-bar');
+            const progressText = document.getElementById('ai-progress-text');
+            const progressContainer = document.getElementById('ai-progress');
+            
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (progressBar) progressBar.style.width = '10%';
+            if (progressText) progressText.textContent = `Inizializzazione (${batchSize} celle per batch, ${maxTokens} token max)...`;
+            
+            try {
+                const response = await fetch(`/ai/generate/${fileId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        file_id: fileId,
+                        template_id: parseInt(templateId),
+                        mode: currentMode,
+                        selected_categories: selectedCategories,
+                        max_tokens: maxTokens,
+                        batch_size: batchSize,
+                        timeout: timeout
+                    })
+                });
+                
+                if (progressBar) progressBar.style.width = '100%';
+                if (progressText) progressText.textContent = 'Completato!';
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`✅ ${data.message}`, 'success');
+                    // Aggiorna contatori
+                    document.getElementById('ai-annotations-count').textContent = data.total_processed || 0;
+                    
+                    // Ricarica la pagina per mostrare i nuovi suggerimenti
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showMessage(`❌ Errore: ${data.error}`, 'danger');
+                }
+                
+            } catch (error) {
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = 'Errore di connessione';
+                showMessage(`❌ Errore di rete: ${error.message}`, 'danger');
+            } finally {
+                // Restore button
+                generateButton.disabled = false;
+                generateButtonText.textContent = buttonTexts[currentMode] || 'Genera Etichette con AI';
+                
+                setTimeout(() => {
+                    if (progressContainer) progressContainer.style.display = 'none';
+                }, 3000);
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

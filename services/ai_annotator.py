@@ -33,20 +33,13 @@ class AIAnnotatorService:
                 'name': 'Standard Quesiti',
                 'description': 'Template ottimizzato per etichettare quesiti educativi e valutazioni',
                 'template_text': (
-                    "Sei un assistente esperto nell'analisi e etichettatura di quesiti educativi e valutazioni.\n\n"
-                    "Il tuo compito è analizzare quesiti, domande e risposte per assegnare etichette tematiche appropriate.\n\n"
-                    "ISTRUZIONI SPECIFICHE:\n"
-                    "1. Analizza il contenuto di ogni testo (quesito, domanda o risposta)\n"
-                    "2. Identifica l'argomento principale, il livello di difficoltà e il tipo di competenza richiesta\n"
-                    "3. Assegna SOLO etichette dalla lista fornita (usa i nomi ESATTI)\n"
-                    "4. Puoi assegnare da 1 a 3 etichette per testo se appropriate\n"
-                    "5. Se un testo non è rilevante o non corrisponde a nessuna etichetta, usa etichetta vuota: \"\"\n"
-                    "6. Per quesiti complessi, privilegia le etichette più specifiche rispetto a quelle generiche\n"
-                    "7. Considera sia il contenuto esplicito che le competenze implicite richieste\n\n"
-                    "FORMATO RISPOSTA OBBLIGATORIO:\n"
-                    "Rispondi SOLO in formato JSON valido con questa struttura esatta:\n"
-                    "[\n  {\"index\": 0, \"label\": \"NomeEsattoDallaLista\", \"confidence\": 0.95},\n  {\"index\": 1, \"label\": \"AltroNomeEsatto\", \"confidence\": 0.87},\n  {\"index\": 2, \"label\": \"\", \"confidence\": 1.0}\n]\n\n"
-                    "IMPORTANTE: Il campo 'confidence' deve essere un numero da 0.1 a 1.0 che indica quanto sei sicuro dell'etichetta.\n"
+                    "Etichetta questi testi educativi scegliendo dalle etichette fornite.\n\n"
+                    "REGOLE:\n"
+                    "- Usa SOLO etichette dalla lista (nomi esatti)\n"
+                    "- Massimo 2 etichette per testo\n"
+                    "- Se non appropriato, usa: \"\"\n\n"
+                    "FORMATO JSON RICHIESTO:\n"
+                    "[{\"index\": 0, \"label\": \"NomeEsatto\", \"confidence\": 0.9}]\n"
                 )
             },
             2: {
@@ -194,8 +187,9 @@ class AIAnnotatorService:
         elif config.provider == 'openrouter':
             self.openrouter_client = OpenRouterClient(config.openrouter_api_key)
     
-    def generate_annotations(self, file_id: int, batch_size: int = 10, mode: str = 'new', 
-                           template_id: int = None, selected_categories: List[str] = None) -> Dict:
+    def generate_annotations(self, file_id: int, batch_size: int = 3, mode: str = 'new', 
+                           template_id: int = None, selected_categories: List[str] = None,
+                           max_tokens: int = 500, timeout: int = 90) -> Dict:
         """
         Genera annotazioni AI per un file
         
@@ -205,6 +199,8 @@ class AIAnnotatorService:
             mode: Modalità di etichettatura ('new', 'additional', 'replace')
             template_id: ID del template prompt da usare
             selected_categories: Lista delle categorie selezionate per il prompt
+            max_tokens: Numero massimo di token per risposta AI
+            timeout: Timeout in secondi per le chiamate AI
         """
         try:
             # Ottiene la configurazione attiva
@@ -262,19 +258,22 @@ class AIAnnotatorService:
                 batch_cells = cells_to_process[i:i + batch_size]
                 batch_texts = [cell.text_content for cell in batch_cells]
 
-                print(f"📝 Processando batch {i//batch_size + 1}: {len(batch_cells)} celle")
+                batch_num = i//batch_size + 1
+                total_batches = (len(cells_to_process) + batch_size - 1) // batch_size
+                print(f"📝 Processando batch {batch_num}/{total_batches}: {len(batch_cells)} celle")
 
                 # Genera le annotazioni per questo batch
                 batch_annotations = self._process_batch(
-                    batch_texts, batch_cells, labels, config, mode, template_id
+                    batch_texts, batch_cells, labels, config, mode, template_id, max_tokens, timeout
                 )
 
+                print(f"✅ Batch {batch_num}: {len(batch_annotations)} annotazioni generate")
                 all_annotations.extend(batch_annotations)
                 total_processed += len(batch_cells)
 
                 # Pausa tra i batch per evitare overload
                 import time
-                time.sleep(1)
+                time.sleep(2)  # Aumentato da 1 a 2 secondi
 
             return {
                 "message": f"Generate {len(all_annotations)} annotazioni (modalità: {mode})",
@@ -289,7 +288,7 @@ class AIAnnotatorService:
     
     def _process_batch(self, texts: List[str], cells: List[TextCell], 
                       labels: List[Label], config: AIConfiguration, mode: str = 'new', 
-                      template_id: int = None) -> List[Dict]:
+                      template_id: int = None, max_tokens: int = 500, timeout: int = 90) -> List[Dict]:
         """
         Processa un batch di testi
         
@@ -300,6 +299,8 @@ class AIAnnotatorService:
             config: Configurazione AI
             mode: Modalità di etichettatura ('new', 'additional', 'replace')
             template_id: ID del template prompt da usare
+            max_tokens: Numero massimo di token per risposta
+            timeout: Timeout in secondi per chiamata AI
         """
         annotations = []
         
@@ -313,22 +314,41 @@ class AIAnnotatorService:
                 {"role": "user", "content": prompt}
             ]
             
-            # Chiama l'AI
+            # Chiama l'AI con retry logic
             response = None
-            if config.provider == 'ollama':
-                response = self.ollama_client.generate_chat(
-                    config.ollama_model,
-                    messages,
-                    config.temperature,
-                    config.max_tokens
-                )
-            elif config.provider == 'openrouter':
-                response = self.openrouter_client.generate_chat(
-                    config.openrouter_model,
-                    messages,
-                    config.temperature,
-                    config.max_tokens
-                )
+            max_retries = 2
+            retry_count = 0
+            
+            while retry_count <= max_retries:
+                try:
+                    if config.provider == 'ollama':
+                        response = self.ollama_client.generate_chat(
+                            config.ollama_model,
+                            messages,
+                            config.temperature,
+                            max_tokens,  # Usa parametro dinamico
+                            timeout      # Usa parametro dinamico
+                        )
+                    elif config.provider == 'openrouter':
+                        response = self.openrouter_client.generate_chat(
+                            config.openrouter_model,
+                            messages,
+                            config.temperature,
+                            max_tokens   # Usa parametro dinamico
+                        )
+                    
+                    # Se la risposta è valida, esce dal loop
+                    if response and 'error' not in response:
+                        break
+                        
+                except Exception as e:
+                    print(f"⚠️ Tentativo {retry_count + 1} fallito: {e}")
+                    
+                retry_count += 1
+                if retry_count <= max_retries:
+                    print(f"🔄 Nuovo tentativo in 3 secondi... ({retry_count}/{max_retries})")
+                    import time
+                    time.sleep(3)
             
             if not response or 'error' in response:
                 print(f"Errore nella risposta AI: {response}")
