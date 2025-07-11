@@ -781,3 +781,223 @@ def test_openrouter_model():
             
     except Exception as e:
         return jsonify({'success': False, 'message': f'Errore generale: {str(e)}'})
+
+@admin_bp.route('/templates')
+@login_required
+@admin_required
+def manage_templates():
+    """Gestione dei template AI"""
+    from models import AIPromptTemplate
+    templates = AIPromptTemplate.query.order_by(AIPromptTemplate.created_at.desc()).all()
+    return render_template('admin/templates.html', templates=templates)
+
+@admin_bp.route('/templates/create', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_template():
+    """Crea un nuovo template AI"""
+    from models import AIPromptTemplate
+    
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        category = request.form.get('category', '').strip()
+        base_prompt = request.form.get('base_prompt', '').strip()
+        
+        # Validazione
+        if not name:
+            flash('Nome template richiesto', 'error')
+            return render_template('admin/template_form.html')
+            
+        if not base_prompt:
+            flash('Prompt base richiesto', 'error')
+            return render_template('admin/template_form.html')
+            
+        # Verifica unicità del nome
+        existing = AIPromptTemplate.query.filter_by(name=name).first()
+        if existing:
+            flash('Un template con questo nome esiste già', 'error')
+            return render_template('admin/template_form.html', 
+                                 name=name, description=description, 
+                                 category=category, base_prompt=base_prompt)
+        
+        try:
+            # Crea il nuovo template
+            template = AIPromptTemplate(
+                name=name,
+                description=description,
+                category=category,
+                base_prompt=base_prompt,
+                is_active=True
+            )
+            
+            db.session.add(template)
+            db.session.commit()
+            
+            flash(f'Template "{name}" creato con successo!', 'success')
+            return redirect(url_for('admin.manage_templates'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Errore durante la creazione: {str(e)}', 'error')
+            return render_template('admin/template_form.html', 
+                                 name=name, description=description, 
+                                 category=category, base_prompt=base_prompt)
+    
+    return render_template('admin/template_form.html')
+
+@admin_bp.route('/templates/<int:template_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_template(template_id):
+    """Modifica un template esistente"""
+    from models import AIPromptTemplate
+    
+    template = AIPromptTemplate.query.get_or_404(template_id)
+    
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        category = request.form.get('category', '').strip()
+        base_prompt = request.form.get('base_prompt', '').strip()
+        is_active = request.form.get('is_active') == 'on'
+        
+        # Validazione
+        if not name:
+            flash('Nome template richiesto', 'error')
+            return render_template('admin/template_form.html', template=template)
+            
+        if not base_prompt:
+            flash('Prompt base richiesto', 'error')
+            return render_template('admin/template_form.html', template=template)
+            
+        # Verifica unicità del nome (escluso il template corrente)
+        existing = AIPromptTemplate.query.filter(
+            AIPromptTemplate.name == name,
+            AIPromptTemplate.id != template_id
+        ).first()
+        if existing:
+            flash('Un template con questo nome esiste già', 'error')
+            return render_template('admin/template_form.html', template=template)
+        
+        try:
+            # Aggiorna il template
+            template.name = name
+            template.description = description
+            template.category = category
+            template.base_prompt = base_prompt
+            template.is_active = is_active
+            template.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            
+            flash(f'Template "{name}" aggiornato con successo!', 'success')
+            return redirect(url_for('admin.manage_templates'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Errore durante l\'aggiornamento: {str(e)}', 'error')
+            
+    return render_template('admin/template_form.html', template=template)
+
+@admin_bp.route('/templates/<int:template_id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def toggle_template(template_id):
+    """Attiva/disattiva un template"""
+    from models import AIPromptTemplate
+    
+    template = AIPromptTemplate.query.get_or_404(template_id)
+    
+    try:
+        template.is_active = not template.is_active
+        template.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        status = "attivato" if template.is_active else "disattivato"
+        return jsonify({
+            'success': True, 
+            'message': f'Template "{template.name}" {status}',
+            'is_active': template.is_active
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)})
+
+@admin_bp.route('/templates/<int:template_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_template(template_id):
+    """Elimina un template"""
+    from models import AIPromptTemplate
+    
+    template = AIPromptTemplate.query.get_or_404(template_id)
+    
+    try:
+        template_name = template.name
+        db.session.delete(template)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Template "{template_name}" eliminato con successo'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)})
+
+@admin_bp.route('/templates/<int:template_id>/preview', methods=['POST'])
+@login_required
+@admin_required
+def preview_template(template_id):
+    """Anteprima di un template con dati di esempio"""
+    from models import AIPromptTemplate, Label, LabelCategory
+    
+    template = AIPromptTemplate.query.get_or_404(template_id)
+    
+    try:
+        # Ottiene alcune etichette di esempio
+        labels = Label.query.filter_by(is_active=True).limit(10).all()
+        
+        # Testi di esempio
+        sample_texts = [
+            "L'AI mi ha aiutato molto a comprendere meglio l'argomento",
+            "Sono preoccupato per la privacy dei miei dati",
+            "Il chatbot è stato utile ma a volte dava risposte sbagliate"
+        ]
+        
+        # Categorie di esempio (se disponibili)
+        categories = [cat.name for cat in LabelCategory.query.filter_by(is_active=True).limit(3).all()]
+        if not categories:
+            categories = ['Sentiment Analysis', 'Usage Patterns']
+        
+        # Genera l'anteprima del prompt
+        preview_prompt = template.build_prompt_with_categories(categories, labels, sample_texts)
+        
+        return jsonify({
+            'success': True,
+            'preview': preview_prompt,
+            'categories_used': categories,
+            'labels_count': len(labels),
+            'sample_texts_count': len(sample_texts)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@admin_bp.route('/templates/categories')
+@login_required
+@admin_required
+def get_template_categories():
+    """Ottiene le categorie utilizzate nei template"""
+    from models import AIPromptTemplate
+    
+    templates = AIPromptTemplate.query.filter_by(is_active=True).all()
+    categories = list(set([t.category for t in templates if t.category]))
+    
+    return jsonify({
+        'success': True,
+        'categories': sorted(categories)
+    })
