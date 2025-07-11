@@ -84,7 +84,7 @@
                         </p>
                         <form id="ai-options-form" class="mb-3">
                             <div class="row g-3">
-                                <div class="col-md-6">
+                                <div class="col-md-12">
                                     <label for="ai-template-select" class="form-label mb-2">
                                         <i class="bi bi-file-text me-1"></i>Template AI
                                         <small class="text-muted">(Stile di analisi)</small>
@@ -93,17 +93,6 @@
                                         <option value="1">📚 Standard Quesiti - Per domande e test educativi</option>
                                         <option value="2">💬 Analisi Commenti - Per feedback e osservazioni</option>
                                         <option value="3">🎯 Analisi Competenze - Per identificare abilità richieste</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="ai-mode-select" class="form-label mb-2">
-                                        <i class="bi bi-gear me-1"></i>Modalità Etichettatura
-                                        <small class="text-muted">(Cosa etichettare)</small>
-                                    </label>
-                                    <select id="ai-mode-select" class="form-select">
-                                        <option value="new">🆕 Solo Nuove - Etichetta solo celle non annotate</option>
-                                        <option value="replace">🔄 Ri-etichetta Tutto - Sostituisce etichette esistenti</option>
-                                        <option value="additional">➕ Aggiungi - Aggiunge alle etichette esistenti</option>
                                     </select>
                                 </div>
                             </div>
@@ -171,18 +160,23 @@
                                 <span id="generate-button-text">Genera Etichette con AI</span>
                             </button>
                             
-                            <!-- Opzioni Rapide -->
+                            <!-- Modalità di Etichettatura -->
                             <div class="btn-group">
-                                <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" 
-                                        aria-expanded="false" title="Opzioni avanzate">
-                                    <i class="bi bi-three-dots"></i>
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" 
+                                        aria-expanded="false" title="Seleziona modalità di etichettatura">
+                                    <i class="bi bi-gear me-1"></i>
+                                    <span id="current-mode-text">Solo Nuove</span>
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>
                                         <h6 class="dropdown-header">
-                                            <i class="bi bi-gear me-1"></i>Modalità Avanzate
+                                            <i class="bi bi-sliders me-1"></i>Modalità di Etichettatura
                                         </h6>
                                     </li>
+                                    <li><button class="dropdown-item" id="mode-new" data-mode="new">
+                                        <i class="bi bi-plus-square me-2"></i>Solo Nuove
+                                        <small class="text-muted d-block">Etichetta solo celle non ancora annotate</small>
+                                    </button></li>
                                     <li><button class="dropdown-item" id="mode-replace" data-mode="replace">
                                         <i class="bi bi-arrow-clockwise me-2"></i>Ri-etichetta Tutto
                                         <small class="text-muted d-block">Sostituisce tutte le etichette esistenti</small>
@@ -194,6 +188,7 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li><button class="dropdown-item" id="test-prompt" disabled>
                                         <i class="bi bi-play me-2"></i>Test Prompt su Campione
+                                        <small class="text-muted d-block">Testa il prompt su 5 celle casuali</small>
                                     </button></li>
                                 </ul>
                             </div>
@@ -472,6 +467,17 @@
     font-size: 0.8em;
     font-weight: 500;
 }
+
+/* Stile per evidenziare la modalità selezionata */
+.dropdown-item.active {
+    background-color: var(--bs-primary);
+    color: white;
+}
+
+.dropdown-item.active:hover {
+    background-color: var(--bs-primary);
+    color: white;
+}
 </style>
 {% endblock %}
 
@@ -539,36 +545,60 @@ document.addEventListener('DOMContentLoaded', function() {
     const modeButtons = document.querySelectorAll('[data-mode]');
     const generateButton = document.getElementById('generate-ai-labels');
     const generateButtonText = document.getElementById('generate-button-text');
+    const currentModeText = document.getElementById('current-mode-text');
+    
+    // Modalità corrente (default: 'new')
+    let currentMode = 'new';
 
     modeButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const mode = btn.dataset.mode;
-            const modeSelect = document.getElementById('ai-mode-select');
             
-            if (modeSelect) {
-                modeSelect.value = mode;
-                updateButtonText(mode);
+            if (mode && mode !== 'test') {  // Escludi il pulsante test
+                currentMode = mode;
+                updateModeDisplay(mode);
                 updatePromptPreview();
             }
         });
     });
 
-    function updateButtonText(mode) {
-        const texts = {
+    function updateModeDisplay(mode) {
+        const modeTexts = {
+            'new': 'Solo Nuove',
+            'replace': 'Ri-etichetta Tutto', 
+            'additional': 'Aggiungi Etichette'
+        };
+        
+        const buttonTexts = {
             'new': 'Genera Etichette con AI',
             'replace': 'Ri-etichetta Tutto con AI', 
             'additional': 'Aggiungi Etichette con AI'
         };
-        if (generateButtonText) {
-            generateButtonText.textContent = texts[mode] || texts['new'];
+        
+        // Aggiorna il testo del dropdown
+        if (currentModeText) {
+            currentModeText.textContent = modeTexts[mode] || modeTexts['new'];
         }
+        
+        // Aggiorna il testo del pulsante principale
+        if (generateButtonText) {
+            generateButtonText.textContent = buttonTexts[mode] || buttonTexts['new'];
+        }
+        
+        // Aggiorna gli stati visivi dei pulsanti del dropdown
+        modeButtons.forEach(btn => {
+            if (btn.dataset.mode === mode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
     }
 
     // --- ELEMENTI DOM UNIFICATI ---
     const promptPreview = document.getElementById('ai-prompt-preview');
     const templateSelect = document.getElementById('ai-template-select');
-    const modeSelect = document.getElementById('ai-mode-select');
     const fileId = {{ excel_file.id }};
 
     // Carica i template disponibili dinamicamente
@@ -716,15 +746,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Event listeners principali
     if (templateSelect) {
         templateSelect.addEventListener('change', () => {
-            const mode = modeSelect?.value || 'new';
-            updateButtonText(mode);
-            updatePromptPreview();
-        });
-    }
-    
-    if (modeSelect) {
-        modeSelect.addEventListener('change', () => {
-            updateButtonText(modeSelect.value);
+            updateModeDisplay(currentMode);
             updatePromptPreview();
         });
     }
@@ -748,6 +770,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Carica i template disponibili all'avvio e aggiorna il prompt
     loadAvailableTemplates().then(() => {
+        // Inizializza la modalità di default
+        updateModeDisplay('new');
         updatePromptPreview();
     });
 });
