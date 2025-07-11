@@ -79,17 +79,64 @@ class AIAnnotatorService:
         }
 
     def get_available_templates(self) -> Dict[int, Dict]:
-        """Restituisce i template disponibili con metadati"""
-        return {
-            tid: {
-                'name': template['name'],
-                'description': template['description']
+        """Restituisce i template disponibili dal database con metadati"""
+        from models import AIPromptTemplate
+        
+        try:
+            templates = AIPromptTemplate.query.filter_by(is_active=True).all()
+            
+            result = {}
+            for template in templates:
+                result[template.id] = {
+                    'name': template.name,
+                    'description': template.description or f'Template per {template.category or "analisi generale"}',
+                    'category': template.category
+                }
+            
+            # Fallback ai template hardcoded se il database è vuoto
+            if not result:
+                return {
+                    tid: {
+                        'name': template['name'],
+                        'description': template['description'],
+                        'category': template.get('category', 'General')
+                    }
+                    for tid, template in self.prompt_templates.items()
+                }
+            
+            return result
+            
+        except Exception as e:
+            # Fallback ai template hardcoded in caso di errore
+            print(f"Errore caricamento template dal DB: {e}")
+            return {
+                tid: {
+                    'name': template['name'],
+                    'description': template['description'],
+                    'category': template.get('category', 'General')
+                }
+                for tid, template in self.prompt_templates.items()
             }
-            for tid, template in self.prompt_templates.items()
-        }
 
     def get_prompt_template(self, template_id: int = None) -> str:
-        """Restituisce il testo del template selezionato, o quello standard se non specificato."""
+        """Restituisce il testo del template selezionato dal database, o quello standard se non specificato."""
+        from models import AIPromptTemplate
+        
+        try:
+            if template_id:
+                template = AIPromptTemplate.query.filter_by(id=template_id, is_active=True).first()
+                if template:
+                    return template.base_prompt
+            
+            # Fallback: prendi il primo template attivo
+            first_template = AIPromptTemplate.query.filter_by(is_active=True).first()
+            if first_template:
+                return first_template.base_prompt
+                
+        except Exception as e:
+            print(f"Errore caricamento template dal DB: {e}")
+        
+        # Ultimo fallback ai template hardcoded
         if template_id and template_id in self.prompt_templates:
             return self.prompt_templates[template_id]['template_text']
         return self.prompt_templates[1]['template_text']
