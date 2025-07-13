@@ -1,11 +1,26 @@
-# Docker Setup per Analisi MU
+# 🐳 Analisi MU - Sistema Docker Ottimizzato
 
-## Avvio rapido con Docker Compose
+## 📋 Panoramica
 
-### Ambiente di sviluppo
+Sistema containerizzato ottimizzato per l'applicazione Analisi MU con supporto completo per:
+- ✅ Parametri dinamici AI (max_tokens, batch_size, timeout)
+- ✅ Sicurezza con utente non-root
+- ✅ Health checks automatici
+- ✅ Gestione volume persistenti
+- ✅ Network isolation
+- ✅ Build ottimizzato con dipendenze native
 
+## 🚀 Quick Start
+
+### Avvio Rapido
 ```bash
-# Avvia l'applicazione
+./start-docker.sh
+```
+
+### Avvio Manuale
+```bash
+# Build e avvio
+docker-compose build --no-cache
 docker-compose up -d
 
 # Visualizza i log

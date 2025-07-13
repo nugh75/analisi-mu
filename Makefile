@@ -1,16 +1,18 @@
 # Makefile per Analisi MU Docker
 
-.PHONY: help build up down logs restart clean backup
+.PHONY: help build up down logs restart clean backup rebuild
 
 # Colori per l'output
 RED=\033[0;31m
 GREEN=\033[0;32m
 YELLOW=\033[1;33m
+BLUE=\033[0;34m
 NC=\033[0m # No Color
 
 # Configurazione di default
 COMPOSE_FILE=docker-compose.yml
 COMPOSE_FILE_PROD=docker-compose.prod.yml
+CONTAINER_NAME=analisi-mu-web
 
 help: ## Mostra questo messaggio di aiuto
 	@echo "$(GREEN)Comandi disponibili per Analisi MU:$(NC)"
@@ -18,6 +20,14 @@ help: ## Mostra questo messaggio di aiuto
 
 build: ## Build dell'immagine Docker
 	@echo "$(GREEN)Building Docker image...$(NC)"
+	docker-compose build --no-cache
+
+rebuild: ## Rebuild completo (down, build, up)
+	@echo "$(BLUE)Rebuilding sistema completo...$(NC)"
+	docker-compose down
+	docker-compose build --no-cache
+	docker-compose up -d
+	@echo "$(GREEN)Sistema riavviato con successo!$(NC)"
 	docker build -t analisi-mu .
 
 build-no-cache: ## Build dell'immagine Docker senza cache

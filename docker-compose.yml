@@ -2,20 +2,24 @@ version: '3.8'
 
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analisi-mu-web
     ports:
       - "5000:5000"
     environment:
-      - SECRET_KEY=dev-secret-key-change-in-production-123456789
-      - DATABASE_URL=sqlite:///analisi_mu.db
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
+      - SECRET_KEY=analisi-mu-production-secret-key-2025
+      - DATABASE_URL=sqlite:////app/instance/analisi_mu.db
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
       - MAX_CONTENT_LENGTH=16777216
       - UPLOAD_FOLDER=uploads
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./instance:/app/instance
-      - ./uploads:/app/uploads
-      - ./backups:/app/backups
+      - ./instance:/app/instance:rw
+      - ./uploads:/app/uploads:rw
+      - ./backups:/app/backups:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
@@ -23,6 +27,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - analisi-mu-network
+
+networks:
+  analisi-mu-network:
+    driver: bridge
 
 volumes:
   instance:
