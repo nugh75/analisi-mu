@@ -56,8 +56,19 @@ def create_app():
     app.register_blueprint(ai_bp, url_prefix='/ai')
     app.register_blueprint(statistics_bp, url_prefix='/statistics')
     
-    # Creazione delle cartelle necessarie
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    # Creazione delle cartelle necessarie con permessi corretti
+    upload_folder = app.config['UPLOAD_FOLDER']
+    instance_folder = 'instance'
+    
+    os.makedirs(upload_folder, mode=0o755, exist_ok=True)
+    os.makedirs(instance_folder, mode=0o755, exist_ok=True)
+    
+    # Assicuriamoci che le cartelle abbiano i permessi corretti
+    try:
+        os.chmod(upload_folder, 0o755)
+        os.chmod(instance_folder, 0o755)
+    except OSError:
+        pass  # Ignora errori di permessi se l'utente non ha privilegi sufficienti
     
     # User loader per Flask-Login
     @login_manager.user_loader
