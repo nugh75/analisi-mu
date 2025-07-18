@@ -62,6 +62,10 @@ def annotate_cell(cell_id):
     user_label_ids = [ann.label_id for ann in user_annotations]
     
     next_url = request.args.get('next') or request.form.get('next')
+    
+    # === NUOVA LOGICA DI NAVIGAZIONE ===
+    # Calcola la navigazione per la stessa domanda mantenendo i filtri
+    navigation_context = get_navigation_context(cell, request.args)
 
     # Gestione richiesta AJAX per aggiornare lo storico
     ajax = request.args.get('ajax', type=int)
@@ -99,7 +103,94 @@ def annotate_cell(cell_id):
                          categories=categories,
                          annotations=annotation_data,
                          user_label_ids=list(user_label_ids),
-                         next_url=next_url)
+                         next_url=next_url,
+                         navigation=navigation_context)
+
+
+def get_navigation_context(current_cell, request_args):
+    """Calcola il contesto di navigazione per celle della stessa domanda"""
+    
+    # Costruisci query per celle della stessa domanda
+    query = TextCell.query.filter_by(column_name=current_cell.column_name)
+    
+    # Applica gli stessi filtri della pagina browse_annotations
+    file_id = request_args.get('file_id', type=int)
+    sheet_name = request_args.get('sheet', '')
+    question_type_filter = request_args.get('question_type', '')
+    annotated_only = request_args.get('annotated_only', '')
+    
+    # Mantieni i filtri originali
+    filter_params = {}
+    if file_id:
+        query = query.filter_by(excel_file_id=file_id)
+        filter_params['file_id'] = file_id
+    if sheet_name:
+        query = query.filter_by(sheet_name=sheet_name)
+        filter_params['sheet'] = sheet_name
+    if question_type_filter:
+        if question_type_filter == 'all':
+            pass  # Mostra tutti i tipi
+        elif question_type_filter:
+            query = query.filter_by(question_type=question_type_filter)
+            filter_params['question_type'] = question_type_filter
+    else:
+        # Default: solo celle annotabili
+        query = query.filter(
+            db.or_(
+                TextCell.question_type == 'aperta',
+                TextCell.question_type.is_(None)
+            )
+        )
+    
+    if annotated_only == '1':
+        query = query.join(CellAnnotation).distinct()
+        filter_params['annotated_only'] = '1'
+    elif annotated_only == '0':
+        query = query.outerjoin(CellAnnotation).filter(CellAnnotation.id.is_(None))
+        filter_params['annotated_only'] = '0'
+    
+    # Ordina per navigazione sequenziale
+    cells = query.order_by(TextCell.excel_file_id, TextCell.sheet_name, 
+                          TextCell.row_index, TextCell.column_index).all()
+    
+    # Trova posizione corrente
+    current_index = -1
+    for i, cell in enumerate(cells):
+        if cell.id == current_cell.id:
+            current_index = i
+            break
+    
+    # Calcola celle precedente e successiva
+    prev_cell = cells[current_index - 1] if current_index > 0 else None
+    next_cell = cells[current_index + 1] if current_index < len(cells) - 1 else None
+    
+    # Costruisci URL di navigazione mantenendo i filtri
+    base_filter_params = dict(filter_params)
+    if request_args.get('next'):
+        base_filter_params['next'] = request_args.get('next')
+    
+    prev_url = None
+    if prev_cell:
+        prev_url = url_for('annotation.annotate_cell', cell_id=prev_cell.id, **base_filter_params)
+    
+    next_url = None
+    if next_cell:
+        next_url = url_for('annotation.annotate_cell', cell_id=next_cell.id, **base_filter_params)
+    
+    # URL di ritorno alla lista
+    back_url = url_for('annotation.browse_annotations', **filter_params)
+    
+    return {
+        'current_index': current_index,
+        'total_cells': len(cells),
+        'prev_cell': prev_cell,
+        'next_cell': next_cell,
+        'prev_url': prev_url,
+        'next_url': next_url,
+        'back_url': back_url,
+        'question_text': current_cell.column_name,
+        'active_filters': filter_params
+    }
 
 @annotation_bp.route('/api/add_annotation', methods=['POST'])
 @login_required

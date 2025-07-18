@@ -16,15 +16,57 @@ questions_bp = Blueprint('questions', __name__, url_prefix='/questions')
 def manage_questions():
     """Pagina di gestione e classificazione delle domande"""
     
-    # Ottieni tutte le domande uniche
-    questions_query = db.session.query(
+    # Prima ottieni i dati sui file Excel
+    from models import ExcelFile
+    
+    # Ottieni tutte le domande raggruppate per file
+    files_with_questions = db.session.query(
+        ExcelFile.id.label('file_id'),
+        ExcelFile.filename.label('filename'),
+        ExcelFile.created_at.label('created_at'),
         TextCell.column_name,
         func.count(TextCell.id).label('total_cells'),
         func.count(TextCell.question_type).label('classified_cells'),
         func.group_concat(distinct(TextCell.question_type)).label('types_used')
-    ).group_by(TextCell.column_name).order_by(TextCell.column_name)
+    ).join(TextCell, ExcelFile.id == TextCell.excel_file_id)\
+     .group_by(ExcelFile.id, TextCell.column_name)\
+     .order_by(ExcelFile.filename, TextCell.column_name).all()
     
-    questions = questions_query.all()
+    # Raggruppa per file
+    files_data = {}
+    total_questions = 0
+    total_classified = 0
+    
+    for row in files_with_questions:
+        file_id = row.file_id
+        if file_id not in files_data:
+            files_data[file_id] = {
+                'file_id': file_id,
+                'filename': row.filename,
+                'created_at': row.created_at,
+                'questions': [],
+                'total_questions': 0,
+                'classified_questions': 0
+            }
+        
+        # Crea oggetto domanda
+        question = {
+            'column_name': row.column_name,
+            'total_cells': row.total_cells,
+            'classified_cells': row.classified_cells,
+            'types_used': row.types_used
+        }
+        
+        files_data[file_id]['questions'].append(question)
+        files_data[file_id]['total_questions'] += 1
+        total_questions += 1
+        
+        if row.classified_cells > 0:
+            files_data[file_id]['classified_questions'] += 1
+            total_classified += 1
+    
+    # Converti in lista ordinata
+    files_list = list(files_data.values())
     
     # Tipi di domanda disponibili
     question_types = [
@@ -37,8 +79,10 @@ def manage_questions():
     ]
     
     return render_template('questions/manage.html',
-                         questions=questions,
-                         question_types=question_types)
+                         files=files_list,
+                         question_types=question_types,
+                         total_questions=total_questions,
+                         total_classified=total_classified)
 
 @questions_bp.route('/classify', methods=['POST'])
 @login_required

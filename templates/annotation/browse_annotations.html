@@ -327,7 +327,11 @@
                                         {% if current_file_id %}
                                         {% set sample_responses = cells.items|selectattr('column_name', 'equalto', question_name)|list %}
                                         {% if sample_responses %}
-                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=sample_responses[0].id) }}" 
+                                        <a href="{{ url_for('annotation.annotate_cell', cell_id=sample_responses[0].id, 
+                                                           file_id=current_file_id, sheet=current_sheet, 
+                                                           question_type=question_type_filter, 
+                                                           annotated_only=annotated_only, 
+                                                           next=request.url) }}" 
                                            class="btn btn-sm btn-success">
                                             <i class="bi bi-pencil me-1"></i>Annota
                                         </a>
@@ -449,7 +453,11 @@
                                         Riga {{ cell.row_index + 1 }}, Col {{ cell.column_index + 1 }}
                                     </small>
                                     {% if not cell.question_type or cell.question_type == 'aperta' %}
-                                    <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" 
+                                    <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id,
+                                                       file_id=current_file_id, sheet=current_sheet,
+                                                       question_type=question_type_filter,
+                                                       annotated_only=annotated_only,
+                                                       next=request.url) }}" 
                                        class="btn btn-primary btn-sm">
                                         <i class="bi bi-pencil me-1"></i>Annota
                                     </a>

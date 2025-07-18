@@ -80,6 +80,69 @@
 {% endblock %}
 
 {% block content %}
+<!-- Breadcrumb di navigazione -->
+<div class="row mb-3">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item">
+                    <a href="{{ navigation.back_url if navigation else url_for('annotation.browse_annotations') }}">
+                        Annotazioni
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{ navigation.question_text[:50] + '...' if navigation.question_text|length > 50 else navigation.question_text }}
+                </li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- Barra di navigazione migliorata -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-body py-2">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group" role="group">
+                            <a href="{{ navigation.back_url if navigation else url_for('annotation.browse_annotations') }}" 
+                               class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Torna alla Lista
+                            </a>
+                            <a href="{{ navigation.prev_url if navigation and navigation.prev_url else '#' }}" 
+                               class="btn btn-outline-primary {{ 'disabled' if not navigation or not navigation.prev_url else '' }}"
+                               {% if navigation and navigation.prev_url %}title="Vai alla cella precedente (Ctrl+←)"{% endif %}>
+                                <i class="bi bi-chevron-left"></i> Precedente
+                            </a>
+                            <a href="{{ navigation.next_url if navigation and navigation.next_url else '#' }}" 
+                               class="btn btn-outline-primary {{ 'disabled' if not navigation or not navigation.next_url else '' }}"
+                               {% if navigation and navigation.next_url %}title="Vai alla cella successiva (Ctrl+→)"{% endif %}>
+                                Successiva <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        {% if navigation %}
+                        <span class="badge bg-info fs-6 me-2">
+                            <i class="bi bi-geo-alt"></i> 
+                            Risposta {{ navigation.current_index + 1 }} di {{ navigation.total_cells }}
+                        </span>
+                        {% endif %}
+                        {% if navigation and navigation.active_filters %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-funnel"></i> 
+                            {{ navigation.active_filters|length }} filtri attivi
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-md-8">
         <!-- Informazioni sulla cella -->
@@ -100,17 +163,21 @@
                     <div class="fs-5">{{ cell.text_content }}</div>
                 </div>
                 
-                <!-- Controlli di navigazione -->
+                <!-- Informazioni aggiuntive -->
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <div>
-                        <a href="{{ next_url or request.args.get('next') or url_for('excel.questions_overview', file_id=cell.excel_file.id) }}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left me-1"></i>Torna alla Lista
-                        </a>
-                    </div>
-                    <div>
                         <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
                             Caratteri: {{ cell.text_content|length }}
                         </small>
+                    </div>
+                    <div>
+                        {% if navigation %}
+                        <small class="text-muted">
+                            <i class="bi bi-question-circle me-1"></i>
+                            Domanda: {{ navigation.question_text[:30] + '...' if navigation.question_text|length > 30 else navigation.question_text }}
+                        </small>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -769,6 +836,61 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carica statistiche al caricamento della pagina
     loadUserStats();
     loadGlobalStats();
+    
+    // === SHORTCUT DA TASTIERA ===
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+← per cella precedente
+        if (e.ctrlKey && e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const prevLink = document.querySelector('a[title*="precedente"]');
+            if (prevLink && !prevLink.classList.contains('disabled')) {
+                window.location.href = prevLink.href;
+            }
+        }
+        
+        // Ctrl+→ per cella successiva
+        if (e.ctrlKey && e.key === 'ArrowRight') {
+            e.preventDefault();
+            const nextLink = document.querySelector('a[title*="successiva"]');
+            if (nextLink && !nextLink.classList.contains('disabled')) {
+                window.location.href = nextLink.href;
+            }
+        }
+        
+        // Ctrl+Backspace per tornare alla lista
+        if (e.ctrlKey && e.key === 'Backspace') {
+            e.preventDefault();
+            const backLink = document.querySelector('a[href*="browse_annotations"]');
+            if (backLink) {
+                window.location.href = backLink.href;
+            }
+        }
+    });
+    
+    // Mostra shortcut all'utente
+    const shortcutInfo = document.createElement('div');
+    shortcutInfo.className = 'position-fixed bottom-0 end-0 p-3';
+    shortcutInfo.style.zIndex = '1050';
+    shortcutInfo.innerHTML = `
+        <div class="card shadow-sm" style="max-width: 200px;">
+            <div class="card-body p-2">
+                <h6 class="card-title fs-6 mb-2">Shortcut:</h6>
+                <small class="text-muted">
+                    <kbd>Ctrl</kbd>+<kbd>←</kbd> Precedente<br>
+                    <kbd>Ctrl</kbd>+<kbd>→</kbd> Successiva<br>
+                    <kbd>Ctrl</kbd>+<kbd>⌫</kbd> Torna alla lista
+                </small>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(shortcutInfo);
+    
+    // Nascondi shortcut dopo 5 secondi
+    setTimeout(() => {
+        shortcutInfo.style.transition = 'opacity 0.5s';
+        shortcutInfo.style.opacity = '0';
+        setTimeout(() => shortcutInfo.remove(), 500);
+    }, 5000);
 });
 
 // Funzioni per le statistiche (fuori dal DOMContentLoaded per renderle globali)
