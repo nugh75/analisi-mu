@@ -39,6 +39,12 @@
                     <div class="col-md-6">
                         <select name="category" id="category" class="form-select" onchange="this.form.submit()">
                             <option value="">Tutte le categorie</option>
+                            <option value="none" {% if current_category == 'none' %}selected{% endif %}>
+                                Nessuna categoria
+                                {% if uncategorized_count > 0 %}
+                                <span class="badge bg-warning">{{ uncategorized_count }}</span>
+                                {% endif %}
+                            </option>
                             {% for category in categories %}
                             <option value="{{ category.id }}" {% if category.id == current_category %}selected{% endif %}>
                                 {{ category.name }}
@@ -169,10 +175,12 @@
                                     </div>
                                 </td>
                                 <td>
-                                    {% if label.category %}
-                                    <span class="badge bg-secondary">{{ label.category }}</span>
+                                    {% if label.category_id and label.category_obj %}
+                                    <span class="badge bg-secondary">{{ label.category_obj.name }}</span>
                                     {% else %}
-                                    <span class="text-muted">-</span>
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Nessuna categoria
+                                    </span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -268,7 +276,7 @@
     <ul class="pagination justify-content-center">
         {% if labels.has_prev %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.prev_num, category=current_category) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.prev_num, category=current_category, show_inactive=show_inactive) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -278,7 +286,7 @@
         {% if page_num %}
         {% if page_num != labels.page %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=page_num, category=current_category) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=page_num, category=current_category, show_inactive=show_inactive) }}">
                 {{ page_num }}
             </a>
         </li>
@@ -296,7 +304,7 @@
 
         {% if labels.has_next %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.next_num, category=current_category) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.next_num, category=current_category, show_inactive=show_inactive) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
@@ -344,7 +352,7 @@
 
 <!-- Statistiche rapide -->
 <div class="row mt-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-light">
             <div class="card-body text-center">
                 <i class="bi bi-tags display-4 text-primary mb-2"></i>
@@ -353,7 +361,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card bg-light">
             <div class="card-body text-center">
                 <i class="bi bi-collection display-4 text-success mb-2"></i>
@@ -362,7 +370,24 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle display-4 text-warning mb-2"></i>
+                <h5>{{ uncategorized_count }}</h5>
+                <small class="text-muted">Senza Categoria</small>
+                {% if uncategorized_count > 0 %}
+                <div class="mt-2">
+                    <a href="{{ url_for('labels.list_labels', category='none') }}" 
+                       class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-funnel me-1"></i>Gestisci
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="card bg-light">
             <div class="card-body text-center">
                 <i class="bi bi-pencil-square display-4 text-info mb-2"></i>

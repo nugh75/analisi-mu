@@ -15,29 +15,38 @@ labels_bp = Blueprint('labels', __name__)
 def list_labels():
     """Lista di tutte le etichette"""
     page = request.args.get('page', 1, type=int)
-    category_filter = request.args.get('category', type=int)
+    category_filter = request.args.get('category')
     show_inactive = request.args.get('show_inactive', False, type=bool)
-    
-    # Query di base per etichette attive
-    query = Label.query
+
+    # Query di base per etichette attive con JOIN esplicito per categoria
+    query = Label.query.options(db.joinedload(Label.category_obj))
     if not show_inactive:
         query = query.filter_by(is_active=True)
-    
-    if category_filter:
-        query = query.filter_by(category_id=category_filter)
-    
+
+    current_category = None
+    if category_filter == 'none':
+        query = query.filter(Label.category_id == None)
+        current_category = 'none'
+    elif category_filter and category_filter.isdigit():
+        query = query.filter_by(category_id=int(category_filter))
+        current_category = int(category_filter)
+
     labels = query.order_by(Label.name).paginate(
         page=page, per_page=20, error_out=False
     )
-    
+
     # Liste delle categorie attive per il filtro
     categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
     
+    # Statistiche per etichette senza categoria
+    uncategorized_count = Label.query.filter(Label.category_id.is_(None)).filter_by(is_active=True).count()
+
     return render_template('labels/list_labels.html', 
                          labels=labels,
                          categories=categories,
-                         current_category=category_filter,
-                         show_inactive=show_inactive)
+                         current_category=current_category,
+                         show_inactive=show_inactive,
+                         uncategorized_count=uncategorized_count)
 
 @labels_bp.route('/create', methods=['GET', 'POST'])
 @login_required
@@ -176,7 +185,8 @@ def api_search_labels():
     if not query:
         return jsonify([])
     
-    labels = Label.query.filter(Label.name.contains(query))\
+    labels = Label.query.options(db.joinedload(Label.category_obj))\
+                       .filter(Label.name.contains(query))\
                        .filter_by(is_active=True)\
                        .order_by(Label.name)\
                        .limit(10)\
@@ -186,7 +196,7 @@ def api_search_labels():
         'id': label.id,
         'name': label.name,
         'description': label.description,
-        'category': label.category,
+        'category': label.category_obj.name if label.category_obj else None,
         'color': label.color
     } for label in labels])
 
@@ -251,12 +261,12 @@ def merge_labels():
             return redirect(url_for('labels.merge_labels'))
     
     # GET: mostra il form di merge
-    labels = Label.query.order_by(Label.category, Label.name).all()
+    labels = Label.query.options(db.joinedload(Label.category_obj)).order_by(Label.category, Label.name).all()
     
     # Raggruppa le etichette per categoria
     labels_by_category = {}
     for label in labels:
-        category = label.category or 'Senza categoria'
+        category = label.category_obj.name if label.category_obj else 'Senza categoria'
         if category not in labels_by_category:
             labels_by_category[category] = []
         
@@ -278,14 +288,14 @@ def merge_labels():
 def api_suggest_merge():
     """API per suggerire etichette simili che potrebbero essere unite"""
     # Trova etichette con nomi simili o nella stessa categoria
-    labels = Label.query.order_by(Label.category, Label.name).all()
+    labels = Label.query.options(db.joinedload(Label.category_obj)).order_by(Label.category, Label.name).all()
     
     suggestions = []
     
     # Raggruppa per categoria
     category_groups = {}
     for label in labels:
-        category = label.category or 'Senza categoria'
+        category = label.category_obj.name if label.category_obj else 'Senza categoria'
         if category not in category_groups:
             category_groups[category] = []
         category_groups[category].append(label)
@@ -412,7 +422,7 @@ def edit_category(category_id):
 @labels_bp.route('/categories/delete/<int:category_id>', methods=['POST'])
 @login_required
 def delete_category(category_id):
-    """Elimina una categoria (soft delete o eliminazione forzata)"""
+    """Elimina una categoria con migrazione automatica delle etichette"""
     if not current_user.is_admin:
         flash('Non hai i permessi per questa operazione.', 'error')
         return redirect(url_for('labels.list_categories'))
@@ -420,35 +430,40 @@ def delete_category(category_id):
     category = Category.query.get_or_404(category_id)
     force_delete = request.form.get('force_delete') == 'true'
     
-    # Conta le etichette associate (solo quelle attive)
-    label_count = Label.query.filter_by(category_id=category_id, is_active=True).count()
+    # Conta le etichette associate (tutte, attive e inattive)
+    all_labels = Label.query.filter_by(category_id=category_id).all()
+    active_label_count = Label.query.filter_by(category_id=category_id, is_active=True).count()
     
-    if label_count > 0 and not force_delete:
-        # Solo soft delete della categoria
-        category.is_active = False
-        db.session.commit()
-        flash(f'Categoria "{category.name}" disattivata. Le etichette rimangono attive.', 'success')
-    elif force_delete:
-        # Eliminazione forzata: disattiva categoria e tutte le sue etichette
-        try:
-            # Disattiva tutte le etichette della categoria
-            labels = Label.query.filter_by(category_id=category_id).all()
-            for label in labels:
-                label.is_active = False
+    try:
+        if len(all_labels) > 0:
+            # MIGRAZIONE AUTOMATICA: Sposta tutte le etichette in "Nessuna categoria"
+            migrated_labels = []
+            for label in all_labels:
+                label.category_id = None
+                migrated_labels.append(label.name)
             
-            # Disattiva la categoria
-            category.is_active = False
-            
+            # Elimina la categoria
+            db.session.delete(category)
             db.session.commit()
-            flash(f'Categoria "{category.name}" e {len(labels)} etichette disattivate con successo.', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Errore durante l\'eliminazione: {str(e)}', 'error')
-    else:
-        # Categoria vuota: eliminazione completa
-        db.session.delete(category)
-        db.session.commit()
-        flash(f'Categoria "{category.name}" eliminata definitivamente.', 'success')
+            
+            # REFRESH: Aggiorna la sessione per riflettere i cambiamenti
+            db.session.expire_all()
+            
+            # Messaggio informativo dettagliato
+            flash(f'Categoria "{category.name}" eliminata con successo. {len(migrated_labels)} etichette spostate in "Nessuna categoria": {", ".join(migrated_labels[:5])}{"..." if len(migrated_labels) > 5 else ""}.', 'success')
+            
+            # Suggerimento per gestire le etichette migrate
+            if active_label_count > 0:
+                flash(f'Suggerimento: Puoi ora gestire le {active_label_count} etichette attive usando il filtro "Nessuna categoria" nella pagina etichette.', 'info')
+        else:
+            # Categoria vuota: eliminazione diretta
+            db.session.delete(category)
+            db.session.commit()
+            flash(f'Categoria "{category.name}" eliminata definitivamente (era vuota).', 'success')
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore durante l\'eliminazione: {str(e)}', 'error')
     
     return redirect(url_for('labels.list_categories'))
 
@@ -591,27 +606,35 @@ def bulk_change_color(label_ids, color):
     return redirect(url_for('labels.list_labels'))
 
 def bulk_delete_categories(category_ids):
-    """Elimina più categorie in blocco"""
+    """Elimina più categorie in blocco con migrazione automatica delle etichette"""
     try:
         categories_to_delete = Category.query.filter(Category.id.in_(category_ids)).all()
-        categories_with_labels = []
-        categories_to_remove = []
+        
+        total_migrated_labels = 0
+        deleted_categories = []
         
         for category in categories_to_delete:
-            label_count = Label.query.filter_by(category_id=category.id).count()
-            if label_count > 0:
-                categories_with_labels.append(f"{category.name} ({label_count} etichette)")
-            else:
-                categories_to_remove.append(category)
+            # Trova tutte le etichette della categoria
+            labels_in_category = Label.query.filter_by(category_id=category.id).all()
+            
+            # Migra le etichette a "Nessuna categoria"
+            for label in labels_in_category:
+                label.category_id = None
+                total_migrated_labels += 1
+            
+            deleted_categories.append(category.name)
+            db.session.delete(category)
         
-        if categories_with_labels:
-            flash(f'Alcune categorie non possono essere eliminate perché contengono etichette: {", ".join(categories_with_labels)}', 'warning')
+        db.session.commit()
         
-        if categories_to_remove:
-            for category in categories_to_remove:
-                db.session.delete(category)
-            db.session.commit()
-            flash(f'Eliminate {len(categories_to_remove)} categorie con successo.', 'success')
+        # REFRESH: Aggiorna la sessione per riflettere i cambiamenti
+        db.session.expire_all()
+        
+        if total_migrated_labels > 0:
+            flash(f'Eliminate {len(deleted_categories)} categorie: {", ".join(deleted_categories)}. {total_migrated_labels} etichette spostate in "Nessuna categoria".', 'success')
+            flash('Suggerimento: Usa il filtro "Nessuna categoria" per gestire le etichette migrate.', 'info')
+        else:
+            flash(f'Eliminate {len(deleted_categories)} categorie vuote con successo.', 'success')
         
     except Exception as e:
         db.session.rollback()
@@ -657,7 +680,7 @@ def bulk_merge_categories(category_ids, target_category_id):
 @login_required
 def api_labels_for_ai():
     """API per ottenere tutte le etichette per l'AI"""
-    labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
+    labels = Label.query.options(db.joinedload(Label.category_obj)).filter_by(is_active=True).order_by(Label.name).all()
     
     labels_data = []
     for label in labels:
