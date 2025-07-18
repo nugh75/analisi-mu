@@ -115,6 +115,10 @@ class TextCell(db.Model):
     column_index = db.Column(db.Integer, nullable=False)
     column_name = db.Column(db.String(100))
     text_content = db.Column(db.Text, nullable=False)
+    
+    # Classificazione manuale del tipo di domanda
+    question_type = db.Column(db.String(20))  # 'aperta', 'chiusa_binaria', 'chiusa_multipla', 'likert', 'anagrafica', 'numerica'
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relazioni

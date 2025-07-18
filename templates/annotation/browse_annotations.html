@@ -154,6 +154,27 @@
                         {% endif %}
                     </div>
                     <div class="col-md-3">
+                        <label for="question_type" class="form-label">
+                            <i class="bi bi-tag me-1"></i>Tipo Domanda
+                        </label>
+                        <select name="question_type" id="question_type" class="form-select">
+                            <option value="">Solo Annotabili (Aperte)</option>
+                            <option value="all" {{ 'selected' if question_type_filter == 'all' else '' }}>Tutti i Tipi</option>
+                            {% for qtype in question_types %}
+                            <option value="{{ qtype }}" {{ 'selected' if qtype == question_type_filter else '' }}>
+                                {% if qtype == 'aperta' %}🔓 Domanda Aperta
+                                {% elif qtype == 'anagrafica' %}👤 Domanda Anagrafica
+                                {% elif qtype == 'chiusa_binaria' %}✅ Sì/No
+                                {% elif qtype == 'chiusa_multipla' %}☑️ Scelta Multipla
+                                {% elif qtype == 'likert' %}📊 Scala Likert
+                                {% elif qtype == 'numerica' %}🔢 Numerica
+                                {% else %}{{ qtype.replace('_', ' ').title() }}
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label for="annotated_only" class="form-label">
                             <i class="bi bi-check-circle me-1"></i>Stato Annotazione
                         </label>
@@ -359,6 +380,29 @@
                                         <small class="text-muted">
                                             {{ cell.sheet_name }}:{{ cell.cell_reference }} ({{ cell.column_name }})
                                         </small>
+                                        <!-- Tipo di domanda -->
+                                        {% if cell.question_type %}
+                                        <br>
+                                        <small class="badge mt-1 
+                                            {% if cell.question_type == 'aperta' %}bg-success
+                                            {% elif cell.question_type == 'anagrafica' %}bg-info
+                                            {% elif cell.question_type == 'chiusa_binaria' %}bg-secondary
+                                            {% elif cell.question_type == 'chiusa_multipla' %}bg-primary
+                                            {% elif cell.question_type == 'likert' %}bg-warning
+                                            {% elif cell.question_type == 'numerica' %}bg-dark
+                                            {% else %}bg-light text-dark
+                                            {% endif %}">
+                                            {% if cell.question_type == 'aperta' %}🔓 Domanda Aperta
+                                            {% elif cell.question_type == 'anagrafica' %}👤 Anagrafica
+                                            {% elif cell.question_type == 'chiusa_binaria' %}✅ Sì/No
+                                            {% elif cell.question_type == 'chiusa_multipla' %}☑️ Scelta Multipla
+                                            {% elif cell.question_type == 'likert' %}📊 Likert
+                                            {% elif cell.question_type == 'numerica' %}🔢 Numerica
+                                            {% else %}{{ cell.question_type.replace('_', ' ').title() if cell.question_type else 'Non Classificata' }}
+                                            {% endif %}
+                                            {% if cell.question_type and cell.question_type != 'aperta' %} (Non Annotabile){% endif %}
+                                        </small>
+                                        {% endif %}
                                     </div>
                                     <div>
                                         {% if cell.annotations %}
@@ -404,10 +448,17 @@
                                         {{ cell.text_content|length }} caratteri | 
                                         Riga {{ cell.row_index + 1 }}, Col {{ cell.column_index + 1 }}
                                     </small>
+                                    {% if not cell.question_type or cell.question_type == 'aperta' %}
                                     <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" 
                                        class="btn btn-primary btn-sm">
                                         <i class="bi bi-pencil me-1"></i>Annota
                                     </a>
+                                    {% else %}
+                                    <span class="btn btn-secondary btn-sm disabled" 
+                                          title="Questo tipo di domanda non è annotabile">
+                                        <i class="bi bi-x-circle me-1"></i>Non Annotabile
+                                    </span>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -426,6 +477,7 @@
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
                                 annotated_only=annotated_only,
+                                question_type=question_type_filter,
                                 view_mode=view_mode) }}">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
@@ -441,6 +493,7 @@
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
                                 annotated_only=annotated_only,
+                                question_type=question_type_filter,
                                 view_mode=view_mode) }}">
                                 {{ page_num }}
                             </a>
@@ -464,6 +517,7 @@
                                 file_id=current_file_id, 
                                 sheet=current_sheet, 
                                 annotated_only=annotated_only,
+                                question_type=question_type_filter,
                                 view_mode=view_mode) }}">
                                 <i class="bi bi-chevron-right"></i>
                             </a>

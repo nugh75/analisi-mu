@@ -22,6 +22,11 @@ def annotate_cell(cell_id):
     """Pagina di annotazione per una singola cella"""
     cell = TextCell.query.get_or_404(cell_id)
     
+    # Verifica se la cella è di un tipo non annotabile
+    if hasattr(cell, 'question_type') and cell.question_type in ['anagrafica', 'chiusa_binaria', 'chiusa_multipla', 'likert', 'numerica']:
+        flash(f'Questa cella contiene una domanda di tipo "{cell.question_type}" e non necessita di annotazione.', 'info')
+        return redirect(url_for('annotation.browse_files'))
+    
     # Ottieni tutte le etichette disponibili
     # Ordiniamo prima per categoria (trattando None come stringa vuota) poi per nome
     labels = Label.query.all()
@@ -341,20 +346,41 @@ def browse_annotations():
     annotated_only = request.args.get('annotated_only', '')
     view_mode = request.args.get('view_mode', 'classic')
     selected_question = request.args.get('question', '')
+    question_type_filter = request.args.get('question_type', '')  # Nuovo filtro per tipo domanda
     ajax = request.args.get('ajax', '')
     
     # Se è una richiesta AJAX, restituisci solo i dati dei filtri
     if ajax == '1' and file_id:
-        sheets = db.session.query(TextCell.sheet_name)\
-                          .filter_by(excel_file_id=file_id)\
-                          .distinct().all()
+        # Per i fogli, considera solo celle annotabili o non classificate se non c'è filtro specifico
+        sheets_query = db.session.query(TextCell.sheet_name)\
+                                .filter_by(excel_file_id=file_id)
+        
+        if not question_type_filter:
+            sheets_query = sheets_query.filter(db.or_(
+                TextCell.question_type == 'aperta',
+                TextCell.question_type.is_(None)
+            ))
+        elif question_type_filter != 'all':
+            sheets_query = sheets_query.filter_by(question_type=question_type_filter)
+            
+        sheets = sheets_query.distinct().all()
         sheet_names = [sheet[0] for sheet in sheets]
         
-        questions = db.session.query(TextCell.column_name)\
-                             .filter_by(excel_file_id=file_id)\
-                             .distinct()\
-                             .order_by(TextCell.column_name)\
-                             .all()
+        # Per le domande, applica lo stesso filtro
+        questions_query = db.session.query(TextCell.column_name)\
+                                   .filter_by(excel_file_id=file_id)
+        
+        if not question_type_filter:
+            questions_query = questions_query.filter(db.or_(
+                TextCell.question_type == 'aperta',
+                TextCell.question_type.is_(None)
+            ))
+        elif question_type_filter != 'all':
+            questions_query = questions_query.filter_by(question_type=question_type_filter)
+            
+        questions = questions_query.distinct()\
+                                 .order_by(TextCell.column_name)\
+                                 .all()
         question_names = [q[0] for q in questions if q[0]]
         
         return jsonify({
@@ -363,6 +389,22 @@ def browse_annotations():
         })
     
     query = TextCell.query
+    
+    # FILTRO PER TIPO DOMANDA
+    if question_type_filter == 'all':
+        # Mostra tutti i tipi di domanda
+        pass
+    elif question_type_filter:
+        # Filtra per tipo specifico
+        query = query.filter_by(question_type=question_type_filter)
+    else:
+        # Default: solo celle annotabili (domande aperte e non classificate)
+        query = query.filter(
+            db.or_(
+                TextCell.question_type == 'aperta',
+                TextCell.question_type.is_(None)  # Include celle non ancora classificate
+            )
+        )
     
     if file_id:
         query = query.filter_by(excel_file_id=file_id)
@@ -441,14 +483,24 @@ def browse_annotations():
                                    .order_by(TextCell.column_name)\
                                    .all()
     
+    # Ottieni tutti i tipi di domanda disponibili per il filtro
+    available_question_types = db.session.query(TextCell.question_type)\
+                                        .filter(TextCell.question_type.isnot(None))\
+                                        .distinct()\
+                                        .order_by(TextCell.question_type)\
+                                        .all()
+    question_types = [qt[0] for qt in available_question_types]
+    
     return render_template('annotation/browse_annotations.html',
                          cells=cells,
                          files=files,
                          sheet_names=sheet_names,
                          question_names=question_names,
+                         question_types=question_types,
                          current_file_id=file_id,
                          current_sheet=sheet_name,
                          selected_question=selected_question,
+                         question_type_filter=question_type_filter,
                          annotated_only=annotated_only,
                          view_mode=view_mode,
                          questions_stats=questions_stats)
@@ -848,7 +900,7 @@ def delete_annotation(annotation_id):
             target_user_id=annotation.user_id,
             annotation_id=annotation_id,
             was_ai_generated=annotation.is_ai_generated,
-            ai_confidence=annotation.ai_confidence,
+            ai_confidence=annotation.ai_confidenza,
             ai_model=annotation.ai_model,
             ai_provider=annotation.ai_provider,
             notes=f"Rimossa annotazione di {user_username}"
@@ -880,3 +932,45 @@ def delete_annotation(annotation_id):
             'success': False,
             'message': f'Errore del server: {str(e)}'
         }), 500
+
+@annotation_bp.route('/admin/question-classification')
+@login_required
+def question_classification_admin():
+    """Reindirizza alla nuova interfaccia di gestione delle domande"""
+    flash('La classificazione automatica è stata rimossa. Usa la nuova interfaccia di gestione manuale.', 'info')
+    return redirect(url_for('questions.manage_questions'))
+
+@annotation_bp.route('/admin/classify-questions/<int:file_id>', methods=['POST'])
+@login_required  
+def classify_questions(file_id=None):
+    """Reindirizza alla nuova interfaccia di gestione delle domande"""
+    flash('La classificazione automatica è stata rimossa. Usa la nuova interfaccia di gestione manuale.', 'info')
+    return redirect(url_for('questions.manage_questions'))
+
+@annotation_bp.route('/api/annotatable-cells/<int:file_id>')
+@login_required
+def get_annotatable_cells(file_id):
+    """API per ottenere le celle di un file (solo domande aperte sono annotabili)"""
+    
+    # Ottieni le celle che sono domande aperte o non classificate
+    annotatable_cells = TextCell.query.filter_by(excel_file_id=file_id)\
+        .filter(db.or_(
+            TextCell.question_type == 'aperta',
+            TextCell.question_type.is_(None)
+        )).all()
+    
+    cells_data = []
+    for cell in annotatable_cells:
+        cells_data.append({
+            'id': cell.id,
+            'sheet_name': cell.sheet_name,
+            'cell_reference': cell.cell_reference,
+            'column_name': cell.column_name,
+            'text_content': cell.text_content[:100] + '...' if len(cell.text_content) > 100 else cell.text_content,
+            'question_type': getattr(cell, 'question_type', None)
+        })
+    
+    return jsonify({
+        'total': len(cells_data),
+        'cells': cells_data
+    })
