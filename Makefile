@@ -12,7 +12,7 @@ NC=\033[0m # No Color
 # Configurazione di default
 COMPOSE_FILE=docker-compose.yml
 COMPOSE_FILE_PROD=docker-compose.prod.yml
-CONTAINER_NAME=analisi-mu-web
+CONTAINER_NAME=anatema-web
 
 help: ## Mostra questo messaggio di aiuto
 	@echo "$(GREEN)Comandi disponibili per Analisi MU:$(NC)"
@@ -28,11 +28,11 @@ rebuild: ## Rebuild completo (down, build, up)
 	docker-compose build --no-cache
 	docker-compose up -d
 	@echo "$(GREEN)Sistema riavviato con successo!$(NC)"
-	docker build -t analisi-mu .
+	docker build -t anatema .
 
 build-no-cache: ## Build dell'immagine Docker senza cache
 	@echo "$(GREEN)Building Docker image without cache...$(NC)"
-	docker build --no-cache -t analisi-mu .
+	docker build --no-cache -t anatema .
 
 up: ## Avvia i servizi (sviluppo)
 	@echo "$(GREEN)Starting development services...$(NC)"

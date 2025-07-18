@@ -127,34 +127,34 @@ CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "app:app"]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: analisi-mu
+  name: anatema
   labels:
-    app: analisi-mu
+    app: anatema
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: analisi-mu
+      app: anatema
   template:
     metadata:
       labels:
-        app: analisi-mu
+        app: anatema
     spec:
       containers:
-      - name: analisi-mu
-        image: analisi-mu:latest
+      - name: anatema
+        image: anatema:latest
         ports:
         - containerPort: 5000
         env:
         - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: analisi-mu-secret
+              name: anatema-secret
               key: secret-key
         - name: DATABASE_URL
           valueFrom:
             configMapKeyRef:
-              name: analisi-mu-config
+              name: anatema-config
               key: database-url
         resources:
           limits:
@@ -183,10 +183,10 @@ spec:
       volumes:
       - name: uploads
         persistentVolumeClaim:
-          claimName: analisi-mu-uploads
+          claimName: anatema-uploads
       - name: instance
         persistentVolumeClaim:
-          claimName: analisi-mu-instance
+          claimName: anatema-instance
 ```
 
 ### Service Configuration
@@ -195,10 +195,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: analisi-mu-service
+  name: anatema-service
 spec:
   selector:
-    app: analisi-mu
+    app: anatema
   ports:
     - protocol: TCP
       port: 80
@@ -212,7 +212,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: analisi-mu-config
+  name: anatema-config
 data:
   database-url: "sqlite:///instance/analisi_mu.db"
   upload-folder: "uploads"
@@ -222,7 +222,7 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: analisi-mu-secret
+  name: anatema-secret
 type: Opaque
 data:
   secret-key: <base64-encoded-secret>
@@ -237,7 +237,7 @@ data:
 version: '3.8'
 services:
   app:
-    image: analisi-mu:latest
+    image: anatema:latest
     deploy:
       replicas: 3
       update_config:
@@ -281,7 +281,7 @@ secrets:
 ```yaml
 # Chart.yaml
 apiVersion: v2
-name: analisi-mu
+name: anatema
 description: A Helm chart for Analisi MU
 type: application
 version: 0.1.0
@@ -291,7 +291,7 @@ appVersion: "1.0.0"
 replicaCount: 3
 
 image:
-  repository: analisi-mu
+  repository: anatema
   pullPolicy: IfNotPresent
   tag: "latest"
 
@@ -305,14 +305,14 @@ ingress:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: analisi-mu.example.com
+    - host: anatema.example.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: analisi-mu-tls
+    - secretName: anatema-tls
       hosts:
-        - analisi-mu.example.com
+        - anatema.example.com
 
 resources:
   limits:
@@ -345,7 +345,7 @@ REDIS_URL=redis://redis:6379/0
 
 # Storage
 STORAGE_TYPE=s3
-S3_BUCKET=analisi-mu-uploads
+S3_BUCKET=anatema-uploads
 S3_REGION=us-west-2
 
 # Monitoring
@@ -368,7 +368,7 @@ upstream analisi_mu {
 
 server {
     listen 80;
-    server_name analisi-mu.example.com;
+    server_name anatema.example.com;
     
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
@@ -376,11 +376,11 @@ server {
 
 server {
     listen 443 ssl http2;
-    server_name analisi-mu.example.com;
+    server_name anatema.example.com;
     
     # SSL Configuration
-    ssl_certificate /etc/ssl/certs/analisi-mu.crt;
-    ssl_certificate_key /etc/ssl/private/analisi-mu.key;
+    ssl_certificate /etc/ssl/certs/anatema.crt;
+    ssl_certificate_key /etc/ssl/private/anatema.key;
     
     # Security Headers
     add_header X-Frame-Options DENY;
@@ -431,7 +431,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'analisi-mu'
+  - job_name: 'anatema'
     static_configs:
       - targets: ['app:5000']
     metrics_path: '/metrics'
@@ -505,7 +505,7 @@ services:
 ```bash
 # Scan vulnerabilità immagine
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  aquasec/trivy:latest image analisi-mu:latest
+  aquasec/trivy:latest image anatema:latest
 
 # Scan configurazione
 docker run --rm -v $(pwd):/app \
@@ -526,10 +526,10 @@ RUN adduser --disabled-password --gecos '' appuser
 USER appuser
 
 # Monta filesystem read-only
-# docker run --read-only --tmpfs /tmp --tmpfs /var/tmp analisi-mu
+# docker run --read-only --tmpfs /tmp --tmpfs /var/tmp anatema
 
 # Limita capabilities
-# docker run --cap-drop ALL --cap-add NET_BIND_SERVICE analisi-mu
+# docker run --cap-drop ALL --cap-add NET_BIND_SERVICE anatema
 ```
 
 ## 🚀 Deploy Multi-Cloud
@@ -540,9 +540,9 @@ USER appuser
 apiVersion: app.containerapp.io/v1beta2
 kind: ContainerApp
 metadata:
-  name: analisi-mu
+  name: anatema
 spec:
-  environmentId: /subscriptions/.../containerappsenvironments/analisi-mu-env
+  environmentId: /subscriptions/.../containerappsenvironments/anatema-env
   configuration:
     ingress:
       external: true
@@ -552,8 +552,8 @@ spec:
         value: your-secret-key
   template:
     containers:
-      - name: analisi-mu
-        image: analisi-mu:latest
+      - name: anatema
+        image: anatema:latest
         env:
           - name: SECRET_KEY
             secretRef: secret-key
@@ -566,7 +566,7 @@ spec:
 
 ```json
 {
-  "family": "analisi-mu",
+  "family": "anatema",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
@@ -574,8 +574,8 @@ spec:
   "executionRoleArn": "arn:aws:iam::account:role/ecsTaskExecutionRole",
   "containerDefinitions": [
     {
-      "name": "analisi-mu",
-      "image": "analisi-mu:latest",
+      "name": "anatema",
+      "image": "anatema:latest",
       "portMappings": [
         {
           "containerPort": 5000,
@@ -591,7 +591,7 @@ spec:
       "secrets": [
         {
           "name": "SECRET_KEY",
-          "valueFrom": "arn:aws:secretsmanager:region:account:secret:analisi-mu-secret"
+          "valueFrom": "arn:aws:secretsmanager:region:account:secret:anatema-secret"
         }
       ]
     }
@@ -605,13 +605,13 @@ spec:
 
 ```bash
 # Accesso al container
-docker exec -it analisi-mu-app bash
+docker exec -it anatema-app bash
 
 # Verifica log
-docker logs analisi-mu-app --tail 100 -f
+docker logs anatema-app --tail 100 -f
 
 # Verifica risorse
-docker stats analisi-mu-app
+docker stats anatema-app
 
 # Verifica network
 docker network ls
@@ -623,29 +623,29 @@ docker network inspect bridge
 #### 1. **Container non si avvia**
 ```bash
 # Verifica log di startup
-docker logs analisi-mu-app
+docker logs anatema-app
 
 # Verifica configurazione
-docker inspect analisi-mu-app
+docker inspect anatema-app
 ```
 
 #### 2. **Problemi di rete**
 ```bash
 # Testa connettività
-docker exec analisi-mu-app curl -f http://localhost:5000/health
+docker exec anatema-app curl -f http://localhost:5000/health
 
 # Verifica porte
-docker port analisi-mu-app
+docker port anatema-app
 ```
 
 #### 3. **Problemi di storage**
 ```bash
 # Verifica volumi
 docker volume ls
-docker volume inspect analisi-mu_uploads
+docker volume inspect anatema_uploads
 
 # Verifica permessi
-docker exec analisi-mu-app ls -la /app/uploads
+docker exec anatema-app ls -la /app/uploads
 ```
 
 ## 🤝 Best Practices

@@ -46,8 +46,8 @@
 
 ```bash
 # Clona il repository
-git clone https://github.com/nugh75/analisi-mu.git
-cd analisi-mu
+git clone https://github.com/nugh75/anatema.git
+cd anatema
 
 # Avvia l'applicazione
 docker compose up -d
@@ -60,8 +60,8 @@ docker compose up -d
 
 ```bash
 # Clona e configura
-git clone https://github.com/nugh75/analisi-mu.git
-cd analisi-mu
+git clone https://github.com/nugh75/anatema.git
+cd anatema
 
 # Crea ambiente virtuale
 python -m venv .venv
@@ -163,7 +163,7 @@ UPLOAD_FOLDER=uploads
 ## � Struttura del progetto
 
 ```
-analisi-mu/
+anatema/
 ├── app.py                 # Applicazione Flask principale
 ├── models.py             # Modelli del database
 ├── forms.py              # Form WTForms

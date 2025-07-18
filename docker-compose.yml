@@ -5,11 +5,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: analisi-mu-web
+    container_name: anatema-web
     ports:
       - "5000:5000"
     environment:
-      - SECRET_KEY=analisi-mu-production-secret-key-2025
+      - SECRET_KEY=anatema-production-secret-key-2025
       - DATABASE_URL=sqlite:////app/instance/analisi_mu.db
       - FLASK_ENV=production
       - FLASK_DEBUG=0
@@ -28,10 +28,10 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - analisi-mu-network
+      - anatema-network
 
 networks:
-  analisi-mu-network:
+  anatema-network:
     driver: bridge
 
 volumes:

@@ -14,8 +14,8 @@ Questa guida ti aiuterà a configurare e deployare **Analisi MU** utilizzando Do
 
 ### 1. Clona il repository
 ```bash
-git clone https://github.com/nugh75/analisi-mu.git
-cd analisi-mu
+git clone https://github.com/nugh75/anatema.git
+cd anatema
 ```
 
 ### 2. Configura l'ambiente
@@ -46,7 +46,7 @@ docker compose -f docker-compose.prod.yml up -d
 ## 📁 Struttura dei file Docker
 
 ```
-analisi-mu/
+anatema/
 ├── Dockerfile                 # Immagine principale dell'applicazione
 ├── docker-compose.yml         # Configurazione development
 ├── docker-compose.prod.yml    # Configurazione production
@@ -104,7 +104,7 @@ SESSION_COOKIE_HTTPONLY=true
 FROM python:3.13-slim
 
 # Etichette per metadata
-LABEL maintainer="analisi-mu@example.com"
+LABEL maintainer="anatema@example.com"
 LABEL version="1.0.0"
 LABEL description="Sistema di etichettatura collaborativa"
 
@@ -193,7 +193,7 @@ docker compose logs -t
 docker stats
 
 # Informazioni dettagliate
-docker inspect analisi-mu-app
+docker inspect anatema-app
 
 # Processi in esecuzione
 docker compose top
@@ -256,7 +256,7 @@ docker compose logs app
 docker compose ps
 
 # Ispeziona il container
-docker inspect analisi-mu-app
+docker inspect anatema-app
 ```
 
 ### Problemi di permessi

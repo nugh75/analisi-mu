@@ -14,7 +14,7 @@ class OpenRouterClient:
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://analisi-mu.ai4educ.org",
+            "HTTP-Referer": "https://anatema.ai4educ.org",
             "X-Title": "Analisi MU - AI Annotation System"
         }
     
