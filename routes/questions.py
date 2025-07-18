@@ -23,7 +23,7 @@ def manage_questions():
     files_with_questions = db.session.query(
         ExcelFile.id.label('file_id'),
         ExcelFile.filename.label('filename'),
-        ExcelFile.created_at.label('created_at'),
+        ExcelFile.uploaded_at.label('uploaded_at'),
         TextCell.column_name,
         func.count(TextCell.id).label('total_cells'),
         func.count(TextCell.question_type).label('classified_cells'),
@@ -43,7 +43,7 @@ def manage_questions():
             files_data[file_id] = {
                 'file_id': file_id,
                 'filename': row.filename,
-                'created_at': row.created_at,
+                'uploaded_at': row.uploaded_at,
                 'questions': [],
                 'total_questions': 0,
                 'classified_questions': 0

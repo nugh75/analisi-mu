@@ -260,6 +260,35 @@
                 <h6 class="mb-0">
                     <i class="bi bi-clock-history me-2"></i>Etichette per Annotatore
                 </h6>
+                <!-- Filtro per annotatori -->
+                {% if annotations %}
+                <div class="mt-2">
+                    <small class="text-muted">Mostra annotazioni di:</small>
+                    <div class="mt-1">
+                        {% set annotators = {} %}
+                        {% for item in annotations %}
+                            {% set _ = annotators.setdefault(item.user.id, {'username': item.user.username, 'count': 0}) %}
+                            {% set _ = annotators.update({item.user.id: {'username': item.user.username, 'count': annotators[item.user.id]['count'] + 1}}) %}
+                        {% endfor %}
+                        
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input annotator-filter" type="checkbox" id="annotator-all" value="all" checked>
+                            <label class="form-check-label" for="annotator-all">
+                                <small>Tutti</small>
+                            </label>
+                        </div>
+                        
+                        {% for user_id, user_info in annotators.items() %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input annotator-filter" type="checkbox" id="annotator-{{ user_id }}" value="{{ user_id }}" checked>
+                            <label class="form-check-label" for="annotator-{{ user_id }}">
+                                <small>{{ user_info.username }} ({{ user_info.count }})</small>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
             <div class="card-body annotation-history">
                 {% if annotations %}
@@ -270,7 +299,7 @@
                 {% endfor %}
                 
                 {% for user_id, user_data in annotations_by_user.items() %}
-                <div class="user-annotations-section mb-3">
+                <div class="user-annotations-section mb-3" data-user-id="{{ user_id }}">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="mb-0 text-primary">
                             <i class="bi bi-person me-1"></i>{{ user_data.user.username }}
@@ -583,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Genera HTML per ogni utente
                     Object.values(annotationsByUser).forEach(userData => {
                         const userAnnotationsHtml = `
-                            <div class="user-annotations-section mb-3">
+                            <div class="user-annotations-section mb-3" data-user-id="${userData.user.id}">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <h6 class="mb-0 text-primary">
                                         <i class="bi bi-person me-1"></i>${userData.user.username}
@@ -643,6 +672,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Riattiva i listener per i nuovi pulsanti di rimozione
                 attachRemoveAnnotationListeners();
+                
+                // Riapplica il filtro degli annotatori
+                filterAnnotations();
             })
             .catch(error => console.error('Errore nel recupero storico annotazioni:', error));
     }
@@ -830,8 +862,93 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => console.error('Errore nel recupero etichette:', error));
     }
 
+    // Gestione filtro annotatori
+    function setupAnnotatorFilter() {
+        const annotatorFilters = document.querySelectorAll('.annotator-filter');
+        const allCheckbox = document.getElementById('annotator-all');
+        
+        if (!annotatorFilters.length) return;
+        
+        // Gestione checkbox "Tutti"
+        allCheckbox?.addEventListener('change', function() {
+            const isChecked = this.checked;
+            annotatorFilters.forEach(checkbox => {
+                if (checkbox !== this) {
+                    checkbox.checked = isChecked;
+                }
+            });
+            filterAnnotations();
+        });
+        
+        // Gestione checkbox singoli annotatori
+        annotatorFilters.forEach(checkbox => {
+            if (checkbox !== allCheckbox) {
+                checkbox.addEventListener('change', function() {
+                    // Se deseleziono un annotatore, deseleziona anche "Tutti"
+                    if (!this.checked && allCheckbox) {
+                        allCheckbox.checked = false;
+                    }
+                    
+                    // Se tutti gli annotatori sono selezionati, seleziona anche "Tutti"
+                    const individualCheckboxes = Array.from(annotatorFilters).filter(cb => cb !== allCheckbox);
+                    const allSelected = individualCheckboxes.every(cb => cb.checked);
+                    if (allSelected && allCheckbox) {
+                        allCheckbox.checked = true;
+                    }
+                    
+                    filterAnnotations();
+                });
+            }
+        });
+    }
+
+    // Funzione per filtrare le annotazioni per annotatore
+    function filterAnnotations() {
+        const annotatorFilters = document.querySelectorAll('.annotator-filter');
+        const allCheckbox = document.getElementById('annotator-all');
+        
+        // Ottieni gli ID degli annotatori selezionati
+        const selectedAnnotators = new Set();
+        
+        annotatorFilters.forEach(checkbox => {
+            if (checkbox.checked && checkbox !== allCheckbox) {
+                selectedAnnotators.add(checkbox.value);
+            }
+        });
+        
+        // Se "Tutti" è selezionato o nessun filtro specifico, mostra tutto
+        const showAll = allCheckbox?.checked || selectedAnnotators.size === 0;
+        
+        // Filtra le sezioni utente
+        document.querySelectorAll('.user-annotations-section').forEach(section => {
+            const userId = section.dataset.userId;
+            
+            if (showAll || selectedAnnotators.has(userId)) {
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+        
+        // Controlla se ci sono sezioni visibili
+        const visibleSections = document.querySelectorAll('.user-annotations-section:not([style*="display: none"])');
+        const annotationHistory = document.querySelector('.annotation-history');
+        
+        if (visibleSections.length === 0 && !showAll) {
+            annotationHistory.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="bi bi-funnel display-4 mb-2"></i>
+                    <p>Nessuna annotazione per gli annotatori selezionati.</p>
+                </div>
+            `;
+        }
+    }
+
     // Attiva i listener al caricamento iniziale
     attachRemoveAnnotationListeners();
+    
+    // Gestione filtro annotatori
+    setupAnnotatorFilter();
     
     // Carica statistiche al caricamento della pagina
     loadUserStats();

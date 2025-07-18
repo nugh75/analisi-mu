@@ -25,7 +25,7 @@ def annotate_cell(cell_id):
     # Verifica se la cella è di un tipo non annotabile
     if hasattr(cell, 'question_type') and cell.question_type in ['anagrafica', 'chiusa_binaria', 'chiusa_multipla', 'likert', 'numerica']:
         flash(f'Questa cella contiene una domanda di tipo "{cell.question_type}" e non necessita di annotazione.', 'info')
-        return redirect(url_for('annotation.browse_files'))
+        return redirect(url_for('annotation.browse_annotations'))
     
     # Ottieni tutte le etichette disponibili
     # Ordiniamo prima per categoria (trattando None come stringa vuota) poi per nome
