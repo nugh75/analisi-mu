@@ -1,6 +1,6 @@
-# 🤖 AI Integration Guide - Analisi MU
+# 🤖 AI Integration Guide -Anatema
 
-Guida completa per l'integrazione e configurazione delle funzionalità di **Intelligenza Artificiale** in Analisi MU. Il sistema supporta multiple provider AI per l'annotazione automatica e assistita.
+Guida completa per l'integrazione e configurazione delle funzionalità di **Intelligenza Artificiale** in Anatema. Il sistema supporta multiple provider AI per l'annotazione automatica e assistita.
 
 ## 🎯 Panoramica
 

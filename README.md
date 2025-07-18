@@ -1,4 +1,4 @@
-# Analisi MU - Sistema di Etichettatura Collaborativa
+#Anatema - Sistema di Etichettatura Collaborativa
 
 **Analisi MU** è un sistema web avanzato per l'etichettatura collaborativa di risposte testuali estratte da file Excel. Progettato per ricercatori, analisti e team che necessitano di classificare e analizzare grandi volumi di testi in modo efficiente e collaborativo.
 

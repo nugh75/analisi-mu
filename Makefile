@@ -1,4 +1,4 @@
-# Makefile per Analisi MU Docker
+# Makefile perAnatema Docker
 
 .PHONY: help build up down logs restart clean backup rebuild
 
@@ -15,7 +15,7 @@ COMPOSE_FILE_PROD=docker-compose.prod.yml
 CONTAINER_NAME=anatema-web
 
 help: ## Mostra questo messaggio di aiuto
-	@echo "$(GREEN)Comandi disponibili per Analisi MU:$(NC)"
+	@echo "$(GREEN)Comandi disponibili perAnatema:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 build: ## Build dell'immagine Docker

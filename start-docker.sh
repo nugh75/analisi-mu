@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script di avvio per Analisi MU Docker
+# Script di avvio perAnatema Docker
 
 set -e
 
-echo "🚀 Avvio Analisi MU Docker..."
+echo "🚀 AvvioAnatema Docker..."
 
 # Verifica che Docker sia in esecuzione
 if ! docker info >/dev/null 2>&1; then
@@ -60,7 +60,7 @@ docker-compose up -d
 # Verifica che tutto sia partito correttamente
 if check_health; then
     echo ""
-    echo "🎉 Analisi MU è pronto!"
+    echo "🎉Anatema è pronto!"
     echo "📊 Dashboard: http://localhost:5000"
     echo "🔑 Login: admin / admin123"
     echo ""

@@ -1,4 +1,4 @@
-# 📦 Container Guide - Analisi MU
+# 📦 Container Guide -Anatema
 
 Guida completa per l'utilizzo di **Analisi MU** in ambienti containerizzati. Include configurazioni per Docker, Kubernetes e orchestrazione avanzata.
 
@@ -282,7 +282,7 @@ secrets:
 # Chart.yaml
 apiVersion: v2
 name: anatema
-description: A Helm chart for Analisi MU
+description: A Helm chart forAnatema
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
@@ -685,4 +685,4 @@ Per problemi con i container:
 
 ---
 
-**Container Guide** - *Containerizzazione enterprise per Analisi MU*
+**Container Guide** - *Containerizzazione enterprise perAnatema*

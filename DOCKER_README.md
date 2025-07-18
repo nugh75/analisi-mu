@@ -1,4 +1,4 @@
-# 🐳 Docker Deployment Guide - Analisi MU
+# 🐳 Docker Deployment Guide -Anatema
 
 Questa guida ti aiuterà a configurare e deployare **Analisi MU** utilizzando Docker e Docker Compose per un ambiente di produzione robusto e scalabile.
 
@@ -370,4 +370,4 @@ Per problemi specifici di Docker:
 
 ---
 
-**Docker Deployment** - *Containerizzazione professionale per Analisi MU*
+**Docker Deployment** - *Containerizzazione professionale perAnatema*

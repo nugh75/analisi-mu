@@ -1,4 +1,4 @@
-// JavaScript principale per Analisi MU
+// JavaScript principale perAnatema
 
 document.addEventListener('DOMContentLoaded', function() {
     // Inizializzazione tooltips Bootstrap
