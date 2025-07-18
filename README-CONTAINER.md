@@ -1,225 +1,688 @@
-# 🐳 Guida Rapida - Avvio Container Analisi MU
+# 📦 Container Guide - Analisi MU
 
-## 🚀 Avvio Immediato
+Guida completa per l'utilizzo di **Analisi MU** in ambienti containerizzati. Include configurazioni per Docker, Kubernetes e orchestrazione avanzata.
 
-### Opzione 1: Docker Compose (Consigliato)
+## 🎯 Panoramica
+
+Analisi MU è progettato per essere facilmente containerizzato e deployato in diversi ambienti:
+- **Sviluppo locale**: Docker Compose per sviluppo rapido
+- **Produzione**: Configurazioni ottimizzate per performance
+- **Kubernetes**: Deployment scalabili e resilienti
+- **Cloud**: Integrazioni con Azure, AWS, GCP
+
+## 🐳 Docker
+
+### Architettura Container
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Load Balancer                    │
+│                     (nginx)                         │
+└─────────────────────┬───────────────────────────────┘
+                      │
+              ┌───────▼───────┐
+              │   App Server  │
+              │   (Python)    │
+              └───────┬───────┘
+                      │
+          ┌───────────▼───────────┐
+          │      Database         │
+          │      (SQLite)         │
+          └───────────────────────┘
+```
+
+### Configurazioni Disponibili
+
+#### 1. **Development** (docker-compose.yml)
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+      - instance:/app/instance
+```
+
+#### 2. **Production** (docker-compose.prod.yml)
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+    volumes:
+      - uploads:/app/uploads
+      - instance:/app/instance
+      - backups:/app/backups
+    
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - app
+```
+
+### Dockerfile Ottimizzato
+
+```dockerfile
+# Multi-stage build per ottimizzazione
+FROM python:3.13-slim as builder
+
+# Installa dipendenze di build
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copia requirements e installa dipendenze
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Stage finale
+FROM python:3.13-slim
+
+# Crea utente non-root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copia dipendenze Python dal builder
+COPY --from=builder /root/.local /home/appuser/.local
+ENV PATH=/home/appuser/.local/bin:$PATH
+
+# Copia codice applicazione
+WORKDIR /app
+COPY . .
+
+# Crea directory e imposta permessi
+RUN mkdir -p uploads instance backups logs \
+    && chown -R appuser:appuser /app
+
+# Cambio all'utente non-root
+USER appuser
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Comando di avvio
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "app:app"]
+```
+
+## ☸️ Kubernetes
+
+### Deployment Manifest
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analisi-mu
+  labels:
+    app: analisi-mu
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: analisi-mu
+  template:
+    metadata:
+      labels:
+        app: analisi-mu
+    spec:
+      containers:
+      - name: analisi-mu
+        image: analisi-mu:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: analisi-mu-secret
+              key: secret-key
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: analisi-mu-config
+              key: database-url
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: instance
+          mountPath: /app/instance
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: analisi-mu-uploads
+      - name: instance
+        persistentVolumeClaim:
+          claimName: analisi-mu-instance
+```
+
+### Service Configuration
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: analisi-mu-service
+spec:
+  selector:
+    app: analisi-mu
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+  type: LoadBalancer
+```
+
+### ConfigMap e Secrets
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analisi-mu-config
+data:
+  database-url: "sqlite:///instance/analisi_mu.db"
+  upload-folder: "uploads"
+  max-content-length: "16777216"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: analisi-mu-secret
+type: Opaque
+data:
+  secret-key: <base64-encoded-secret>
+  openai-api-key: <base64-encoded-api-key>
+```
+
+## 🚀 Orchestrazione Avanzata
+
+### Docker Swarm
+
+```yaml
+version: '3.8'
+services:
+  app:
+    image: analisi-mu:latest
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - app-network
+    secrets:
+      - source: app_secret
+        target: /run/secrets/app_secret
+    
+  nginx:
+    image: nginx:alpine
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: overlay
+    attachable: true
+
+secrets:
+  app_secret:
+    external: true
+```
+
+### Helm Chart
+
+```yaml
+# Chart.yaml
+apiVersion: v2
+name: analisi-mu
+description: A Helm chart for Analisi MU
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+# values.yaml
+replicaCount: 3
+
+image:
+  repository: analisi-mu
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: LoadBalancer
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: analisi-mu.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: analisi-mu-tls
+      hosts:
+        - analisi-mu.example.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+```
+
+## 🔧 Configurazione Avanzata
+
+### Variabili d'Ambiente
 
 ```bash
-# 1. Avvia il container
-docker-compose up -d
+# Applicazione
+SECRET_KEY=your-secret-key
+FLASK_ENV=production
+FLASK_DEBUG=0
 
-# 2. Verifica che sia in esecuzione
-docker-compose ps
+# Database
+DATABASE_URL=postgresql://user:pass@postgres:5432/analisi_mu
+REDIS_URL=redis://redis:6379/0
 
-# 3. Visualizza i log
-docker-compose logs -f web
+# Storage
+STORAGE_TYPE=s3
+S3_BUCKET=analisi-mu-uploads
+S3_REGION=us-west-2
+
+# Monitoring
+SENTRY_DSN=https://your-sentry-dsn
+METRICS_ENABLED=true
+LOG_LEVEL=INFO
+
+# AI Services
+OPENAI_API_KEY=sk-your-openai-key
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+OLLAMA_BASE_URL=http://ollama:11434
 ```
 
-### Opzione 2: Makefile (Ancora più semplice)
+### Configurazione Nginx
+
+```nginx
+upstream analisi_mu {
+    server app:5000;
+}
+
+server {
+    listen 80;
+    server_name analisi-mu.example.com;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name analisi-mu.example.com;
+    
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/analisi-mu.crt;
+    ssl_certificate_key /etc/ssl/private/analisi-mu.key;
+    
+    # Security Headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    
+    # Gzip Compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    
+    # Client body size
+    client_max_body_size 16M;
+    
+    location / {
+        proxy_pass http://analisi_mu;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    location /static {
+        alias /app/static;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    location /uploads {
+        alias /app/uploads;
+        expires 1d;
+        add_header Cache-Control "public";
+    }
+}
+```
+
+## 📊 Monitoraggio e Logging
+
+### Prometheus Metrics
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'analisi-mu'
+    static_configs:
+      - targets: ['app:5000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+```
+
+### Grafana Dashboard
+
+```json
+{
+  "dashboard": {
+    "title": "Analisi MU Dashboard",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(flask_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Centralized Logging
+
+```yaml
+# Fluentd configuration
+version: '3.8'
+services:
+  fluentd:
+    image: fluent/fluentd:latest
+    ports:
+      - "24224:24224"
+    volumes:
+      - ./fluentd.conf:/fluentd/etc/fluent.conf
+    depends_on:
+      - elasticsearch
+  
+  elasticsearch:
+    image: elasticsearch:7.14.0
+    environment:
+      - discovery.type=single-node
+  
+  kibana:
+    image: kibana:7.14.0
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+```
+
+## 🔒 Sicurezza
+
+### Scan di Sicurezza
 
 ```bash
-# Avvia tutto con un comando
-make up
+# Scan vulnerabilità immagine
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:latest image analisi-mu:latest
 
-# Oppure per vedere i log in tempo reale
-make dev
+# Scan configurazione
+docker run --rm -v $(pwd):/app \
+  bridgecrew/checkov:latest -f /app/Dockerfile
 ```
 
-### Opzione 3: Docker manuale
+### Hardening Container
+
+```dockerfile
+# Usa immagine minimal
+FROM python:3.13-slim
+
+# Rimuovi shell non necessarie
+RUN rm -rf /bin/sh /bin/bash
+
+# Imposta utente non-root
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser
+
+# Monta filesystem read-only
+# docker run --read-only --tmpfs /tmp --tmpfs /var/tmp analisi-mu
+
+# Limita capabilities
+# docker run --cap-drop ALL --cap-add NET_BIND_SERVICE analisi-mu
+```
+
+## 🚀 Deploy Multi-Cloud
+
+### Azure Container Apps
+
+```yaml
+apiVersion: app.containerapp.io/v1beta2
+kind: ContainerApp
+metadata:
+  name: analisi-mu
+spec:
+  environmentId: /subscriptions/.../containerappsenvironments/analisi-mu-env
+  configuration:
+    ingress:
+      external: true
+      targetPort: 5000
+    secrets:
+      - name: secret-key
+        value: your-secret-key
+  template:
+    containers:
+      - name: analisi-mu
+        image: analisi-mu:latest
+        env:
+          - name: SECRET_KEY
+            secretRef: secret-key
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+```
+
+### AWS ECS
+
+```json
+{
+  "family": "analisi-mu",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::account:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "analisi-mu",
+      "image": "analisi-mu:latest",
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "FLASK_ENV",
+          "value": "production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:region:account:secret:analisi-mu-secret"
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 🛠️ Troubleshooting
+
+### Debug Container
 
 ```bash
-# 1. Build dell'immagine
-docker build -t analisi-mu .
+# Accesso al container
+docker exec -it analisi-mu-app bash
 
-# 2. Avvia il container
-docker run -d \
-  --name analisi-mu \
-  -p 5000:5000 \
-  -v $(pwd)/instance:/app/instance \
-  -v $(pwd)/uploads:/app/uploads \
-  -v $(pwd)/backups:/app/backups \
-  analisi-mu
+# Verifica log
+docker logs analisi-mu-app --tail 100 -f
+
+# Verifica risorse
+docker stats analisi-mu-app
+
+# Verifica network
+docker network ls
+docker network inspect bridge
 ```
 
-## 📋 Verifica che tutto funzioni
+### Problemi Comuni
 
-1. **Accedi all'applicazione**: http://localhost:5000
-2. **Login di test**: 
-   - Username: `admin`
-   - Password: `admin123`
-
-## 🛠️ Comandi Utili
-
-### Gestione Container
-
+#### 1. **Container non si avvia**
 ```bash
-# Ferma il container
-docker-compose down
+# Verifica log di startup
+docker logs analisi-mu-app
 
-# Riavvia il container
-docker-compose restart
-
-# Visualizza lo stato
-docker-compose ps
-
-# Accedi al container
-docker-compose exec web bash
+# Verifica configurazione
+docker inspect analisi-mu-app
 ```
 
-### Con Makefile
-
+#### 2. **Problemi di rete**
 ```bash
-make help      # Mostra tutti i comandi disponibili
-make up        # Avvia i servizi
-make down      # Ferma i servizi
-make logs      # Visualizza i log
-make restart   # Riavvia i servizi
-make shell     # Accedi al container
-make backup    # Crea backup del database
-make ps        # Mostra lo stato
+# Testa connettività
+docker exec analisi-mu-app curl -f http://localhost:5000/health
+
+# Verifica porte
+docker port analisi-mu-app
 ```
 
-## 🔧 Risoluzione Problemi
-
-### Porta 5000 già in uso
-
+#### 3. **Problemi di storage**
 ```bash
-# Cambia la porta nel docker-compose.yml
-ports:
-  - "5001:5000"  # Usa la porta 5001
+# Verifica volumi
+docker volume ls
+docker volume inspect analisi-mu_uploads
 
-# Oppure ferma il processo che usa la porta 5000
-sudo lsof -i :5000
-sudo kill -9 [PID]
+# Verifica permessi
+docker exec analisi-mu-app ls -la /app/uploads
 ```
 
-### Container non si avvia
+## 🤝 Best Practices
 
-```bash
-# 1. Controlla i log per errori
-docker-compose logs web
+### 1. **Immagini Ottimizzate**
+- Usa immagini slim o alpine
+- Multi-stage builds
+- Minimizza layer
+- Scansiona vulnerabilità
 
-# 2. Verifica lo stato del container
-docker-compose ps
+### 2. **Configurazione Sicura**
+- Utenti non-root
+- Secrets management
+- Network policies
+- Resource limits
 
-# 3. Ricostruisci l'immagine
-docker-compose build --no-cache
+### 3. **Monitoraggio**
+- Health checks
+- Metrics collection
+- Centralized logging
+- Alerting
 
-# 4. Riavvia tutto
-docker-compose down && docker-compose up -d
-```
-
-### Problemi di permessi
-
-```bash
-# Imposta i permessi corretti
-sudo chown -R $USER:$USER ./instance ./uploads ./backups
-chmod 755 ./instance ./uploads ./backups
-```
-
-## 📂 Struttura File Persistenti
-
-I seguenti file/directory sono persistenti:
-
-```
-./instance/     # Database SQLite
-./uploads/      # File Excel caricati
-./backups/      # Backup del database
-```
-
-## 🔒 Configurazione Produzione
-
-Per l'ambiente di produzione:
-
-```bash
-# 1. Copia il file di configurazione
-cp .env.production .env
-
-# 2. Modifica le variabili
-nano .env
-
-# 3. Avvia in produzione
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-## 📊 Monitoraggio
-
-```bash
-# Visualizza risorse usate
-docker stats
-
-# Health check
-curl http://localhost:5000/
-
-# Log in tempo reale
-docker-compose logs -f --tail=100
-```
-
-## 🔄 Backup e Ripristino
-
-### Backup automatico
-
-```bash
-# Con Makefile
-make backup
-
-# Manualmente
-docker-compose exec web python -c "
-import shutil, datetime
-shutil.copy2('/app/instance/analisi_mu.db', 
-             f'/app/backups/analisi_mu_backup_{datetime.datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.db')
-"
-```
-
-### Ripristino
-
-```bash
-# 1. Ferma il container
-docker-compose down
-
-# 2. Ripristina il database
-cp ./backups/analisi_mu_backup_YYYYMMDD_HHMMSS.db ./instance/analisi_mu.db
-
-# 3. Riavvia il container
-docker-compose up -d
-```
-
-## ⚡ Comandi Rapidi
-
-```bash
-# Setup completo prima volta
-make init
-
-# Sviluppo rapido
-make dev
-
-# Produzione
-make prod
-
-# Pulizia sistema
-make clean
-
-# Stato completo
-make status
-```
-
-## 📱 Accesso all'Applicazione
-
-Una volta avviato il container, accedi a:
-
-- **URL**: http://localhost:5000
-- **Admin**: admin / admin123
-- **Dashboard**: http://localhost:5000/dashboard
+### 4. **Backup e Recovery**
+- Backup automatici
+- Disaster recovery
+- Testing restore
+- Documentation
 
 ## 🆘 Supporto
 
-In caso di problemi:
+Per problemi con i container:
 
-1. Controlla i log: `make logs`
-2. Verifica lo stato: `make ps`
-3. Riavvia: `make restart`
-4. Ricostruisci: `make build-no-cache && make up`
+- **Issues**: Usa tag `container` o `docker` su GitHub
+- **Logs**: Includi sempre i log del container
+- **Configurazione**: Condividi la configurazione (senza secrets)
+- **Ambiente**: Specifica l'ambiente (Docker, K8s, etc.)
 
 ---
 
-**Nota**: Assicurati di avere Docker e Docker Compose installati sul tuo sistema prima di procedere.
+**Container Guide** - *Containerizzazione enterprise per Analisi MU*

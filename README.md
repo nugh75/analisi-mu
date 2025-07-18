@@ -1,287 +1,286 @@
-# Analisi MU - Applicazione per l'Etichettatura Tematica Collaborativa
+# Analisi MU - Sistema di Etichettatura Collaborativa
 
-Un'applicazione web basata su **Flask** per la gestione collaborativa dell'etichettatura tematica di risposte testuali contenute in file Excel, progettata per supportare processi di analisi tematica scientifica.
+**Analisi MU** è un sistema web avanzato per l'etichettatura collaborativa di risposte testuali estratte da file Excel. Progettato per ricercatori, analisti e team che necessitano di classificare e analizzare grandi volumi di testi in modo efficiente e collaborativo.
 
-## 🎯 Obiettivi
+## 🎯 Caratteristiche principali
 
-L'applicazione supporta ricercatori nell'analisi qualitativa permettendo di:
-- Caricare file Excel contenenti risposte testuali
-- Creare un sistema di etichette personalizzato 
-- Annotare collaborativamente le celle testuali
-- Analizzare l'accordo inter-codificatore
-- Esportare i dati per successive analisi
+### 📊 **Gestione intelligente dei dati**
+- **Importazione automatica**: Carica file Excel e estrae automaticamente le celle testuali
+- **Navigazione intuitiva**: Interfaccia ottimizzata per la navigazione tra migliaia di risposte
+- **Filtri avanzati**: Filtra per domande, annotatori, stato di completamento
 
-## ✨ Funzionalità Principali
+### 🏷️ **Sistema di etichettatura flessibile**
+- **Etichette personalizzate**: Crea etichette con colori e descrizioni custom
+- **Categorie organizzate**: Raggruppa etichette per ambiti tematici
+- **Annotazione multipla**: Assegna più etichette alla stessa cella
+- **Annotazione collaborativa**: Più utenti possono lavorare sugli stessi dati
 
-### 📊 Gestione File Excel
-- Caricamento di file `.xlsx` e `.xls`
-- Estrazione automatica delle celle testuali
-- Supporto per file multi-foglio
-- Visualizzazione strutturata dei contenuti
+### 🤖 **Integrazione AI (Opzionale)**
+- **Supporto multi-provider**: OpenAI, Anthropic, Ollama
+- **Annotazione assistita**: Suggerimenti automatici basati su AI
+- **Template personalizzabili**: Crea prompt specifici per il tuo dominio
 
-### 🏷️ Sistema di Etichettatura
-- Creazione di etichette con nome, descrizione, categoria e colore
-- Gestione collaborativa del repertorio di etichette
-- Assegnazione multipla di etichette per cella
-- Storico completo delle annotazioni
+### 📈 **Analytics e reportistica**
+- **Dashboard interattiva**: Visualizzazioni in tempo reale delle annotazioni
+- **Statistiche dettagliate**: Metriche per utente, file, etichette
+- **Confronto inter-annotatori**: Analisi della concordanza tra annotatori
+- **Esportazione dati**: Esporta risultati in vari formati
 
-### 👥 Collaborazione
-- Gestione utenti con autenticazione sicura
-- Visualizzazione delle etichette di tutti gli utenti
-- Tracking delle modifiche con timestamp e autore
-- Dashboard personali per ogni ricercatore
+### � **Gestione utenti e permessi**
+- **Ruoli differenziati**: Amministratori, annotatori, visualizzatori
+- **Tracking delle attività**: Cronologia completa delle annotazioni
+- **Controllo qualità**: Supervisione del lavoro degli annotatori
 
-### 📈 Analisi e Statistiche
-- Statistiche generali sull'avanzamento
-- Analisi dell'uso delle etichette
-- Confronto tra etichettatori
-- Esportazione dati per analisi esterne
+## 🛠️ Tecnologie utilizzate
 
-## 🛠️ Tecnologie Utilizzate
+- **Backend**: Flask (Python 3.13+)
+- **Database**: SQLite con SQLAlchemy ORM
+- **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
+- **AI**: Integrazione con OpenAI, Anthropic, Ollama
+- **Containerizzazione**: Docker e Docker Compose
+- **Sicurezza**: Flask-Login, CSRF protection, gestione sessioni
 
-- **Backend**: Flask 3.0 (Python)
-- **Database**: SQLAlchemy (SQLite/PostgreSQL)
-- **Autenticazione**: Flask-Login
-- **Form**: Flask-WTF + WTForms
-- **Frontend**: Bootstrap 5 + JavaScript
-- **File Processing**: Pandas + OpenPyXL
+## 🚀 Installazione rapida
 
-## 🚀 Installazione e Setup
+### Con Docker (Raccomandato)
 
-### Requisiti
-- Python 3.8+
-- pip (package manager Python)
+```bash
+# Clona il repository
+git clone https://github.com/nugh75/analisi-mu.git
+cd analisi-mu
 
-### Setup Rapido
+# Avvia l'applicazione
+docker compose up -d
 
-1. **Clona il repository**
-   ```bash
-   git clone <repository-url>
-   cd analisi-mu
-   ```
-
-2. **Esegui lo script di setup**
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-
-3. **Avvia l'applicazione**
-   ```bash
-   source venv/bin/activate
-   python app.py
-   ```
-
-4. **Accedi all'applicazione**
-   - Apri il browser su: http://localhost:5000
-   - Login con account admin:
-     - Username: `admin`
-     - Password: `admin123`
-
-### Setup Manuale
-
-1. **Crea ambiente virtuale**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-2. **Installa dipendenze**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configura ambiente**
-   ```bash
-   cp .env.example .env
-   # Modifica .env secondo necessità
-   ```
-
-4. **Inizializza database**
-   ```bash
-   python -c "from app import create_app; app = create_app(); app.app_context().push(); from app import db; db.create_all()"
-   ```
-
-## 📋 Struttura del Progetto
-
-```
-analisi-mu/
-├── app.py                 # Applicazione principale Flask
-├── models.py              # Modelli del database
-├── forms.py               # Form WTForms
-├── requirements.txt       # Dipendenze Python
-├── setup.sh              # Script di setup automatico
-├── .env.example          # Template configurazione
-│
-├── routes/               # Blueprint delle routes
-│   ├── __init__.py
-│   ├── auth.py          # Autenticazione
-│   ├── main.py          # Routes principali
-│   ├── excel.py         # Gestione file Excel
-│   ├── labels.py        # Gestione etichette
-│   └── annotation.py    # Sistema annotazioni
-│
-├── templates/           # Template Jinja2
-│   ├── base.html        # Template base
-│   ├── auth/            # Template autenticazione
-│   ├── main/            # Template principali
-│   ├── excel/           # Template file Excel
-│   ├── labels/          # Template etichette
-│   └── annotation/      # Template annotazioni
-│
-├── static/              # File statici
-│   ├── css/
-│   │   └── style.css    # Stili personalizzati
-│   └── js/
-│       └── main.js      # JavaScript principale
-│
-└── uploads/             # Cartella file caricati
+# Accedi su http://localhost:5000
+# Username: admin | Password: admin123
 ```
 
-## 💻 Utilizzo
+### Installazione locale
 
-### 1. Primo Accesso
-- Registra un nuovo account o usa l'admin predefinito
-- Familiarizza con l'interfaccia dalla dashboard
+```bash
+# Clona e configura
+git clone https://github.com/nugh75/analisi-mu.git
+cd analisi-mu
 
-### 2. Caricamento File Excel
-- Vai a "File Excel" → "Carica File"
-- Seleziona un file `.xlsx` o `.xls` 
-- L'applicazione estrae automaticamente le celle testuali
+# Crea ambiente virtuale
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
-### 3. Creazione Etichette
-- Vai a "Etichette" → "Crea Etichetta"
-- Definisci nome, descrizione, categoria e colore
-- Le etichette sono condivise tra tutti gli utenti
+# Installa dipendenze
+pip install -r requirements.txt
 
-### 4. Annotazione
-- Vai a "Annotazioni" → "Naviga Celle"
-- Seleziona una cella da annotare
-- Assegna una o più etichette cliccando su di esse
-- Visualizza le annotazioni degli altri utenti
+# Configura ambiente
+cp .env.example .env
+# Modifica .env con le tue configurazioni
 
-### 5. Analisi
-- Usa "Annotazioni" → "Statistiche" per analisi generali
-- Esporta i dati per analisi esterne (feature futura)
+# Avvia l'applicazione
+python app.py
+```
 
-## 🔧 Configurazione
+## 📋 Guida rapida
 
-### Variabili d'Ambiente (.env)
+### 1. **Primo accesso**
+- Accedi con `admin/admin123`
+- Cambia immediatamente la password
+- Crea utenti per il tuo team
+
+### 2. **Caricamento dati**
+- Vai su "Gestione File" → "Carica Nuovo File"
+- Seleziona un file Excel (.xlsx)
+- Il sistema estrarrà automaticamente le celle testuali
+
+### 3. **Configurazione etichette**
+- Accedi a "Gestione Etichette"
+- Crea categorie (es. "Sentiment", "Tematiche")
+- Aggiungi etichette con colori distintivi
+
+### 4. **Annotazione**
+- Seleziona "Annotazioni" → "Inizia Annotazione"
+- Usa i filtri per navigare efficacemente
+- Clicca sulle etichette per assegnarle
+- Utilizza le scorciatoie da tastiera per velocizzare
+
+### 5. **Monitoraggio**
+- Controlla i progressi nella dashboard
+- Visualizza statistiche dettagliate
+- Confronta il lavoro degli annotatori
+
+## 🎨 Interfaccia
+
+L'interfaccia è progettata per massimizzare la produttività:
+
+- **Design responsivo**: Funziona su desktop, tablet e mobile
+- **Navigazione intuitiva**: Breadcrumb e filtri sempre visibili
+- **Feedback visivo**: Indicatori di stato e progress bar
+- **Scorciatoie**: Controlli da tastiera per operazioni frequenti
+- **Temi personalizzabili**: Interfaccia adattabile alle preferenze
+
+## 🔧 Configurazione avanzata
+
+### Variabili d'ambiente
 
 ```bash
 # Sicurezza
 SECRET_KEY=your-secret-key-here
+DATABASE_URL=sqlite:///instance/analisi_mu.db
 
-# Database
-DATABASE_URL=sqlite:///analisi_mu.db
+# AI (Opzionale)
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+OLLAMA_BASE_URL=http://localhost:11434
 
-# Upload
-MAX_CONTENT_LENGTH=16777216
+# Configurazione file
+MAX_CONTENT_LENGTH=16777216  # 16MB
 UPLOAD_FOLDER=uploads
-
-# Flask
-FLASK_ENV=development
-FLASK_DEBUG=1
 ```
 
-### Database
+### Personalizzazione
 
-L'applicazione supporta:
-- **SQLite** (predefinito, per sviluppo)
-- **PostgreSQL** (consigliato per produzione)
+- **Etichette predefinite**: Modifica `app.py` per le tue categorie
+- **Template AI**: Personalizza i prompt in `routes/ai.py`
+- **Stili**: Modifica `static/css/style.css` per il branding
+- **Workflow**: Adatta le route in `routes/` per processi specifici
 
-Per PostgreSQL:
-```bash
-DATABASE_URL=postgresql://username:password@localhost/analisi_mu
+## � Casi d'uso
+
+### **Ricerca accademica**
+- Analisi di risposte a questionari
+- Classificazione di feedback studenti
+- Analisi del sentiment in interviste
+
+### **Analisi aziendale**
+- Categorizzazione di feedback clienti
+- Analisi di survey dipendenti
+- Classificazione di recensioni prodotti
+
+### **Ricerca sociale**
+- Analisi di risposte aperte in sondaggi
+- Classificazione di contenuti social
+- Analisi qualitativa di interviste
+
+## � Struttura del progetto
+
+```
+analisi-mu/
+├── app.py                 # Applicazione Flask principale
+├── models.py             # Modelli del database
+├── forms.py              # Form WTForms
+├── requirements.txt      # Dipendenze Python
+├── Dockerfile           # Configurazione Docker
+├── docker-compose.yml   # Orchestrazione Docker
+├── routes/              # Blueprint delle route
+│   ├── auth.py         # Autenticazione
+│   ├── main.py         # Pagine principali
+│   ├── excel.py        # Gestione file Excel
+│   ├── labels.py       # Gestione etichette
+│   ├── annotation.py   # Sistema di annotazione
+│   ├── admin.py        # Pannello amministratore
+│   ├── ai.py           # Integrazione AI
+│   ├── statistics.py   # Statistiche e analytics
+│   └── questions.py    # Gestione domande
+├── templates/           # Template HTML
+│   ├── base.html       # Template base
+│   ├── auth/           # Template autenticazione
+│   ├── main/           # Template principali
+│   ├── excel/          # Template file Excel
+│   ├── labels/         # Template etichette
+│   ├── annotation/     # Template annotazioni
+│   ├── admin/          # Template amministrazione
+│   └── statistics/     # Template statistiche
+├── static/             # File statici
+│   ├── css/
+│   │   └── style.css   # Stili personalizzati
+│   └── js/
+│       └── main.js     # JavaScript principale
+├── uploads/            # File caricati
+├── instance/           # Database e file di configurazione
+└── backups/            # Backup del database
 ```
 
-## 📊 Modello Dati
+## 🔒 Sicurezza
 
-### Entità Principali
+- **Password hashate**: Utilizzando Werkzeug per l'hashing sicuro
+- **Protezione CSRF**: Tutti i form protetti da attacchi CSRF
+- **Gestione sessioni**: Sessioni sicure con Flask-Login
+- **Validazione input**: Validazione sia lato server che client
+- **Upload sicuri**: Controlli di sicurezza sui file caricati
 
-- **User**: Utenti/ricercatori del sistema
-- **ExcelFile**: File Excel caricati
-- **TextCell**: Celle testuali estratte dai file
-- **Label**: Etichette del sistema
-- **CellAnnotation**: Annotazioni delle celle
-
-### Relazioni
-- Un utente può caricare molti file Excel
-- Un file Excel contiene molte celle testuali
-- Una cella può avere molte annotazioni (da utenti diversi)
-- Un'annotazione collega utente, cella ed etichetta
-
-## 🔐 Sicurezza
-
-- Password hashate con Werkzeug
-- Protezione CSRF su tutti i form
-- Session management sicuro con Flask-Login
-- Validazione input lato server e client
-- Upload file con controlli di sicurezza
-
-## 🎨 Interfaccia Utente
-
-- Design responsivo con Bootstrap 5
-- Interfaccia intuitiva e user-friendly
-- Feedback visivo per tutte le azioni
-- Supporto per temi scuri (futuro)
-- Accessibilità WCAG compliant
-
-## 🚀 Deploy in Produzione
+## 🚀 Deploy in produzione
 
 ### Preparazione
-1. Imposta `FLASK_ENV=production`
-2. Usa un database PostgreSQL
-3. Configura un server web (nginx + gunicorn)
-4. Imposta HTTPS
-5. Backup automatici del database
 
-### Esempio con Gunicorn
+1. **Configura l'ambiente**
+```bash
+export FLASK_ENV=production
+export SECRET_KEY=your-production-secret
+export DATABASE_URL=postgresql://user:pass@localhost/db
+```
+
+2. **Usa un database PostgreSQL**
+```bash
+pip install psycopg2-binary
+```
+
+3. **Configura un server web**
 ```bash
 pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:8000 app:app
 ```
 
-## 🔄 Roadmap
+4. **Configura HTTPS con nginx**
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
 
-### Prossime Funzionalità
-- [ ] Esportazione dati in formato CSV/Excel
-- [ ] Calcolo accordo inter-codificatore (Cohen's Kappa)
-- [ ] Sistema di progetti per organizzare il lavoro
-- [ ] API REST per integrazioni esterne
-- [ ] Importazione etichette da file esterni
-- [ ] Sistema di backup automatico
-- [ ] Dashboard analytics avanzate
-- [ ] Supporto per file CSV
-- [ ] Sistema di notifiche
-- [ ] Modalità offline
+## 🤝 Contributi
 
-### Miglioramenti UX
-- [ ] Ricerca avanzata nelle celle
-- [ ] Filtri multipli per annotazioni
-- [ ] Shortcuts da tastiera
-- [ ] Tour guidato per nuovi utenti
-- [ ] Tema scuro
-- [ ] Supporto mobile ottimizzato
+Contributi benvenuti! Per contribuire:
 
-## 🤝 Contribuire
+1. **Fork** del repository
+2. **Crea** un branch per la feature (`git checkout -b feature/amazing-feature`)
+3. **Sviluppa** e testa le modifiche
+4. **Commit** delle modifiche (`git commit -m 'Add amazing feature'`)
+5. **Push** del branch (`git push origin feature/amazing-feature`)
+6. **Apri** una Pull Request
 
-1. Fork del repository
-2. Crea un branch per la feature (`git checkout -b feature/amazing-feature`)
-3. Commit delle modifiche (`git commit -m 'Add amazing feature'`)
-4. Push del branch (`git push origin feature/amazing-feature`)
-5. Apri una Pull Request
+### Linee guida per contributi
+
+- Mantieni il codice pulito e commentato
+- Scrivi test per le nuove funzionalità
+- Segui le convenzioni Python (PEP 8)
+- Aggiorna la documentazione se necessario
 
 ## 📝 Licenza
 
-Questo progetto è distribuito sotto licenza MIT. Vedi il file `LICENSE` per dettagli.
+Distribuito sotto licenza MIT. Vedi `LICENSE` per dettagli.
 
-## 📞 Supporto
+## 🆘 Supporto
 
-Per problemi, domande o suggerimenti:
-- Apri una Issue su GitHub
-- Contatta il team di sviluppo
+- **Issues**: Apri un'issue su GitHub per bug e richieste
+- **Discussioni**: Partecipa alle discussioni della community
+- **Wiki**: Consulta la documentazione dettagliata
+- **Email**: Contatta il team di sviluppo per supporto prioritario
 
 ## 🙏 Ringraziamenti
 
-Sviluppato per supportare la ricerca qualitativa nell'ambito dell'analisi tematica collaborativa.
+Sviluppato con ❤️ per supportare la ricerca qualitativa e l'analisi tematica collaborativa.
+
+Un ringraziamento speciale a tutti i ricercatori e analisti che hanno contribuito con feedback e suggerimenti per migliorare questo strumento.
+
+---
+
+**Analisi MU** - *Trasforma l'analisi qualitativa in un processo collaborativo e intelligente*

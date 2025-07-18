@@ -1,226 +1,421 @@
-# 🤖 Sistema di Etichettatura AI - Analisi MU
+# 🤖 AI Integration Guide - Analisi MU
 
-## Panoramica
+Guida completa per l'integrazione e configurazione delle funzionalità di **Intelligenza Artificiale** in Analisi MU. Il sistema supporta multiple provider AI per l'annotazione automatica e assistita.
 
-Il sistema di etichettatura AI integra **Ollama** (locale) e **OpenRouter** (cloud) per automatizzare l'annotazione di testi, mantenendo il controllo umano attraverso un sistema di revisione.
+## 🎯 Panoramica
 
-## 🚀 Caratteristiche Principali
+Analisi MU integra modelli di linguaggio avanzati per:
+- **Annotazione automatica**: Classificazione automatica delle celle testuali
+- **Suggerimenti intelligenti**: Raccomandazioni di etichette basate su AI
+- **Analisi del sentiment**: Analisi automatica del sentiment
+- **Classificazione tematica**: Categorizzazione automatica dei contenuti
+- **Template personalizzati**: Prompt specifici per domini di ricerca
 
-### Multi-Provider AI
-- **Ollama**: Modelli AI locali per privacy e controllo completo
-- **OpenRouter**: Accesso ai migliori modelli cloud (GPT-4, Claude, Gemini)
+## 🔧 Provider Supportati
 
-### Etichettatura Intelligente
-- Analisi automatica di centinaia di testi in batch
-- Suggerimenti con punteggio di confidenza
-- Revisione umana per ogni suggerimento
+### 1. **OpenAI** (Raccomandato)
+- **Modelli**: GPT-4, GPT-4 Turbo, GPT-3.5 Turbo
+- **Vantaggi**: Qualità superiore, ampia gamma di modelli
+- **Costi**: A consumo, pricing competitivo
 
-### Gestione Modelli Avanzata
-- Download e gestione modelli Ollama stile OpenWebUI
-- Catalogo modelli OpenRouter (gratuiti e a pagamento)
-- Monitoraggio utilizzo e costi
+### 2. **Anthropic Claude**
+- **Modelli**: Claude-3 Opus, Claude-3 Sonnet, Claude-3 Haiku
+- **Vantaggi**: Eccellente per analisi di testi lunghi
+- **Costi**: A consumo, ottimo rapporto qualità/prezzo
 
-## 📋 Prerequisiti
+### 3. **Ollama** (Locale)
+- **Modelli**: Llama 3.1, Mistral, Gemma, Phi-3
+- **Vantaggi**: Completamente locale, nessun costo aggiuntivo
+- **Requisiti**: GPU dedicata o CPU potente
 
-### Per Ollama
-- Server Ollama in esecuzione su `http://192.168.12.14:11435`
-- Almeno un modello scaricato (es. `llama3`, `mistral`)
+## 🚀 Configurazione Rapida
 
-### Per OpenRouter
-- Account OpenRouter attivo
-- API Key valida
-- Crediti sufficienti per modelli a pagamento
+### 1. Configura le API Keys
 
-## 🛠 Installazione e Configurazione
-
-### 1. Migrazione Database
 ```bash
-# Esegui la migrazione per aggiungere le tabelle AI
-python migrate_ai_database.py
-
-# Verifica la migrazione
-python migrate_ai_database.py --verify
+# Nel file .env
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-### 2. Installazione Dipendenze
+### 2. Testa la connessione
+
 ```bash
-pip install -r requirements.txt
+# Testa OpenAI
+python -c "
+import openai
+import os
+openai.api_key = os.getenv('OPENAI_API_KEY')
+response = openai.chat.completions.create(
+    model='gpt-3.5-turbo',
+    messages=[{'role': 'user', 'content': 'Test'}],
+    max_tokens=10
+)
+print('OpenAI: OK')
+"
+
+# Testa Anthropic
+python -c "
+import anthropic
+import os
+client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+response = client.messages.create(
+    model='claude-3-haiku-20240307',
+    max_tokens=10,
+    messages=[{'role': 'user', 'content': 'Test'}]
+)
+print('Anthropic: OK')
+"
+
+# Testa Ollama
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3.1",
+  "prompt": "Test",
+  "stream": false
+}'
 ```
 
-### 3. Configurazione AI
-1. Vai su **Amministrazione → Configurazione AI**
-2. Crea una nuova configurazione:
-   - **Ollama**: URL server + modello
-   - **OpenRouter**: API key + modello
-3. Testa la connessione
-4. Attiva la configurazione
+## 📋 Configurazione Dettagliata
 
-### 4. Test Integrazioni
+### OpenAI Setup
+
+1. **Crea account** su [OpenAI Platform](https://platform.openai.com/)
+2. **Genera API Key** nella sezione API Keys
+3. **Imposta billing** per abilitare l'uso
+4. **Configura limiti** per controllare i costi
+
+```python
+# Configurazione modelli OpenAI
+OPENAI_MODELS = {
+    'gpt-4': {
+        'name': 'GPT-4',
+        'max_tokens': 8192,
+        'cost_per_1k_tokens': 0.03,
+        'recommended_for': 'Analisi complesse, alta qualità'
+    },
+    'gpt-4-turbo': {
+        'name': 'GPT-4 Turbo',
+        'max_tokens': 128000,
+        'cost_per_1k_tokens': 0.01,
+        'recommended_for': 'Testi lunghi, analisi dettagliate'
+    },
+    'gpt-3.5-turbo': {
+        'name': 'GPT-3.5 Turbo',
+        'max_tokens': 16384,
+        'cost_per_1k_tokens': 0.001,
+        'recommended_for': 'Uso generale, economico'
+    }
+}
+```
+
+### Anthropic Setup
+
+1. **Crea account** su [Anthropic Console](https://console.anthropic.com/)
+2. **Genera API Key** nella sezione API Keys
+3. **Configura billing** per abilitare l'uso
+
+```python
+# Configurazione modelli Anthropic
+ANTHROPIC_MODELS = {
+    'claude-3-opus': {
+        'name': 'Claude-3 Opus',
+        'max_tokens': 200000,
+        'cost_per_1k_tokens': 0.015,
+        'recommended_for': 'Analisi complesse, ricerca avanzata'
+    },
+    'claude-3-sonnet': {
+        'name': 'Claude-3 Sonnet',
+        'max_tokens': 200000,
+        'cost_per_1k_tokens': 0.003,
+        'recommended_for': 'Bilanciamento qualità/costo'
+    },
+    'claude-3-haiku': {
+        'name': 'Claude-3 Haiku',
+        'max_tokens': 200000,
+        'cost_per_1k_tokens': 0.0005,
+        'recommended_for': 'Analisi veloci, economiche'
+    }
+}
+```
+
+### Ollama Setup (Locale)
+
+1. **Installa Ollama**
 ```bash
-# Test completo delle integrazioni
-python test_ai_integration.py
+# Linux/Mac
+curl -fsSL https://ollama.com/install.sh | sh
 
-# Per testare OpenRouter, imposta la variabile d'ambiente
-export OPENROUTER_API_KEY="sk-or-..."
-python test_ai_integration.py
+# Windows
+# Scarica da https://ollama.com/download/windows
 ```
 
-## 🎯 Utilizzo
+2. **Avvia il servizio**
+```bash
+# Avvia Ollama
+ollama serve
 
-### Etichettatura Automatica
-
-1. **Accedi a un file Excel** con domande da etichettare
-2. **Clicca "Genera Etichette AI"** nel pannello AI
-3. **Attendi l'elaborazione** (progress bar in tempo reale)
-4. **Rivedi i suggerimenti** cliccando "Rivedi Suggerimenti"
-
-### Revisione Suggerimenti
-
-La pagina di revisione offre:
-- **Vista dettagliata** di ogni suggerimento
-- **Filtri** per confidenza, etichetta, data
-- **Azioni in blocco** per accettare/rifiutare multiple annotazioni
-- **Testo completo** espandibile per decisioni informate
-
-### Gestione Modelli
-
-#### Ollama
-- **Lista modelli installati** con informazioni dettagliate
-- **Scarica nuovi modelli** dal catalogo integrato
-- **Elimina modelli** non utilizzati
-- **Monitoraggio spazio** e performance
-
-#### OpenRouter
-- **Modelli gratuiti** sempre disponibili
-- **Modelli premium** con pricing trasparente
-- **Monitoraggio utilizzo** e costi in tempo reale
-
-## 🔧 Configurazioni Avanzate
-
-### Prompt di Sistema Personalizzato
-```
-Sei un assistente specializzato nell'etichettatura di testi educativi. 
-Analizza ogni testo e assegna l'etichetta più appropriata dalla lista fornita. 
-Considera il contesto educativo e sii coerente nelle tue scelte.
+# Installa modelli
+ollama pull llama3.1
+ollama pull mistral
+ollama pull gemma2
 ```
 
-### Parametri di Generazione
-- **Temperature** (0-2): Controllo creatività
-  - 0.1-0.3: Conservativo, coerente
-  - 0.7: Bilanciato (raccomandato)
-  - 1.5-2.0: Creativo, variabile
+3. **Configura modelli**
+```python
+# Configurazione modelli Ollama
+OLLAMA_MODELS = {
+    'llama3.1': {
+        'name': 'Llama 3.1',
+        'size': '4.7GB',
+        'recommended_for': 'Uso generale, buona qualità'
+    },
+    'mistral': {
+        'name': 'Mistral 7B',
+        'size': '4.1GB',
+        'recommended_for': 'Veloce, efficiente'
+    },
+    'gemma2': {
+        'name': 'Gemma 2',
+        'size': '5.4GB',
+        'recommended_for': 'Analisi tecniche'
+    }
+}
+```
 
-- **Max Tokens** (100-4000): Lunghezza risposta
-  - 500-1000: Ottimale per etichettatura
-  - 1000+: Per analisi dettagliate
+## 🎯 Template e Prompt
 
-## 📊 Monitoraggio e Statistiche
+### Template predefiniti
 
-### Dashboard AI
-- Annotazioni totali generate
-- Tasso di accettazione suggerimenti
-- Performance per modello
-- Utilizzo risorse
+Il sistema include template ottimizzati per diversi domini:
 
-### Metriche di Qualità
-- **Confidence Score**: Affidabilità predizione
-- **Acceptance Rate**: Percentuale approvazioni umane
-- **Time Savings**: Tempo risparmiato vs annotazione manuale
+#### 1. **Analisi Sentiment**
+```python
+SENTIMENT_TEMPLATE = """
+Analizza il sentiment del seguente testo e classificalo in una delle seguenti categorie:
+- Positivo: Atteggiamento favorevole
+- Negativo: Atteggiamento contrario
+- Neutro: Posizione neutra
+- Ambivalente: Contiene aspetti sia positivi che negativi
 
-## 🔒 Sicurezza e Privacy
+Testo: {text}
 
-### Dati Locali (Ollama)
-- Tutti i dati rimangono sul server locale
-- Nessuna trasmissione esterna
-- Controllo completo su modelli e configurazioni
+Fornisci solo la classificazione senza spiegazioni aggiuntive.
+"""
+```
 
-### Dati Cloud (OpenRouter)
-- Testi inviati ai provider esterni
-- Conformità GDPR dei provider
-- Logs e audit trail completi
+#### 2. **Classificazione Tematica**
+```python
+THEMATIC_TEMPLATE = """
+Classifica il seguente testo secondo le categorie tematiche:
+{categories}
 
-### Utente AI
-- Utente virtuale `ai_assistant` per tracciabilità
-- Tutte le annotazioni AI sono marcate
-- Storico completo delle revisioni umane
+Testo: {text}
 
-## 🚨 Risoluzione Problemi
+Seleziona una o più categorie pertinenti e fornisci una breve giustificazione.
+"""
+```
+
+#### 3. **Analisi Educativa**
+```python
+EDUCATIONAL_TEMPLATE = """
+Analizza il seguente testo dal punto di vista educativo considerando:
+- Livello di istruzione
+- Ambito disciplinare
+- Prospettiva (studente/docente/genitore)
+- Problematiche evidenziate
+
+Testo: {text}
+
+Fornisci un'analisi strutturata.
+"""
+```
+
+### Personalizzazione Template
+
+```python
+# Crea template personalizzato
+def create_custom_template(domain, categories, instructions):
+    template = f"""
+    Dominio: {domain}
+    
+    Categorie disponibili:
+    {categories}
+    
+    Istruzioni specifiche:
+    {instructions}
+    
+    Testo da analizzare: {{text}}
+    
+    Fornisci classificazione e motivazione.
+    """
+    return template
+
+# Esempio per ricerca medica
+medical_template = create_custom_template(
+    domain="Ricerca Medica",
+    categories=["Sintomi", "Diagnosi", "Trattamento", "Prevenzione"],
+    instructions="Identifica elementi clinici rilevanti"
+)
+```
+
+## 🔄 Utilizzo nell'Interfaccia
+
+### 1. **Annotazione Automatica**
+- Seleziona le celle da annotare
+- Scegli il modello AI da utilizzare
+- Configura il template appropriato
+- Avvia l'annotazione automatica
+- Revisiona e conferma i risultati
+
+### 2. **Suggerimenti Intelligenti**
+- Durante l'annotazione manuale
+- Il sistema suggerisce etichette pertinenti
+- Basato su modelli pre-addestrati
+- Miglioramento continuo con feedback
+
+### 3. **Analisi Batch**
+- Elaborazione di grandi volumi di dati
+- Schedulazione di job asincroni
+- Monitoraggio del progresso
+- Esportazione risultati
+
+## 📊 Monitoraggio e Ottimizzazione
+
+### Metriche di Performance
+
+```python
+# Tracking delle metriche
+AI_METRICS = {
+    'accuracy': 0.85,          # Precisione delle classificazioni
+    'processing_time': 2.3,    # Tempo medio per annotazione
+    'cost_per_annotation': 0.005,  # Costo per annotazione
+    'user_satisfaction': 0.92  # Soddisfazione utente
+}
+```
+
+### Ottimizzazione dei Costi
+
+```python
+# Strategia di ottimizzazione
+COST_OPTIMIZATION = {
+    'use_cache': True,         # Cache per richieste duplicate
+    'batch_processing': True,  # Elaborazione batch
+    'model_selection': 'auto', # Selezione automatica modello
+    'max_daily_cost': 50.0     # Limite di spesa giornaliera
+}
+```
+
+## 🛡️ Sicurezza e Privacy
+
+### Protezione dei Dati
+
+1. **Dati sensibili**: Non inviare mai dati personali agli AI esterni
+2. **Anonimizzazione**: Rimuovi identificatori prima dell'elaborazione
+3. **Controllo accesso**: Limita l'accesso alle funzionalità AI
+4. **Audit trail**: Registra tutte le operazioni AI
+
+### Configurazione Sicura
+
+```python
+# Configurazione sicurezza AI
+AI_SECURITY = {
+    'data_anonymization': True,
+    'request_logging': True,
+    'response_sanitization': True,
+    'rate_limiting': True,
+    'max_text_length': 5000,
+    'blocked_patterns': ['email', 'phone', 'ssn']
+}
+```
+
+## 🔧 Risoluzione Problemi
 
 ### Errori Comuni
 
-#### Ollama Non Connesso
+#### 1. **API Key non valida**
 ```bash
-# Verifica stato Ollama
-curl http://192.168.12.14:11345/api/tags
+# Verifica la key
+echo $OPENAI_API_KEY | cut -c1-10
+# Deve iniziare con "sk-"
 
-# Riavvia Ollama se necessario
-systemctl restart ollama
+# Testa la connessione
+curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+     https://api.openai.com/v1/models
 ```
 
-#### OpenRouter API Key Non Valida
-- Verifica l'API key su https://openrouter.ai/keys
-- Controlla i crediti disponibili
-- Testa la connessione dalla configurazione AI
+#### 2. **Limite di rate raggiunto**
+```python
+# Implementa retry con backoff
+import time
+import random
 
-#### Modelli Non Trovati
-- Ollama: Scarica modelli tramite l'interfaccia
-- OpenRouter: Verifica disponibilità modello
+def retry_with_backoff(func, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except RateLimitError:
+            wait_time = (2 ** attempt) + random.uniform(0, 1)
+            time.sleep(wait_time)
+    raise Exception("Max retries exceeded")
+```
 
-### Performance
+#### 3. **Ollama non risponde**
+```bash
+# Verifica stato servizio
+curl http://localhost:11434/api/tags
 
-#### Ollama Lento
-- Verifica risorse server (RAM, CPU)
-- Usa modelli più piccoli (7B vs 70B)
-- Riduci batch_size nella configurazione
+# Riavvia Ollama
+ollama serve
 
-#### Timeout OpenRouter
-- Riduci max_tokens
-- Aumenta timeout nelle chiamate API
-- Verifica connettività internet
+# Controlla log
+journalctl -u ollama -f
+```
 
-## 🔄 Aggiornamenti
+## 📈 Migliori Pratiche
 
-### Aggiornamento Modelli OpenRouter
-I modelli disponibili sono aggiornati automaticamente quando:
-- Si carica la pagina modelli OpenRouter
-- Si testa una configurazione
-- Database viene re-sincronizzato
+### 1. **Selezione del Modello**
+- **GPT-4**: Analisi complesse, ricerca avanzata
+- **GPT-3.5**: Uso generale, buon rapporto qualità/prezzo
+- **Claude-3**: Testi lunghi, analisi dettagliate
+- **Ollama**: Privacy, controllo completo, nessun costo
 
-### Nuovi Modelli Ollama
-- Nuovi modelli appaiono nel catalogo
-- Download tramite interfaccia web
-- Gestione automatica dipendenze
+### 2. **Ottimizzazione dei Prompt**
+```python
+# Prompt structure
+EFFECTIVE_PROMPT = """
+Contesto: {context}
+Obiettivo: {objective}
+Formato richiesto: {format}
+Esempi: {examples}
+Testo: {text}
+"""
+```
 
-## 📈 Best Practices
+### 3. **Gestione della Qualità**
+- Valida sempre i risultati AI
+- Implementa feedback loop
+- Monitora l'accuratezza nel tempo
+- Aggiorna i template regolarmente
 
-### Prompt Engineering
-1. **Sii specifico** nel prompt di sistema
-2. **Includi esempi** di etichettature corrette
-3. **Definisci il contesto** (educativo, ricerca, ecc.)
-4. **Testa varianti** di prompt per ottimizzare
+## 🤝 Contributi
 
-### Gestione Qualità
-1. **Rivedi sempre** i primi batch di suggerimenti
-2. **Monitora confidence scores** per identificare pattern
-3. **Aggiorna prompt** basandoti sui feedback
-4. **Combina AI + umano** per massima accuratezza
+Per contribuire alle funzionalità AI:
 
-### Ottimizzazione Costi
-1. **Usa modelli gratuiti** per test e sviluppo
-2. **Modelli premium** solo per produzione
-3. **Monitora utilizzo** OpenRouter regolarmente
-4. **Ottimizza batch_size** per efficienza
+1. **Testa nuovi modelli** e condividi i risultati
+2. **Crea template** per domini specifici
+3. **Ottimizza i prompt** per migliori performance
+4. **Documenta** le configurazioni di successo
 
-## 🔗 Link Utili
+## 🆘 Supporto
 
-- [Ollama Documentation](https://ollama.ai/docs)
-- [OpenRouter Models](https://openrouter.ai/models)
-- [OpenRouter API Docs](https://openrouter.ai/docs)
+Per problemi con l'AI:
 
-## 📞 Supporto
+- **Issues**: Usa il tag `ai` su GitHub
+- **Logs**: Includi sempre i log delle richieste AI
+- **Configurazione**: Condividi la configurazione (senza API keys)
+- **Esempi**: Fornisci esempi di testi problematici
 
-Per problemi o domande:
-1. Controlla i logs dell'applicazione
-2. Usa il sistema di test integrato
-3. Verifica configurazioni AI
-4. Consulta la documentazione provider
+---
+
+**AI Integration** - *Intelligenza Artificiale per l'analisi qualitativa avanzata*

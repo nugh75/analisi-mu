@@ -1,153 +1,373 @@
-# 🐳 Analisi MU - Sistema Docker Ottimizzato
+# 🐳 Docker Deployment Guide - Analisi MU
 
-## 📋 Panoramica
+Questa guida ti aiuterà a configurare e deployare **Analisi MU** utilizzando Docker e Docker Compose per un ambiente di produzione robusto e scalabile.
 
-Sistema containerizzato ottimizzato per l'applicazione Analisi MU con supporto completo per:
-- ✅ Parametri dinamici AI (max_tokens, batch_size, timeout)
-- ✅ Sicurezza con utente non-root
-- ✅ Health checks automatici
-- ✅ Gestione volume persistenti
-- ✅ Network isolation
-- ✅ Build ottimizzato con dipendenze native
+## 📋 Prerequisiti
+
+- **Docker** 20.10+
+- **Docker Compose** 2.0+
+- **Git** per clonare il repository
+- **Almeno 2GB di RAM** disponibile
+- **Almeno 10GB di spazio disco** per dati e log
 
 ## 🚀 Quick Start
 
-### Avvio Rapido
+### 1. Clona il repository
 ```bash
-./start-docker.sh
+git clone https://github.com/nugh75/analisi-mu.git
+cd analisi-mu
 ```
 
-### Avvio Manuale
+### 2. Configura l'ambiente
 ```bash
-# Build e avvio
-docker-compose build --no-cache
-docker-compose up -d
-
-# Visualizza i log
-docker-compose logs -f
-
-# Ferma l'applicazione
-docker-compose down
-```
-
-### Ambiente di produzione
-
-```bash
-# Crea un file .env con le variabili di produzione
+# Copia il file di configurazione
 cp .env.example .env
 
-# Modifica .env con i valori di produzione
+# Modifica le configurazioni (opzionale)
 nano .env
-
-# Avvia l'applicazione in produzione
-docker-compose -f docker-compose.prod.yml up -d
-
-# Visualizza i log
-docker-compose -f docker-compose.prod.yml logs -f
-
-# Ferma l'applicazione
-docker-compose -f docker-compose.prod.yml down
 ```
 
-## Comandi utili
-
-### Build dell'immagine
-
+### 3. Avvia l'applicazione
 ```bash
-# Build dell'immagine Docker
-docker build -t analisi-mu .
+# Modalità development
+docker compose up -d
 
-# Build forzato (senza cache)
-docker build --no-cache -t analisi-mu .
+# Modalità production
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-### Gestione dei container
+### 4. Accedi all'applicazione
+- **URL**: http://localhost:5000
+- **Username**: admin
+- **Password**: admin123
 
-```bash
-# Riavvia solo il servizio web
-docker-compose restart web
+⚠️ **IMPORTANTE**: Cambia immediatamente la password dell'admin!
 
-# Accedi al container
-docker-compose exec web bash
+## 📁 Struttura dei file Docker
 
-# Visualizza lo stato dei servizi
-docker-compose ps
+```
+analisi-mu/
+├── Dockerfile                 # Immagine principale dell'applicazione
+├── docker-compose.yml         # Configurazione development
+├── docker-compose.prod.yml    # Configurazione production
+├── docker-init.sh            # Script di inizializzazione
+├── start-docker.sh           # Script di avvio rapido
+└── .env.example              # Template delle variabili d'ambiente
 ```
 
-### Backup e ripristino
+## 🔧 Configurazione
+
+### Variabili d'ambiente (.env)
 
 ```bash
-# Backup del database
-docker-compose exec web python -c "
+# === APPLICAZIONE ===
+SECRET_KEY=your-super-secret-key-here
+FLASK_ENV=production
+FLASK_DEBUG=0
+
+# === DATABASE ===
+DATABASE_URL=sqlite:///instance/analisi_mu.db
+
+# === UPLOAD ===
+UPLOAD_FOLDER=uploads
+MAX_CONTENT_LENGTH=16777216
+
+# === AI (Opzionale) ===
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+OLLAMA_BASE_URL=http://localhost:11434
+
+# === SICUREZZA ===
+CSRF_ENABLED=true
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_HTTPONLY=true
+```
+
+### Configurazione Development vs Production
+
+#### Development (docker-compose.yml)
+- Hot reload abilitato
+- Debug mode attivo
+- Porte esposte direttamente
+- Volumi per sviluppo
+
+#### Production (docker-compose.prod.yml)
+- Ottimizzazioni per performance
+- Logging strutturato
+- Sicurezza avanzata
+- Backup automatici
+
+## 🏗️ Dockerfile Spiegato
+
+```dockerfile
+# Immagine base Python slim
+FROM python:3.13-slim
+
+# Etichette per metadata
+LABEL maintainer="analisi-mu@example.com"
+LABEL version="1.0.0"
+LABEL description="Sistema di etichettatura collaborativa"
+
+# Creazione utente non-root per sicurezza
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Dipendenze di sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Directory di lavoro
+WORKDIR /app
+
+# Copia e installa dipendenze Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia codice applicazione
+COPY . .
+
+# Creazione directory necessarie
+RUN mkdir -p uploads instance backups \
+    && chown -R appuser:appuser /app
+
+# Cambio all'utente non-root
+USER appuser
+
+# Esposizione porta
+EXPOSE 5000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Comando di avvio
+CMD ["python", "app.py"]
+```
+
+## 🔒 Sicurezza
+
+### Configurazioni di sicurezza implementate:
+
+1. **Utente non-root**: L'applicazione gira con utente dedicato
+2. **Secrets management**: Variabili sensibili tramite .env
+3. **Network isolation**: Comunicazione tra container isolata
+4. **File permissions**: Permessi corretti sui file critici
+5. **Healthcheck**: Monitoraggio dello stato dell'applicazione
+
+### Raccomandazioni aggiuntive:
+
+```bash
+# Genera una chiave sicura
+openssl rand -hex 32
+
+# Imposta permessi corretti
+chmod 600 .env
+chmod 755 uploads/ instance/
+
+# Configura firewall (esempio con ufw)
+sudo ufw allow 5000/tcp
+sudo ufw enable
+```
+
+## 📊 Monitoraggio e Logging
+
+### Visualizzazione dei log
+```bash
+# Log in tempo reale
+docker compose logs -f
+
+# Log di un servizio specifico
+docker compose logs -f app
+
+# Ultimi 100 log
+docker compose logs --tail=100
+
+# Log con timestamp
+docker compose logs -t
+```
+
+### Metriche container
+```bash
+# Statistiche risorse
+docker stats
+
+# Informazioni dettagliate
+docker inspect analisi-mu-app
+
+# Processi in esecuzione
+docker compose top
+```
+
+## 🛠️ Operazioni di Manutenzione
+
+### Backup del database
+```bash
+# Backup manuale
+docker compose exec app python -c "
+from app import create_app
+from models import db
 import shutil
 import datetime
-shutil.copy2('/app/instance/analisi_mu.db', 
-             f'/app/backups/analisi_mu_backup_{datetime.datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.db')
-"
 
-# Lista dei backup
-docker-compose exec web ls -la /app/backups/
+app = create_app()
+with app.app_context():
+    backup_name = f'backup_{datetime.datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.db'
+    shutil.copy('instance/analisi_mu.db', f'backups/{backup_name}')
+    print(f'Backup creato: {backup_name}')
+"
 ```
 
-## Struttura dei volumi
+### Aggiornamento dell'applicazione
+```bash
+# Ferma l'applicazione
+docker compose down
 
-- `./instance` - Directory contenente il database SQLite
-- `./uploads` - Directory per i file Excel caricati
-- `./backups` - Directory per i backup del database
+# Aggiorna il codice
+git pull origin main
 
-## Configurazione
+# Ricostruisci l'immagine
+docker compose build --no-cache
 
-Le variabili d'ambiente possono essere configurate in:
-1. File `.env` (non incluso nel repository)
-2. Direttamente nel file `docker-compose.yml`
-3. Variabili d'ambiente del sistema
+# Riavvia l'applicazione
+docker compose up -d
+```
 
-### Variabili principali:
+### Pulizia del sistema
+```bash
+# Rimuovi container, volumi e immagini inutilizzate
+docker system prune -a --volumes
 
-- `SECRET_KEY` - Chiave segreta per Flask (CAMBIA IN PRODUZIONE!)
-- `DATABASE_URL` - URL del database (SQLite per default)
-- `FLASK_ENV` - Ambiente Flask (development/production)
-- `FLASK_DEBUG` - Debug mode (0/1)
-- `MAX_CONTENT_LENGTH` - Dimensione massima file upload
-- `UPLOAD_FOLDER` - Directory per i file caricati
+# Rimuovi solo i container fermati
+docker container prune
 
-## Troubleshooting
+# Rimuovi solo le immagini non utilizzate
+docker image prune -a
+```
 
-### Problemi comuni:
+## 🔧 Risoluzione dei Problemi
 
-1. **Porta 5000 già in uso**
-   ```bash
-   # Modifica la porta nel docker-compose.yml
-   ports:
-     - "5001:5000"  # Usa la porta 5001 invece di 5000
-   ```
+### Container non si avvia
+```bash
+# Controlla i log
+docker compose logs app
 
-2. **Database non accessibile**
-   ```bash
-   # Verifica i permessi della directory instance
-   sudo chown -R $USER:$USER ./instance
-   ```
+# Verifica lo stato
+docker compose ps
 
-3. **Container non si avvia**
-   ```bash
-   # Controlla i log per errori
-   docker-compose logs web
-   ```
+# Ispeziona il container
+docker inspect analisi-mu-app
+```
 
-4. **Build fallisce**
-   ```bash
-   # Pulisci cache Docker
-   docker system prune -a
-   ```
+### Problemi di permessi
+```bash
+# Correggi i permessi
+docker compose exec app chown -R appuser:appuser /app
 
-## Monitoraggio
+# Verifica i permessi
+docker compose exec app ls -la
+```
 
-L'applicazione include un health check che verifica:
-- Accessibilità del servizio sulla porta 5000
-- Stato dell'applicazione Flask
+### Database locked
+```bash
+# Ferma l'applicazione
+docker compose down
 
-Il health check è configurato per:
-- Intervallo: 30 secondi
-- Timeout: 10 secondi
-- Retry: 3 tentativi
-- Periodo di grazia: 40 secondi
+# Rimuovi il file di lock
+rm -f instance/analisi_mu.db-wal instance/analisi_mu.db-shm
+
+# Riavvia
+docker compose up -d
+```
+
+### Problemi di connessione AI
+```bash
+# Testa la connessione OpenAI
+docker compose exec app python -c "
+import openai
+import os
+openai.api_key = os.getenv('OPENAI_API_KEY')
+print('OpenAI connection OK' if openai.api_key else 'No API key')
+"
+```
+
+## 🚀 Deploy in Produzione
+
+### 1. Configurazione server
+```bash
+# Aggiorna il sistema
+sudo apt update && sudo apt upgrade -y
+
+# Installa Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# Installa Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+### 2. Configurazione produzione
+```bash
+# Usa la configurazione di produzione
+docker compose -f docker-compose.prod.yml up -d
+
+# Configura nginx come reverse proxy
+sudo apt install nginx
+
+# Configura SSL con Let's Encrypt
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com
+```
+
+### 3. Monitoraggio produzione
+```bash
+# Installa strumenti di monitoraggio
+docker run -d \
+  --name watchtower \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --schedule "0 0 2 * * *"
+```
+
+## 📈 Scaling
+
+### Scaling orizzontale
+```bash
+# Scala l'applicazione
+docker compose up -d --scale app=3
+
+# Usa un load balancer
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### Ottimizzazioni performance
+```bash
+# Configura memoria e CPU
+docker compose up -d --memory="1g" --cpus="2"
+
+# Usa un database esterno
+# Modifica DATABASE_URL in .env per PostgreSQL
+```
+
+## 🤝 Contributi
+
+Per contribuire al setup Docker:
+
+1. Testa le modifiche localmente
+2. Documenta le nuove configurazioni
+3. Aggiorna questo README
+4. Apri una Pull Request
+
+## 🆘 Supporto
+
+Per problemi specifici di Docker:
+
+- **Issues**: Apri un'issue su GitHub con tag `docker`
+- **Logs**: Includi sempre i log del container
+- **Configurazione**: Condividi la tua configurazione (senza secrets)
+
+---
+
+**Docker Deployment** - *Containerizzazione professionale per Analisi MU*
