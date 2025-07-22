@@ -27,15 +27,14 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copia il codice dell'applicazione
 COPY . .
 
-# Copia lo script di inizializzazione
-COPY docker-init.sh /app/docker-init.sh
-RUN chmod +x /app/docker-init.sh
-
 # Crea le directory necessarie con permessi corretti
 RUN mkdir -p uploads instance backups \
     && chown -R appuser:appuser /app \
     && chmod -R 755 /app \
     && chmod -R 777 uploads instance backups
+
+# Assicura che lo script di init abbia i permessi di esecuzione
+RUN chmod +x /app/docker-init.sh
 
 # Cambia all'utente non-root
 USER appuser
