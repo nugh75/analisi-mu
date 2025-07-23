@@ -92,3 +92,20 @@ class CategoryForm(FlaskForm):
                        default='#6c757d',
                        description='Seleziona un colore per la categoria')
     is_active = BooleanField('Attiva', default=True)
+
+
+class TextDocumentForm(FlaskForm):
+    """Form per il caricamento di documenti di testo"""
+    file = FileField('File di Testo', validators=[
+        FileRequired(message='Seleziona un file'),
+        FileAllowed(['txt', 'md', 'docx'], 
+                   message='Sono supportati solo file di testo (.txt, .md, .docx)')
+    ])
+    document_type = SelectField('Tipo Documento', 
+                               choices=[
+                                   ('focus_group', 'Focus Group'),
+                                   ('interview', 'Intervista'),
+                                   ('other', 'Altro')
+                               ],
+                               default='other',
+                               validators=[DataRequired()])

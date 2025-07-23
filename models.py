@@ -334,3 +334,92 @@ class PromptTemplate(db.Model):
     
     def __repr__(self):
         return f'<PromptTemplate {self.name} ({self.category})>'
+
+
+class TextDocument(db.Model):
+    """Modello per documenti di testo (focus group, interviste, etc.)"""
+    __tablename__ = 'text_documents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)  # Nome file sul server
+    original_name = db.Column(db.String(255), nullable=False)  # Nome originale del file
+    content = db.Column(db.Text, nullable=False)  # Contenuto del documento
+    document_type = db.Column(db.String(50), default='other')  # 'focus_group', 'interview', 'other'
+    file_format = db.Column(db.String(10), nullable=False)  # 'txt', 'md', 'docx'
+    
+    # Metadati
+    word_count = db.Column(db.Integer, default=0)
+    character_count = db.Column(db.Integer, default=0)
+    
+    # Relazioni utente
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    uploader = db.relationship('User', backref='text_documents')
+    annotations = db.relationship('TextAnnotation', backref='document', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<TextDocument {self.original_name}>'
+    
+    def update_stats(self):
+        """Aggiorna le statistiche del documento"""
+        if self.content:
+            self.word_count = len(self.content.split())
+            self.character_count = len(self.content)
+
+
+class TextAnnotation(db.Model):
+    """Modello per le annotazioni su documenti di testo"""
+    __tablename__ = 'text_annotations'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('text_documents.id'), nullable=False)
+    
+    # Selezione di testo
+    text_selection = db.Column(db.Text, nullable=False)  # Testo selezionato
+    start_position = db.Column(db.Integer, nullable=False)  # Posizione inizio
+    end_position = db.Column(db.Integer, nullable=False)  # Posizione fine
+    
+    # Contesto (righe prima e dopo per riferimento)
+    context_before = db.Column(db.Text)
+    context_after = db.Column(db.Text)
+    
+    # Etichetta assegnata
+    label_id = db.Column(db.Integer, db.ForeignKey('label.id'), nullable=False)
+    
+    # Utente che ha creato l'annotazione
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Metadati AI (se generata automaticamente)
+    is_ai_generated = db.Column(db.Boolean, default=False)
+    ai_confidence = db.Column(db.Float)
+    ai_model = db.Column(db.String(100))
+    ai_provider = db.Column(db.String(50))
+    
+    # Status e review
+    status = db.Column(db.String(20), default='active')  # 'active', 'disputed', 'archived'
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    reviewed_at = db.Column(db.DateTime)
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    label = db.relationship('Label', backref='text_annotations')
+    user = db.relationship('User', foreign_keys=[user_id], backref='text_annotations')
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+    
+    def __repr__(self):
+        return f'<TextAnnotation {self.text_selection[:50]}...>'
+    
+    @property
+    def text_preview(self):
+        """Anteprima del testo selezionato (massimo 100 caratteri)"""
+        if len(self.text_selection) <= 100:
+            return self.text_selection
+        return f"{self.text_selection[:97]}..."

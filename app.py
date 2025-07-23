@@ -47,6 +47,7 @@ def create_app():
     from routes.ai import ai_bp
     from routes.statistics import statistics_bp
     from routes.questions import questions_bp
+    from routes.text_documents import text_documents_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp, url_prefix='/')
@@ -57,6 +58,7 @@ def create_app():
     app.register_blueprint(ai_bp, url_prefix='/ai')
     app.register_blueprint(statistics_bp, url_prefix='/statistics')
     app.register_blueprint(questions_bp, url_prefix='/questions')
+    app.register_blueprint(text_documents_bp)
     
     # Creazione delle cartelle necessarie con permessi corretti
     upload_folder = app.config['UPLOAD_FOLDER']
@@ -86,7 +88,8 @@ def create_app():
     
     # Creazione delle tabelle del database
     with app.app_context():
-        from models import User, Label, ExcelFile, TextCell, CellAnnotation
+        from models import (User, Label, ExcelFile, TextCell, CellAnnotation, 
+                           TextDocument, TextAnnotation)
         db.create_all()
         
         # Creazione utente admin di default se non esiste
@@ -166,4 +169,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5077)

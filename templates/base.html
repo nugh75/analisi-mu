@@ -49,6 +49,22 @@
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="textDocsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-file-text me-1"></i>Documenti Testo
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('text_documents.upload') }}">
+                                <i class="bi bi-cloud-upload me-1"></i>Carica Documento
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('text_documents.list_documents') }}">
+                                <i class="bi bi-list me-1"></i>Lista Documenti
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('text_documents.manage_annotations') }}">
+                                <i class="bi bi-tags me-1"></i>Gestisci Annotazioni
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="labelsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-tags me-1"></i>Etichette
                         </a>
