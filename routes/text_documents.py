@@ -17,7 +17,8 @@ from forms import TextDocumentForm
 text_documents_bp = Blueprint('text_documents', __name__, url_prefix='/text-documents')
 
 ALLOWED_EXTENSIONS = {'txt', 'md', 'docx'}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 5 * 1024 * 1024  # Ridotto a 5MB per performance migliori
+MAX_CONTENT_LENGTH = 500000  # 500KB di testo puro (circa 100-150 pagine)
 
 def allowed_file(filename):
     """Verifica se il file è di un tipo consentito"""
@@ -33,13 +34,22 @@ def read_text_file(file_path, file_format):
     try:
         if file_format == 'docx':
             doc = Document(file_path)
-            content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+            # Ottimizzazione: usa list comprehension più efficiente
+            # e processa solo paragrafi non vuoti
+            paragraphs = []
+            for p in doc.paragraphs:
+                text = p.text.strip()
+                if text:  # Solo paragrafi con contenuto
+                    paragraphs.append(text)
+            content = '\n'.join(paragraphs)
         else:  # txt, md
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
         
-        # Sanitizza il contenuto
-        content = bleach.clean(content, tags=[], strip=True)
+        # Sanitizzazione condizionale: solo se contiene HTML
+        if '<' in content and '>' in content:
+            content = bleach.clean(content, tags=[], strip=True)
+        
         return content
     except Exception as e:
         current_app.logger.error(f"Errore nella lettura del file {file_path}: {str(e)}")
@@ -92,6 +102,12 @@ def upload():
                     flash('Errore nella lettura del file', 'error')
                     return redirect(request.url)
                 
+                # Verifica lunghezza contenuto
+                if len(content) > MAX_CONTENT_LENGTH:
+                    os.remove(file_path)
+                    flash(f'Il contenuto del documento è troppo lungo. Massimo {MAX_CONTENT_LENGTH//1000}KB di testo', 'error')
+                    return redirect(request.url)
+                
                 # Crea record nel database
                 document = TextDocument(
                     filename=filename,
@@ -101,7 +117,10 @@ def upload():
                     file_format=file_format,
                     user_id=current_user.id
                 )
-                document.update_stats()
+                
+                # Calcola statistiche in modo più efficiente
+                document.word_count = len(content.split()) if content else 0
+                document.character_count = len(content) if content else 0
                 
                 db.session.add(document)
                 db.session.commit()

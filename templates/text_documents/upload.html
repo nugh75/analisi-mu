@@ -33,7 +33,12 @@
                                            accept=".txt,.md,.docx" required>
                                     <div class="form-text">
                                         Formati supportati: TXT, Markdown (.md), Word (.docx). 
-                                        Dimensione massima: 10MB
+                                        Dimensione massima: 5MB - Contenuto massimo: 500KB di testo
+                                    </div>
+                                    <!-- Progress bar nascosta inizialmente -->
+                                    <div class="progress mt-2" id="uploadProgress" style="display: none;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" style="width: 0%"></div>
                                     </div>
                                 </div>
 
@@ -131,9 +136,9 @@ document.addEventListener('DOMContentLoaded', function() {
     fileInput.addEventListener('change', function() {
         const file = this.files[0];
         if (file) {
-            // Verifica dimensione (10MB)
-            if (file.size > 10 * 1024 * 1024) {
-                alert('Il file è troppo grande. Dimensione massima: 10MB');
+            // Verifica dimensione (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Il file è troppo grande. Dimensione massima: 5MB');
                 this.value = '';
                 return;
             }
@@ -150,6 +155,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Aggiorna UI con info file
             const fileInfo = `File selezionato: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
             document.querySelector('.form-text').innerHTML = fileInfo;
+            
+            // Avviso per file DOCX grandi
+            if (fileExtension === 'docx' && file.size > 1024 * 1024) {
+                document.querySelector('.form-text').innerHTML += '<br><small class="text-warning">⚠️ File Word di grandi dimensioni potrebbero richiedere più tempo per l\'elaborazione</small>';
+            }
         }
     });
 
@@ -169,9 +179,30 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Mostra modal di caricamento
+        // Mostra indicatori di caricamento
         submitBtn.disabled = true;
-        progressModal.show();
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Caricamento...';
+        
+        const progressBar = document.getElementById('uploadProgress');
+        const progressBarFill = progressBar.querySelector('.progress-bar');
+        progressBar.style.display = 'block';
+        
+        // Simula progresso (dato che non possiamo tracciare il vero progresso)
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90; // Non andare oltre 90% finché non finisce davvero
+            
+            progressBarFill.style.width = progress + '%';
+            
+            if (progress > 50) {
+                progressBarFill.textContent = file.name.includes('.docx') ? 
+                    'Elaborazione documento Word...' : 'Elaborazione contenuto...';
+            }
+        }, 500);
+        
+        // Pulisci l'intervallo quando la pagina cambia
+        window.uploadProgressInterval = progressInterval;
     });
 
     // Gestione errori
