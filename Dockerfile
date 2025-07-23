@@ -44,7 +44,7 @@ ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV DATABASE_URL=sqlite:///instance/analisi_mu.db
+ENV DATABASE_URL=sqlite:////app/instance/analisi_mu.db
 
 # Espone la porta 5000
 EXPOSE 5000
