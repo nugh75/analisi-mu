@@ -991,7 +991,7 @@ def delete_annotation(annotation_id):
             target_user_id=annotation.user_id,
             annotation_id=annotation_id,
             was_ai_generated=annotation.is_ai_generated,
-            ai_confidence=annotation.ai_confidenza,
+            ai_confidence=annotation.ai_confidence,
             ai_model=annotation.ai_model,
             ai_provider=annotation.ai_provider,
             notes=f"Rimossa annotazione di {user_username}"
