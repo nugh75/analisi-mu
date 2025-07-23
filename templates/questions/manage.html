@@ -208,7 +208,8 @@
                                                        id="select-all-{{ file.file_id }}" 
                                                        onchange="toggleSelectAllInFile({{ file.file_id }}, this)">
                                             </th>
-                                            <th style="width: 55%;">Domanda</th>
+                                            <th style="width: 5%;">#</th>
+                                            <th style="width: 50%;">Domanda</th>
                                             <th style="width: 10%;">Celle</th>
                                             <th style="width: 20%;">Tipo Attuale</th>
                                             <th style="width: 10%;">Azioni</th>
@@ -227,6 +228,9 @@
                                                        value="{{ question.column_name }}" 
                                                        data-file-id="{{ file.file_id }}"
                                                        onchange="updateSelection()">
+                                            </td>
+                                            <td class="text-center fw-bold text-muted">
+                                                {{ loop.index }}
                                             </td>
                                             <td>
                                                 <div class="question-text">

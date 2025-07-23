@@ -71,11 +71,18 @@
     <div class="col-12">
         <div class="card border-primary">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="bi bi-robot me-2"></i>Assistente AI per Etichettatura
+                <h5 class="mb-0 d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="bi bi-robot me-2"></i>Assistente AI per Etichettatura
+                    </span>
+                    <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" 
+                            data-bs-target="#ai-assistant-body" aria-expanded="false" aria-controls="ai-assistant-body"
+                            title="Mostra/Nascondi sezione AI">
+                        <i class="bi bi-chevron-down" id="ai-toggle-icon"></i>
+                    </button>
                 </h5>
             </div>
-            <div class="card-body">
+            <div class="card-body collapse" id="ai-assistant-body">
                 <div class="row">
                     <div class="col-md-8">
                         <p class="mb-3">
@@ -526,6 +533,21 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Gestione toggle AI Assistant
+    const aiToggleButton = document.querySelector('[data-bs-target="#ai-assistant-body"]');
+    const aiToggleIcon = document.getElementById('ai-toggle-icon');
+    const aiAssistantBody = document.getElementById('ai-assistant-body');
+    
+    if (aiToggleButton && aiToggleIcon && aiAssistantBody) {
+        aiAssistantBody.addEventListener('shown.bs.collapse', function () {
+            aiToggleIcon.className = 'bi bi-chevron-up';
+        });
+        
+        aiAssistantBody.addEventListener('hidden.bs.collapse', function () {
+            aiToggleIcon.className = 'bi bi-chevron-down';
+        });
+    }
+    
     // Setup AI settings button
     const aiSettingsBtn = document.getElementById('ai-settings');
     if (aiSettingsBtn) {

@@ -95,7 +95,8 @@
                     <table class="table table-hover">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 50%;">Domanda</th>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 45%;">Domanda</th>
                                 <th class="text-center" style="width: 15%;">Risposte</th>
                                 <th class="text-center" style="width: 15%;">Annotate</th>
                                 <th class="text-center" style="width: 10%;">Progresso</th>
@@ -106,6 +107,9 @@
                             {% for question_name, total_responses, annotated_responses in questions_stats %}
                             {% set progress = (annotated_responses / total_responses * 100) if total_responses > 0 else 0 %}
                             <tr>
+                                <td class="text-center fw-bold text-muted">
+                                    {{ loop.index }}
+                                </td>
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <i class="bi bi-question-circle me-2 text-primary"></i>
