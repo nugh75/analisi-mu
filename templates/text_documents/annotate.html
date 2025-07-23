@@ -12,7 +12,7 @@
                     Etichettamento: {{ document.original_name }}
                 </h2>
                 <div>
-                    <a href="{{ url_for('text_documents.manage_annotations', document_id=document.id) }}" 
+                    <a href="{{ url_for('text_documents.annotations', document_id=document.id) }}" 
                        class="btn btn-outline-info me-2">
                         <i class="bi bi-list-check"></i> Gestisci Annotazioni
                     </a>
@@ -93,14 +93,22 @@
                 <div class="col-lg-4">
                     <!-- Etichette Disponibili -->
                     <div class="card mb-3">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
                                 <i class="bi bi-tags"></i> Etichette Disponibili
                             </h6>
+                            <div>
+                                <button class="btn btn-sm btn-outline-secondary" id="reloadLabels" title="Ricarica etichette">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                                <a href="{{ url_for('labels.create_label') }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                    <i class="bi bi-plus"></i>
+                                </a>
+                            </div>
                         </div>
                         <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                            {% if labels %}
-                                {% for label in labels %}
+                            {% if labels_json %}
+                                {% for label in labels_json %}
                                 <div class="d-flex align-items-center mb-2 label-item" 
                                      data-label-id="{{ label.id }}"
                                      data-label-name="{{ label.name }}"
@@ -108,7 +116,7 @@
                                     <div class="label-color-indicator me-2" 
                                          style="width: 12px; height: 12px; background-color: {{ label.color or '#007bff' }}; border-radius: 2px;"></div>
                                     <span class="flex-grow-1">{{ label.name }}</span>
-                                    <small class="text-muted">{{ label.text_annotations|length if label.text_annotations else 0 }}</small>
+                                    <small class="text-muted">0</small>
                                 </div>
                                 {% endfor %}
                             {% else %}
@@ -124,44 +132,15 @@
                     <div class="card">
                         <div class="card-header">
                             <h6 class="mb-0">
-                                <i class="bi bi-list-check"></i> Annotazioni ({{ annotations|length }})
+                                <i class="bi bi-list-check"></i> Annotazioni (0)
                             </h6>
                         </div>
-                        <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
-                            {% if annotations %}
-                                {% for annotation in annotations %}
-                                <div class="annotation-item p-2 border-bottom" 
-                                     data-annotation-id="{{ annotation.id }}"
-                                     data-start="{{ annotation.start_position }}"
-                                     data-end="{{ annotation.end_position }}">
-                                    <div class="d-flex align-items-start">
-                                        <div class="label-color-indicator me-2 mt-1" 
-                                             style="width: 8px; height: 8px; background-color: {{ annotation.label.color or '#007bff' }}; border-radius: 50%;"></div>
-                                        <div class="flex-grow-1">
-                                            <div class="fw-bold small">{{ annotation.label.name }}</div>
-                                            <div class="text-truncate small text-muted" style="max-width: 200px;">
-                                                "{{ annotation.text_preview }}"
-                                            </div>
-                                            <div class="small text-muted">
-                                                {{ annotation.user.username }} - {{ annotation.created_at.strftime('%d/%m %H:%M') }}
-                                            </div>
-                                        </div>
-                                        {% if current_user.is_admin or annotation.user_id == current_user.id %}
-                                        <button class="btn btn-sm btn-outline-danger delete-annotation" 
-                                                data-annotation-id="{{ annotation.id }}" title="Elimina">
-                                            <i class="bi bi-trash" style="font-size: 0.7rem;"></i>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="p-3 text-center text-muted">
-                                    <i class="bi bi-info-circle"></i><br>
-                                    Nessuna annotazione presente.<br>
-                                    Seleziona del testo per iniziare.
-                                </div>
-                            {% endif %}
+                        <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;" id="annotationsList">
+                            <div class="p-3 text-center text-muted">
+                                <i class="bi bi-info-circle"></i><br>
+                                Nessuna annotazione presente.<br>
+                                Seleziona del testo per iniziare.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -190,7 +169,7 @@
                     <label for="labelSelect" class="form-label">Seleziona Etichetta:</label>
                     <select class="form-select" id="labelSelect" required>
                         <option value="">-- Seleziona un'etichetta --</option>
-                        {% for label in labels %}
+                        {% for label in labels_json %}
                         <option value="{{ label.id }}" data-color="{{ label.color or '#007bff' }}">
                             {{ label.name }}
                         </option>
@@ -238,13 +217,20 @@
 <script src="{{ url_for('static', filename='js/text_annotation.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Variabili utente globali
+    window.currentUserId = {{ current_user.id }};
+    window.currentUserName = "{{ current_user.username }}";
+    
     // Inizializza il sistema di annotazione
     const annotationSystem = new TextAnnotationSystem({
         documentId: {{ document.id }},
         containerId: 'documentContent',
-        annotations: {{ annotations|tojson }},
-        labels: {{ labels|tojson }}
+        annotations: {{ annotations_json|tojson }},
+        labels: {{ labels_json|tojson }}
     });
+    
+    // Esponi globalmente per l'accesso dai modal
+    window.annotationSystem = annotationSystem;
     
     // Gestione eliminazione annotazioni
     document.querySelectorAll('.delete-annotation').forEach(btn => {
@@ -264,6 +250,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cancella selezione
     document.getElementById('clearSelection').addEventListener('click', function() {
         annotationSystem.clearSelection();
+    });
+    
+    // Ricarica etichette
+    document.getElementById('reloadLabels').addEventListener('click', async function() {
+        const button = this;
+        const icon = button.querySelector('i');
+        
+        // Animazione loading
+        icon.className = 'bi bi-arrow-clockwise spin';
+        button.disabled = true;
+        
+        const success = await annotationSystem.reloadLabels();
+        
+        // Reset animazione
+        icon.className = 'bi bi-arrow-clockwise';
+        button.disabled = false;
+        
+        if (success) {
+            annotationSystem.showToast('Etichette ricaricate con successo', 'success');
+        } else {
+            annotationSystem.showToast('Errore nel ricaricamento delle etichette', 'error');
+        }
+    });
+    
+    // Auto-reload quando la finestra riceve focus (utile quando si apre "Crea etichetta" in nuova tab)
+    window.addEventListener('focus', async function() {
+        await annotationSystem.reloadLabels();
     });
 });
 </script>

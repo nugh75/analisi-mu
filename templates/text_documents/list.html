@@ -145,13 +145,13 @@
                                     <td>
                                         <div class="btn-group" role="group">
                                             <!-- Visualizza/Etichetta -->
-                                            <a href="{{ url_for('text_documents.view', document_id=document.id) }}" 
+                                            <a href="{{ url_for('text_documents.annotate', document_id=document.id) }}" 
                                                class="btn btn-sm btn-outline-primary" title="Etichetta">
                                                 <i class="bi bi-tags"></i>
                                             </a>
                                             
                                             <!-- Gestisci Annotazioni -->
-                                            <a href="{{ url_for('text_documents.manage_annotations', document_id=document.id) }}" 
+                                            <a href="{{ url_for('text_documents.annotations', document_id=document.id) }}" 
                                                class="btn btn-sm btn-outline-info" title="Gestisci Annotazioni">
                                                 <i class="bi bi-list-check"></i>
                                             </a>

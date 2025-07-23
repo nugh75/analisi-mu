@@ -187,57 +187,10 @@
                     <!-- Paginazione -->
                     {% if annotations.pages > 1 %}
                     <div class="card-footer">
-                        <nav aria-label="Paginazione annotazioni">
-                            <ul class="pagination justify-content-center mb-0">
-                                {% if annotations.has_prev %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('text_documents.manage_annotations', 
-                                            page=annotations.prev_num, 
-                                            document_id=current_document,
-                                            label_id=current_label,
-                                            user_id=current_user_filter) }}">
-                                            Precedente
-                                        </a>
-                                    </li>
-                                {% endif %}
-                                
-                                {% for page_num in annotations.iter_pages() %}
-                                    {% if page_num %}
-                                        {% if page_num != annotations.page %}
-                                            <li class="page-item">
-                                                <a class="page-link" href="{{ url_for('text_documents.manage_annotations', 
-                                                    page=page_num,
-                                                    document_id=current_document,
-                                                    label_id=current_label,
-                                                    user_id=current_user_filter) }}">
-                                                    {{ page_num }}
-                                                </a>
-                                            </li>
-                                        {% else %}
-                                            <li class="page-item active">
-                                                <span class="page-link">{{ page_num }}</span>
-                                            </li>
-                                        {% endif %}
-                                    {% else %}
-                                        <li class="page-item disabled">
-                                            <span class="page-link">...</span>
-                                        </li>
-                                    {% endif %}
-                                {% endfor %}
-                                
-                                {% if annotations.has_next %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('text_documents.manage_annotations', 
-                                            page=annotations.next_num,
-                                            document_id=current_document,
-                                            label_id=current_label,
-                                            user_id=current_user_filter) }}">
-                                            Successivo
-                                        </a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                        </nav>
+                        <!-- Paginazione rimossa per ora - da implementare se necessario -->
+                        <div class="text-center">
+                            <small class="text-muted">Mostra tutte le annotazioni del documento</small>
+                        </div>
                     </div>
                     {% endif %}
 

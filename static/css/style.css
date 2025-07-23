@@ -11,6 +11,16 @@
     --dark-color: #343a40;
 }
 
+/* Animazioni */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
 /* Layout generale */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;

@@ -112,17 +112,16 @@ def upload_ajax():
         # Step 4: Salvataggio nel database
         current_app.logger.info(f"Salvataggio nel database: {len(content)} caratteri")
         new_document = TextDocument(
-            filename=filename,  # Nome file sul server
-            original_name=original_filename,  # Nome originale
-            content=content,
-            document_type=document_type,
+            filename=original_filename,
+            stored_filename=filename,
+            file_path=file_path,
             file_format=file_format,
-            user_id=current_user.id  # Corretto nome campo
+            document_type=document_type,
+            content=content,
+            file_size=file_size,
+            uploaded_by=current_user.id,
+            upload_date=datetime.utcnow()
         )
-        
-        # Aggiorna statistiche
-        new_document.word_count = len(content.split()) if content else 0
-        new_document.character_count = len(content) if content else 0
         
         db.session.add(new_document)
         db.session.commit()
@@ -173,13 +172,13 @@ def list_documents():
     
     if search:
         search_term = f"%{search}%"
-        query = query.filter(TextDocument.original_name.ilike(search_term))
+        query = query.filter(TextDocument.filename.ilike(search_term))
     
     # Se non admin, mostra solo i propri documenti
     if not current_user.is_admin:
-        query = query.filter_by(user_id=current_user.id)
+        query = query.filter_by(uploaded_by=current_user.id)
     
-    documents = query.order_by(TextDocument.created_at.desc()).paginate(
+    documents = query.order_by(TextDocument.upload_date.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     
@@ -187,7 +186,7 @@ def list_documents():
     if current_user.is_admin:
         total_query = TextDocument.query
     else:
-        total_query = TextDocument.query.filter_by(user_id=current_user.id)
+        total_query = TextDocument.query.filter_by(uploaded_by=current_user.id)
     
     stats = {
         'total': total_query.count(),
@@ -209,19 +208,16 @@ def annotate(document_id):
     document = TextDocument.query.get_or_404(document_id)
     
     # Verifica permessi
-    if not current_user.is_admin and document.user_id != current_user.id:
+    if not current_user.is_admin and document.uploaded_by != current_user.id:
         flash('Non hai i permessi per visualizzare questo documento', 'error')
         return redirect(url_for('text_documents.list_documents'))
     
     # Carica etichette disponibili
     labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
     
-    # Carica annotazioni esistenti con dettagli utente e etichetta
-    annotations = db.session.query(TextAnnotation)\
-                           .options(db.joinedload(TextAnnotation.user))\
-                           .options(db.joinedload(TextAnnotation.label))\
-                           .filter(TextAnnotation.document_id == document_id)\
-                           .order_by(TextAnnotation.start_position).all()
+    # Carica annotazioni esistenti
+    annotations = TextAnnotation.query.filter_by(document_id=document_id)\
+                                    .order_by(TextAnnotation.start_position).all()
     
     # Statistiche documento
     stats = {
@@ -236,38 +232,10 @@ def annotate(document_id):
         annotated_chars = sum(ann.end_position - ann.start_position for ann in annotations)
         stats['coverage_percentage'] = min(100, (annotated_chars / len(document.content)) * 100)
     
-    # Converti labels e annotations in formato JSON-serializzabile
-    labels_json = [
-        {
-            'id': label.id,
-            'name': label.name,
-            'description': label.description,
-            'category': label.category,
-            'color': label.color
-        }
-        for label in labels
-    ]
-    
-    annotations_json = [
-        {
-            'id': ann.id,
-            'start_position': ann.start_position,
-            'end_position': ann.end_position,
-            'text_selection': ann.text_selection,
-            'label_id': ann.label_id,
-            'label_name': ann.label.name if ann.label else f'Etichetta {ann.label_id}',
-            'label_color': ann.label.color if ann.label else '#007bff',
-            'user_id': ann.user_id,
-            'user_name': ann.user.username if ann.user else 'Utente sconosciuto',
-            'created_at': ann.created_at.strftime('%d/%m/%Y %H:%M') if ann.created_at else ''
-        }
-        for ann in annotations
-    ]
-    
     return render_template('text_documents/annotate.html',
                          document=document,
-                         labels_json=labels_json,
-                         annotations_json=annotations_json,
+                         labels=labels,
+                         annotations=annotations,
                          stats=stats)
 
 @text_documents_bp.route('/api/annotate', methods=['POST'])
@@ -296,7 +264,7 @@ def api_annotate():
             return jsonify({'success': False, 'message': 'Documento non trovato'}), 404
         
         # Verifica permessi
-        if not current_user.is_admin and document.user_id != current_user.id:
+        if not current_user.is_admin and document.uploaded_by != current_user.id:
             return jsonify({'success': False, 'message': 'Permessi insufficienti'}), 403
         
         # Verifica etichetta
@@ -304,7 +272,18 @@ def api_annotate():
         if not label or not label.is_active:
             return jsonify({'success': False, 'message': 'Etichetta non valida'}), 400
         
-
+        # Verifica sovrapposizioni
+        overlapping = TextAnnotation.query.filter(
+            TextAnnotation.document_id == document_id,
+            TextAnnotation.start_position < end_position,
+            TextAnnotation.end_position > start_position
+        ).first()
+        
+        if overlapping:
+            return jsonify({
+                'success': False, 
+                'message': 'Sovrapposizione con annotazione esistente'
+            }), 400
         
         # Crea annotazione
         annotation = TextAnnotation(
@@ -329,8 +308,6 @@ def api_annotate():
                 'label_name': label.name,
                 'label_color': label.color,
                 'text_selection': annotation.text_selection,
-                'user_id': annotation.user_id,
-                'user_name': current_user.username,
                 'created_at': annotation.created_at.strftime('%d/%m/%Y %H:%M')
             }
         })
@@ -340,6 +317,27 @@ def api_annotate():
         current_app.logger.error(f"Errore nella creazione annotazione: {str(e)}")
         return jsonify({'success': False, 'message': 'Errore interno del server'}), 500
 
+@text_documents_bp.route('/api/annotations/<int:annotation_id>', methods=['DELETE'])
+@login_required
+def api_delete_annotation(annotation_id):
+    """API per eliminare un'annotazione"""
+    try:
+        annotation = TextAnnotation.query.get_or_404(annotation_id)
+        
+        # Verifica permessi
+        if not current_user.is_admin and annotation.user_id != current_user.id:
+            return jsonify({'success': False, 'message': 'Permessi insufficienti'}), 403
+        
+        db.session.delete(annotation)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Annotazione eliminata con successo'})
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Errore nell'eliminazione annotazione: {str(e)}")
+        return jsonify({'success': False, 'message': 'Errore interno del server'}), 500
+
 @text_documents_bp.route('/annotations/<int:document_id>')
 @login_required
 def annotations(document_id):
@@ -347,39 +345,20 @@ def annotations(document_id):
     document = TextDocument.query.get_or_404(document_id)
     
     # Verifica permessi
-    if not current_user.is_admin and document.user_id != current_user.id:
+    if not current_user.is_admin and document.uploaded_by != current_user.id:
         flash('Non hai i permessi per visualizzare questo documento', 'error')
         return redirect(url_for('text_documents.list_documents'))
     
-    # Carica annotazioni con dettagli utente e etichetta
-    annotations = db.session.query(TextAnnotation)\
-                           .options(db.joinedload(TextAnnotation.label))\
-                           .options(db.joinedload(TextAnnotation.user))\
+    # Carica annotazioni con dettagli
+    annotations = db.session.query(TextAnnotation, Label)\
+                           .join(Label, TextAnnotation.label_id == Label.id)\
                            .filter(TextAnnotation.document_id == document_id)\
                            .order_by(TextAnnotation.start_position)\
                            .all()
     
-    # Carica tutte le etichette per statistiche
-    labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
-    
-    # Statistiche
-    stats = {
-        'total_annotations': len(annotations),
-        'unique_labels': len(set(ann.label_id for ann in annotations)),
-        'annotators': len(set(ann.user_id for ann in annotations)),
-        'coverage_percentage': 0
-    }
-    
-    # Calcola copertura
-    if document.content and len(document.content) > 0:
-        annotated_chars = sum(ann.end_position - ann.start_position for ann in annotations)
-        stats['coverage_percentage'] = min(100, (annotated_chars / len(document.content)) * 100)
-    
-    return render_template('text_documents/document_annotations.html',
+    return render_template('text_documents/annotations.html',
                          document=document,
-                         annotations=annotations,
-                         labels=labels,
-                         stats=stats)
+                         annotations=annotations)
 
 @text_documents_bp.route('/delete/<int:document_id>', methods=['POST'])
 @login_required
@@ -388,13 +367,14 @@ def delete_document(document_id):
     document = TextDocument.query.get_or_404(document_id)
     
     # Verifica permessi
-    if not current_user.is_admin and document.user_id != current_user.id:
+    if not current_user.is_admin and document.uploaded_by != current_user.id:
         flash('Non hai i permessi per eliminare questo documento', 'error')
         return redirect(url_for('text_documents.list_documents'))
     
     try:
-        # I file sono salvati nel filesystem ma non tracciamo il path nel DB
-        # TODO: Implementare tracciamento path se necessario
+        # Elimina file fisico
+        if document.file_path and os.path.exists(document.file_path):
+            os.remove(document.file_path)
         
         # Elimina annotazioni associate
         TextAnnotation.query.filter_by(document_id=document_id).delete()
@@ -411,80 +391,3 @@ def delete_document(document_id):
         flash('Errore nell\'eliminazione del documento', 'error')
     
     return redirect(url_for('text_documents.list_documents'))
-
-@text_documents_bp.route('/api/labels')
-@login_required
-def api_get_labels():
-    """API per ottenere le etichette disponibili"""
-    labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
-    return jsonify({
-        'success': True,
-        'labels': [
-            {
-                'id': label.id,
-                'name': label.name,
-                'color': label.color,
-                'description': label.description
-            }
-            for label in labels
-        ]
-    })
-
-@text_documents_bp.route('/api/annotations/<int:annotation_id>', methods=['PUT'])
-@login_required
-def api_update_annotation(annotation_id):
-    """API per modificare un'annotazione"""
-    try:
-        annotation = TextAnnotation.query.get_or_404(annotation_id)
-        
-        # Verifica permessi
-        if not current_user.is_admin and annotation.user_id != current_user.id:
-            return jsonify({'success': False, 'message': 'Non hai i permessi per modificare questa annotazione'}), 403
-        
-        data = request.get_json()
-        
-        # Aggiorna l'annotazione
-        if 'label_id' in data:
-            label = Label.query.get(data['label_id'])
-            if not label:
-                return jsonify({'success': False, 'message': 'Etichetta non valida'}), 400
-            annotation.label_id = data['label_id']
-        
-        if 'note' in data:
-            annotation.note = data['note'].strip() if data['note'] else None
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Annotazione aggiornata con successo'
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"Errore aggiornamento annotazione: {str(e)}")
-        db.session.rollback()
-        return jsonify({'success': False, 'message': 'Errore interno del server'}), 500
-
-@text_documents_bp.route('/api/annotations/<int:annotation_id>', methods=['DELETE'])
-@login_required
-def api_delete_annotation(annotation_id):
-    """API per eliminare un'annotazione"""
-    try:
-        annotation = TextAnnotation.query.get_or_404(annotation_id)
-        
-        # Verifica permessi
-        if not current_user.is_admin and annotation.user_id != current_user.id:
-            return jsonify({'success': False, 'message': 'Non hai i permessi per eliminare questa annotazione'}), 403
-        
-        db.session.delete(annotation)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Annotazione eliminata con successo'
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"Errore eliminazione annotazione: {str(e)}")
-        db.session.rollback()
-        return jsonify({'success': False, 'message': 'Errore interno del server'}), 500

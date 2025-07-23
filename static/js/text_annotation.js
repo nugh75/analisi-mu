@@ -16,9 +16,18 @@ class TextAnnotationSystem {
     }
     
     init() {
+        // Salva il contenuto originale
+        this.originalContent = this.container.textContent;
+        
         this.setupEventListeners();
         this.renderAnnotations();
         this.setupModals();
+        
+        // Popola la lista compatta delle annotazioni
+        this.rebuildAnnotationsList();
+        
+        // Aggiorna i conteggi iniziali
+        this.updateStats();
     }
     
     setupEventListeners() {
@@ -27,10 +36,25 @@ class TextAnnotationSystem {
             setTimeout(() => this.handleTextSelection(e), 10);
         });
         
+        // Anche per touch devices
+        this.container.addEventListener('touchend', (e) => {
+            setTimeout(() => this.handleTextSelection(e), 10);
+        });
+        
         // Click su annotazioni esistenti
         this.container.addEventListener('click', (e) => {
             if (e.target.classList.contains('annotation-highlight')) {
-                this.showAnnotationDetails(e.target.dataset.annotationId);
+                e.preventDefault();
+                
+                // Gestisci annotazioni multiple
+                if (e.target.dataset.multipleAnnotations) {
+                    const annotationIds = e.target.dataset.multipleAnnotations.split(',').map(id => parseInt(id));
+                    const annotations = this.annotations.filter(a => annotationIds.includes(a.id));
+                    this.showMultipleAnnotationsModal(annotations);
+                } else if (e.target.dataset.annotationId) {
+                    // Annotazione singola
+                    this.showAnnotationDetails(e.target.dataset.annotationId);
+                }
             }
         });
         
@@ -38,6 +62,13 @@ class TextAnnotationSystem {
         this.container.addEventListener('selectstart', (e) => {
             if (e.target.classList.contains('annotation-highlight')) {
                 e.preventDefault();
+            }
+        });
+        
+        // Aggiungi listener per il reset quando si clicca fuori dal container
+        document.addEventListener('click', (e) => {
+            if (!this.container.contains(e.target) && !e.target.closest('.modal')) {
+                this.clearSelection();
             }
         });
     }
@@ -63,13 +94,6 @@ class TextAnnotationSystem {
         
         // Verifica che la selezione sia all'interno del container
         if (!this.container.contains(range.commonAncestorContainer)) {
-            return;
-        }
-        
-        // Verifica che non ci siano annotazioni esistenti nella selezione
-        if (this.hasExistingAnnotations(range)) {
-            this.showToast('Non è possibile annotare testo già etichettato', 'warning');
-            selection.removeAllRanges();
             return;
         }
         
@@ -99,28 +123,6 @@ class TextAnnotationSystem {
         };
         
         this.showAnnotationModal();
-    }
-    
-    hasExistingAnnotations(range) {
-        const walker = document.createTreeWalker(
-            range.commonAncestorContainer,
-            NodeFilter.SHOW_ELEMENT,
-            {
-                acceptNode: (node) => {
-                    return node.classList && node.classList.contains('annotation-highlight') 
-                        ? NodeFilter.FILTER_ACCEPT 
-                        : NodeFilter.FILTER_SKIP;
-                }
-            }
-        );
-        
-        while (walker.nextNode()) {
-            if (range.intersectsNode(walker.currentNode)) {
-                return true;
-            }
-        }
-        
-        return false;
     }
     
     getTextPosition(node, offset) {
@@ -199,7 +201,30 @@ class TextAnnotationSystem {
                 
                 // Aggiorna l'interfaccia
                 this.addAnnotationToList(data.annotation);
-                this.highlightAnnotation(this.selectedRange.range, label, data.annotation.id);
+                
+                // Aggiorna l'array locale delle annotazioni
+                this.annotations.push({
+                    id: data.annotation.id,
+                    start_position: this.selectedRange.start,
+                    end_position: this.selectedRange.end,
+                    text_selection: this.selectedText,
+                    label_id: labelId,
+                    label_name: data.annotation.label_name,
+                    label_color: data.annotation.label_color,
+                    user_id: data.annotation.user_id || window.currentUserId,
+                    user_name: data.annotation.user_name || window.currentUserName,
+                    created_at: data.annotation.created_at
+                });
+
+                // Aggiorna tutte le annotazioni locali con i dati più recenti di etichetta e utente
+                this.updateExistingAnnotationsWithLabels();
+
+                // Ricostruisci il rendering delle annotazioni
+                this.renderAnnotations();
+                // Aggiorna la lista compatta "Annotazione (n)"
+                this.rebuildAnnotationsList();
+                
+                // Pulisci la selezione
                 this.clearSelection();
                 
                 // Aggiorna contatori
@@ -227,66 +252,172 @@ class TextAnnotationSystem {
         };
     }
     
-    highlightAnnotation(range, label, annotationId) {
-        const span = document.createElement('span');
-        span.className = 'annotation-highlight';
-        span.style.backgroundColor = this.hexToRgba(label.color || '#007bff', 0.3);
-        span.style.borderBottom = `2px solid ${label.color || '#007bff'}`;
-        span.style.cursor = 'pointer';
-        span.dataset.annotationId = annotationId;
-        span.title = `${label.name}: ${range.toString().substring(0, 50)}...`;
-        
-        try {
-            range.surroundContents(span);
-        } catch (e) {
-            // Fallback per selezioni complesse
-            const contents = range.extractContents();
-            span.appendChild(contents);
-            range.insertNode(span);
-        }
-    }
-    
     renderAnnotations() {
-        // Ordina annotazioni per posizione
-        const sortedAnnotations = [...this.annotations].sort((a, b) => a.start_position - b.start_position);
-        
-        let offset = 0;
-        const textContent = this.container.textContent;
-        this.container.innerHTML = '';
-        
-        for (let i = 0; i < sortedAnnotations.length; i++) {
-            const annotation = sortedAnnotations[i];
-            const label = this.labels.find(l => l.id === annotation.label_id);
-            
-            // Testo prima dell'annotazione
-            if (annotation.start_position > offset) {
-                const beforeText = textContent.substring(offset, annotation.start_position);
-                this.container.appendChild(document.createTextNode(beforeText));
-            }
-            
-            // Annotazione
-            const span = document.createElement('span');
-            span.className = 'annotation-highlight';
-            span.style.backgroundColor = this.hexToRgba(label?.color || '#007bff', 0.3);
-            span.style.borderBottom = `2px solid ${label?.color || '#007bff'}`;
-            span.style.cursor = 'pointer';
-            span.dataset.annotationId = annotation.id;
-            span.title = `${label?.name || 'Unknown'}: ${annotation.text_selection.substring(0, 50)}...`;
-            span.textContent = annotation.text_selection;
-            
-            this.container.appendChild(span);
-            offset = annotation.end_position;
+        // Salva il contenuto originale se non è già salvato
+        if (!this.originalContent) {
+            this.originalContent = this.container.textContent;
         }
-        
-        // Testo rimanente
-        if (offset < textContent.length) {
-            const remainingText = textContent.substring(offset);
+
+        const textContent = this.originalContent;
+        this.container.innerHTML = '';
+
+        if (this.annotations.length === 0) {
+            this.container.textContent = textContent;
+            return;
+        }
+
+        // Crea eventi per ogni inizio e fine annotazione
+        const events = [];
+        this.annotations.forEach(annotation => {
+            events.push({
+                position: annotation.start_position,
+                type: 'start',
+                annotation: annotation
+            });
+            events.push({
+                position: annotation.end_position,
+                type: 'end',
+                annotation: annotation
+            });
+        });
+
+        // Ordina eventi per posizione
+        events.sort((a, b) => {
+            if (a.position !== b.position) {
+                return a.position - b.position;
+            }
+            // Se alla stessa posizione, prima 'end' poi 'start'
+            return a.type === 'end' ? -1 : 1;
+        });
+
+        let currentPosition = 0;
+        const activeAnnotations = [];
+
+        events.forEach((event, index) => {
+            // Aggiungi testo prima dell'evento (se non sovrapposto)
+            if (event.position > currentPosition) {
+                const segmentText = textContent.substring(currentPosition, event.position);
+                if (activeAnnotations.length === 0) {
+                    // Testo normale
+                    this.container.appendChild(document.createTextNode(segmentText));
+                } else {
+                    // Testo con annotazioni attive
+                    this.createAnnotatedSegment(segmentText, [...activeAnnotations]);
+                }
+                currentPosition = event.position;
+            }
+
+            // Gestisci l'evento
+            if (event.type === 'start') {
+                activeAnnotations.push(event.annotation);
+            } else {
+                const index = activeAnnotations.findIndex(a => a.id === event.annotation.id);
+                if (index > -1) {
+                    activeAnnotations.splice(index, 1);
+                }
+            }
+        });
+
+        // Aggiungi testo rimanente
+        if (currentPosition < textContent.length) {
+            const remainingText = textContent.substring(currentPosition);
             this.container.appendChild(document.createTextNode(remainingText));
         }
+
+        // Assicurati che il container sia selezionabile
+        this.container.style.userSelect = 'text';
+        this.container.style.webkitUserSelect = 'text';
+        this.container.style.mozUserSelect = 'text';
+    }
+
+    createAnnotatedSegment(text, annotations) {
+        const span = document.createElement('span');
+        span.className = 'annotation-highlight';
+        span.textContent = text;
+        span.style.cursor = 'pointer';
+        span.style.position = 'relative';
+
+        if (annotations.length === 1) {
+            // Singola annotazione
+            const annotation = annotations[0];
+            const label = this.labels.find(l => l.id === annotation.label_id);
+            span.style.backgroundColor = this.hexToRgba(label?.color || '#007bff', 0.3);
+            span.style.borderBottom = `2px solid ${label?.color || '#007bff'}`;
+            span.dataset.annotationId = annotation.id;
+            span.title = `${label?.name || 'Unknown'}: ${annotation.text_selection?.substring(0, 50) || text.substring(0, 50)}...`;
+        } else {
+            // Annotazioni multiple - crea stile sovrapposto
+            span.style.background = this.createMultipleAnnotationBackground(annotations);
+            span.style.borderBottom = `3px double #333`;
+            span.dataset.multipleAnnotations = annotations.map(a => a.id).join(',');
+            
+            const labelNames = annotations.map(a => {
+                const label = this.labels.find(l => l.id === a.label_id);
+                return label?.name || 'Unknown';
+            });
+            span.title = `Multiple Labels: ${labelNames.join(', ')}`;
+            
+            // Aggiungi listener per click su annotazioni multiple
+            span.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showMultipleAnnotationsModal(annotations);
+            });
+        }
+
+        this.container.appendChild(span);
+    }
+
+    createMultipleAnnotationBackground(annotations) {
+        // Crea un gradiente con i colori delle diverse annotazioni
+        const colors = annotations.map(annotation => {
+            const label = this.labels.find(l => l.id === annotation.label_id);
+            return this.hexToRgba(label?.color || '#007bff', 0.4);
+        });
+        
+        if (colors.length === 2) {
+            return `linear-gradient(90deg, ${colors[0]} 50%, ${colors[1]} 50%)`;
+        } else if (colors.length === 3) {
+            return `linear-gradient(90deg, ${colors[0]} 33%, ${colors[1]} 33%, ${colors[1]} 66%, ${colors[2]} 66%)`;
+        } else {
+            // Per più di 3 colori, usa strisce
+            const percentage = 100 / colors.length;
+            let gradient = 'linear-gradient(90deg, ';
+            colors.forEach((color, index) => {
+                const start = index * percentage;
+                const end = (index + 1) * percentage;
+                gradient += `${color} ${start}%, ${color} ${end}%`;
+                if (index < colors.length - 1) gradient += ', ';
+            });
+            gradient += ')';
+            return gradient;
+        }
+    }
+
+    showMultipleAnnotationsModal(annotations) {
+        // Crea e mostra un modal per gestire annotazioni multiple
+        let modalContent = '<div class="mb-3"><h6>Annotazioni Multiple:</h6><ul>';
+        annotations.forEach(annotation => {
+            const label = this.labels.find(l => l.id === annotation.label_id);
+            modalContent += `
+                <li class="mb-2">
+                    <span class="badge" style="background-color: ${label?.color || '#007bff'}">
+                        ${label?.name || 'Unknown'}
+                    </span>
+                    <br><small class="text-muted">"${annotation.text_selection?.substring(0, 100) || ''}..."</small>
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="annotationSystem.deleteAnnotation(${annotation.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </li>
+            `;
+        });
+        modalContent += '</ul></div>';
+        
+        document.getElementById('annotationDetailsContent').innerHTML = modalContent;
+        this.detailsModal.show();
     }
     
     addAnnotationToList(annotation) {
-        const annotationsList = document.querySelector('.card-body[style*="max-height: 400px"]');
+        const annotationsList = document.getElementById('annotationsList');
         
         // Se la lista era vuota, rimuovi il messaggio placeholder
         const placeholder = annotationsList.querySelector('.text-center.text-muted');
@@ -300,17 +431,31 @@ class TextAnnotationSystem {
         
         const label = this.labels.find(l => l.id == annotation.label_id);
         
+        // Usa i dati dal server se disponibili, altrimenti cerca nei labels locali
+        const labelName = annotation.label_name || (label ? label.name : `Etichetta ${annotation.label_id}`);
+        const labelColor = annotation.label_color || (label ? label.color : '#007bff');
+        
+        // Determina il nome utente da mostrare
+        let userDisplayName = 'Utente sconosciuto';
+        if (annotation.user_id && annotation.user_id == window.currentUserId) {
+            userDisplayName = window.currentUserName || 'Tu';
+        } else if (annotation.user_name) {
+            userDisplayName = annotation.user_name;
+        } else if (annotation.user_id == window.currentUserId) {
+            userDisplayName = 'Tu';
+        }
+        
         annotationItem.innerHTML = `
             <div class="d-flex align-items-start">
                 <div class="label-color-indicator me-2 mt-1" 
-                     style="width: 8px; height: 8px; background-color: ${label?.color || '#007bff'}; border-radius: 50%;"></div>
+                     style="width: 8px; height: 8px; background-color: ${labelColor}; border-radius: 50%;"></div>
                 <div class="flex-grow-1">
-                    <div class="fw-bold small">${annotation.label_name}</div>
+                    <div class="fw-bold small">${labelName}</div>
                     <div class="text-truncate small text-muted" style="max-width: 200px;">
-                        "${annotation.text_preview}"
+                        "${annotation.text_selection?.substring(0, 50) || 'Testo selezionato'}..."
                     </div>
                     <div class="small text-muted">
-                        ${window.currentUserName || 'Tu'} - ${annotation.created_at}
+                        ${userDisplayName} - ${annotation.created_at || 'Adesso'}
                     </div>
                 </div>
                 <button class="btn btn-sm btn-outline-danger delete-annotation" 
@@ -343,30 +488,39 @@ class TextAnnotationSystem {
             if (data.success) {
                 this.showToast(data.message, 'success');
                 
-                // Rimuovi dall'interfaccia
-                const annotationElement = document.querySelector(`[data-annotation-id="${annotationId}"]`);
-                if (annotationElement) {
-                    if (annotationElement.classList.contains('annotation-highlight')) {
-                        // Sostituisci con testo normale
-                        const textNode = document.createTextNode(annotationElement.textContent);
-                        annotationElement.parentNode.replaceChild(textNode, annotationElement);
-                    } else {
-                        // Rimuovi dalla lista
-                        annotationElement.remove();
-                    }
+                // Rimuovi dall'array locale
+                this.annotations = this.annotations.filter(a => a.id != annotationId);
+                
+                // Ricostruisci il rendering
+                this.renderAnnotations();
+                
+                // Rimuovi dalla lista delle annotazioni
+                const listItem = document.querySelector(`.annotation-item[data-annotation-id="${annotationId}"]`);
+                if (listItem) {
+                    listItem.remove();
                 }
                 
                 // Aggiorna contatori
                 this.updateStats();
                 
-                // Rimuovi dall'array locale
-                this.annotations = this.annotations.filter(a => a.id != annotationId);
+                // Se non ci sono più annotazioni, mostra il messaggio placeholder
+                const annotationsList = document.getElementById('annotationsList');
+                if (annotationsList && annotationsList.children.length === 0) {
+                    annotationsList.innerHTML = `
+                        <div class="p-3 text-center text-muted">
+                            <i class="bi bi-info-circle"></i><br>
+                            Nessuna annotazione presente.<br>
+                            Seleziona del testo per iniziare.
+                        </div>
+                    `;
+                }
                 
             } else {
                 this.showToast('Errore: ' + data.message, 'error');
             }
         })
         .catch(error => {
+            console.error('Errore eliminazione annotazione:', error);
             this.showToast('Errore di connessione: ' + error.message, 'error');
         });
     }
@@ -459,18 +613,47 @@ class TextAnnotationSystem {
     }
     
     clearSelection() {
-        window.getSelection().removeAllRanges();
+        // Rimuovi tutte le selezioni
+        if (window.getSelection) {
+            window.getSelection().removeAllRanges();
+        } else if (document.selection) {
+            document.selection.empty();
+        }
+        
+        // Reset variabili interne
         this.selectedText = null;
         this.selectedRange = null;
+        
+        // Chiudi eventuali modali aperti
+        if (this.annotationModal) {
+            this.annotationModal.hide();
+        }
     }
     
     updateStats() {
         // Aggiorna i contatori nell'interfaccia
-        const annotationsCount = document.querySelectorAll('.annotation-highlight').length;
-        const statsElement = document.querySelector('.col-md-3:nth-child(3) strong');
-        if (statsElement && statsElement.textContent === 'Annotazioni:') {
-            statsElement.nextSibling.textContent = ` ${annotationsCount}`;
+        const annotationsCount = this.annotations.length;
+        
+        // Trova l'elemento delle statistiche nelle info del documento
+        const statsElements = document.querySelectorAll('.card-body .row .col-md-3');
+        statsElements.forEach(element => {
+            const strongElement = element.querySelector('strong');
+            if (strongElement && strongElement.textContent.includes('Annotazioni:')) {
+                // Aggiorna il conteggio delle annotazioni
+                element.innerHTML = `<strong>Annotazioni:</strong> ${annotationsCount}`;
+            }
+        });
+        
+        // Aggiorna anche il titolo della sezione annotazioni
+        const annotationsTitle = document.querySelector('.card-header h6');
+        if (annotationsTitle && annotationsTitle.textContent.includes('Annotazioni')) {
+            annotationsTitle.innerHTML = `
+                <i class="bi bi-list-check"></i> Annotazioni (${annotationsCount})
+            `;
         }
+        
+        // Aggiorna la sidebar delle etichette con i nuovi conteggi
+        this.updateLabelsSidebar();
     }
     
     hexToRgba(hex, alpha) {
@@ -502,5 +685,165 @@ class TextAnnotationSystem {
                 toast.remove();
             }
         }, 5000);
+    }
+    
+    /**
+     * Ricarica le etichette disponibili dal server
+     */
+    async reloadLabels() {
+        try {
+            const response = await fetch('/text-documents/api/labels', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Aggiorna l'array delle etichette
+                this.labels = data.labels;
+                
+                // Aggiorna le annotazioni esistenti con i nuovi dati delle etichette
+                this.updateExistingAnnotationsWithLabels();
+                
+                // Aggiorna la select del modal
+                this.updateLabelSelect();
+                
+                // Aggiorna la lista delle etichette disponibili nella sidebar
+                this.updateLabelsSidebar();
+                
+                // Ricostruisci la lista delle annotazioni per mostrare i nomi corretti
+                this.rebuildAnnotationsList();
+                
+                return true;
+            } else {
+                console.error('Errore nel caricamento etichette:', data.message);
+                return false;
+            }
+        } catch (error) {
+            console.error('Errore di rete nel caricamento etichette:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Aggiorna le annotazioni esistenti con i nuovi dati delle etichette
+     */
+    updateExistingAnnotationsWithLabels() {
+        this.annotations.forEach(annotation => {
+            const label = this.labels.find(l => l.id == annotation.label_id);
+            if (label) {
+                annotation.label_name = label.name;
+                annotation.label_color = label.color;
+            }
+            
+            // Assicurati che ci siano dati utente di base
+            if (!annotation.user_name && annotation.user_id == window.currentUserId) {
+                annotation.user_name = window.currentUserName || 'Tu';
+            }
+            if (!annotation.user_name && annotation.user_id) {
+                annotation.user_name = `Utente ${annotation.user_id}`;
+            }
+        });
+    }
+    
+    /**
+     * Ricostruisce completamente la lista delle annotazioni
+     */
+    rebuildAnnotationsList() {
+        const annotationsList = document.getElementById('annotationsList');
+        if (!annotationsList) return;
+        
+        // Svuota la lista
+        annotationsList.innerHTML = '';
+        
+        // Ricostruisci ogni annotazione con i dati aggiornati
+        this.annotations.forEach(annotation => {
+            this.addAnnotationToList(annotation);
+        });
+    }
+    
+    /**
+     * Aggiorna la select delle etichette nel modal
+     */
+    updateLabelSelect() {
+        const labelSelect = document.getElementById('labelSelect');
+        if (!labelSelect) return;
+        
+        // Mantieni il valore attualmente selezionato
+        const currentValue = labelSelect.value;
+        
+        // Svuota e ricompila
+        labelSelect.innerHTML = '<option value="">-- Seleziona un\'etichetta --</option>';
+        
+        this.labels.forEach(label => {
+            const option = document.createElement('option');
+            option.value = label.id;
+            option.textContent = label.name;
+            option.dataset.color = label.color || '#007bff';
+            labelSelect.appendChild(option);
+        });
+        
+        // Ripristina la selezione se ancora valida
+        if (currentValue && this.labels.find(l => l.id == currentValue)) {
+            labelSelect.value = currentValue;
+        }
+    }
+    
+    /**
+     * Aggiorna la lista delle etichette nella sidebar
+     */
+    updateLabelsSidebar() {
+        const labelsContainer = document.querySelector('.card-body[style*="max-height: 300px"]');
+        if (!labelsContainer) return;
+        
+        if (this.labels.length === 0) {
+            labelsContainer.innerHTML = `
+                <p class="text-muted small">Nessuna etichetta disponibile.</p>
+                <a href="/labels/create" class="btn btn-sm btn-outline-primary">
+                    Crea Etichette
+                </a>
+            `;
+            return;
+        }
+        
+        // Calcola il conteggio delle etichette usate
+        const labelCounts = this.calculateLabelCounts();
+        
+        labelsContainer.innerHTML = '';
+        
+        this.labels.forEach(label => {
+            const count = labelCounts[label.id] || 0;
+            
+            const labelItem = document.createElement('div');
+            labelItem.className = 'd-flex align-items-center mb-2 label-item';
+            labelItem.dataset.labelId = label.id;
+            labelItem.dataset.labelName = label.name;
+            labelItem.dataset.labelColor = label.color || '#007bff';
+            
+            labelItem.innerHTML = `
+                <div class="label-color-indicator me-2" 
+                     style="width: 12px; height: 12px; background-color: ${label.color || '#007bff'}; border-radius: 2px;"></div>
+                <span class="flex-grow-1">${label.name}</span>
+                <small class="text-muted">${count}</small>
+            `;
+            
+            labelsContainer.appendChild(labelItem);
+        });
+    }
+    
+    /**
+     * Calcola quante volte ogni etichetta è stata usata
+     */
+    calculateLabelCounts() {
+        const counts = {};
+        this.annotations.forEach(annotation => {
+            const labelId = annotation.label_id;
+            counts[labelId] = (counts[labelId] || 0) + 1;
+        });
+        return counts;
     }
 }
