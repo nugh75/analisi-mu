@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Nuovo Post - {{ category.name }} - Anatema{% endblock %}
+{% block title %}Nuovo Post{% if excel_file %} - {{ excel_file.original_filename }}{% else %} - {{ category.name }}{% endif %} - Anatema{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -12,17 +12,30 @@
                     <h2 class="mb-1">
                         <i class="bi bi-plus-circle me-2"></i>Nuovo Post
                     </h2>
+                    {% if direct_mode and excel_file %}
+                    <p class="text-muted mb-0">
+                        Nel forum di: <strong>{{ excel_file.original_filename }}</strong>
+                    </p>
+                    {% else %}
                     <p class="text-muted mb-0">
                         Categoria: 
                         <i class="{{ category.icon }} text-{{ category.color }} me-1"></i>
                         {{ category.name }}
                     </p>
+                    {% endif %}
                 </div>
                 <div>
+                    {% if direct_mode and excel_file %}
+                    <a href="{{ url_for('forum.file_forum', file_id=excel_file.id) }}" 
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Torna al Forum
+                    </a>
+                    {% else %}
                     <a href="{{ url_for('forum.category', category_id=category.id) }}" 
                        class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-left me-1"></i>Annulla
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

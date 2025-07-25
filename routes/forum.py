@@ -51,6 +51,9 @@ def file_forum(file_id):
                                        .order_by(ForumCategory.is_system.desc(), ForumCategory.created_at)\
                                        .all()
     
+    # Trova la categoria generale per i post diretti
+    general_category = next((cat for cat in categories if cat.name.startswith("💬")), categories[0] if categories else None)
+    
     # Statistiche generali
     total_posts = db.session.query(func.count(ForumPost.id))\
                            .join(ForumCategory)\
@@ -63,17 +66,26 @@ def file_forum(file_id):
                               .filter(ForumCategory.excel_file_id == file_id)\
                               .scalar() or 0
     
-    # Ultimi post
+    # Ultimi post (tutti i post, non divisi per categoria)
     recent_posts = db.session.query(ForumPost)\
                             .join(ForumCategory)\
                             .filter(ForumCategory.excel_file_id == file_id)\
                             .order_by(ForumPost.created_at.desc())\
-                            .limit(5)\
+                            .limit(10)\
                             .all()
+    
+    # Prepara statistiche per le categorie
+    categories_with_stats = []
+    for category in categories:
+        post_count = len(category.posts)
+        last_activity = category.posts[0].created_at if category.posts else None
+        categories_with_stats.append((category, post_count, last_activity))
     
     return render_template('forum/file_forum.html', 
                          excel_file=excel_file,
                          categories=categories,
+                         categories_with_stats=categories_with_stats,
+                         general_category=general_category,
                          total_posts=total_posts,
                          total_comments=total_comments,
                          recent_posts=recent_posts)
@@ -139,6 +151,68 @@ def create_post(category_id):
         return redirect(url_for('forum.view_post', post_id=post.id))
     
     return render_template('forum/create_post.html', category=category)
+
+@forum_bp.route('/file/<int:file_id>/create_post', methods=['GET', 'POST'])
+@login_required
+def create_post_direct(file_id):
+    """Crea un nuovo post direttamente nel file, senza scegliere categoria"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    
+    # Trova o crea la categoria generale
+    general_category = ForumCategory.query.filter_by(
+        excel_file_id=file_id,
+        name="💬 Discussioni"
+    ).first()
+    
+    if not general_category:
+        create_general_category(file_id)
+        general_category = ForumCategory.query.filter_by(
+            excel_file_id=file_id,
+            name="💬 Discussioni"
+        ).first()
+    
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        content = request.form.get('content', '').strip()
+        
+        if not title or not content:
+            flash('Titolo e contenuto sono obbligatori', 'error')
+            return redirect(url_for('forum.create_post_direct', file_id=file_id))
+        
+        # Crea il post nella categoria generale
+        post = ForumPost(
+            title=title,
+            content=content,
+            category_id=general_category.id,
+            author_id=current_user.id
+        )
+        
+        db.session.add(post)
+        db.session.commit()
+        
+        flash('Post creato con successo!', 'success')
+        return redirect(url_for('forum.view_post', post_id=post.id))
+    
+    return render_template('forum/create_post.html', 
+                         category=general_category, 
+                         excel_file=excel_file,
+                         direct_mode=True)
+
+@forum_bp.route('/file/<int:file_id>/regenerate_categories', methods=['POST'])
+@login_required
+def regenerate_categories(file_id):
+    """Rigenera le categorie per un file Excel"""
+    excel_file = ExcelFile.query.get_or_404(file_id)
+    
+    # Elimina le categorie esistenti di sistema (non quelle create dall'utente)
+    ForumCategory.query.filter_by(excel_file_id=file_id, is_system=True).delete()
+    db.session.commit()
+    
+    # Ricrea le categorie predefinite
+    create_default_categories(file_id)
+    
+    flash(f'Categorie rigenerate con successo per il file {excel_file.original_filename}!', 'success')
+    return redirect(url_for('forum.file_forum', file_id=file_id))
 
 @forum_bp.route('/file/<int:file_id>/new_category', methods=['GET', 'POST'])
 @login_required
@@ -249,6 +323,25 @@ def search():
                          results=results, 
                          file_id=file_id, 
                          excel_file=excel_file)
+
+def create_general_category(file_id):
+    """Crea solo una categoria generale semplice per un file Excel"""
+    excel_file = ExcelFile.query.get(file_id)
+    if not excel_file:
+        return
+    
+    # Solo categoria generale
+    general_category = ForumCategory(
+        name="💬 Discussioni",
+        description="Tutte le discussioni su questo dataset",
+        icon="bi-chat-dots",
+        color="primary",
+        is_system=True,
+        excel_file_id=file_id,
+        created_by=current_user.id
+    )
+    db.session.add(general_category)
+    db.session.commit()
 
 def create_default_categories(file_id):
     """Crea le categorie predefinite per un file Excel"""

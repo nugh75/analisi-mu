@@ -220,6 +220,7 @@
                                         <!-- Etichetta attiva -->
                                         <form method="POST" action="{{ url_for('labels.toggle_label_active', label_id=label.id) }}" 
                                               style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                             <button type="submit" class="btn btn-outline-warning" 
                                                     title="Disattiva etichetta">
                                                 <i class="bi bi-eye-slash"></i>
@@ -246,6 +247,7 @@
                                         <!-- Etichetta inattiva -->
                                         <form method="POST" action="{{ url_for('labels.toggle_label_active', label_id=label.id) }}" 
                                               style="display: inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                             <button type="submit" class="btn btn-outline-success" 
                                                     title="Riattiva etichetta">
                                                 <i class="bi bi-eye"></i>
