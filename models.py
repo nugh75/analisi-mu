@@ -423,3 +423,104 @@ class TextAnnotation(db.Model):
         if len(self.text_selection) <= 100:
             return self.text_selection
         return f"{self.text_selection[:97]}..."
+
+
+class ForumCategory(db.Model):
+    """Modello per le categorie del forum"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    icon = db.Column(db.String(50), default='bi-chat-dots')
+    color = db.Column(db.String(20), default='primary')
+    is_system = db.Column(db.Boolean, default=False)  # True per categorie prestabilite (domande)
+    excel_file_id = db.Column(db.Integer, db.ForeignKey('excel_file.id'), nullable=False)
+    question_name = db.Column(db.String(255))  # Solo per categorie di domande
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Relazioni
+    excel_file = db.relationship('ExcelFile', backref='forum_categories')
+    creator = db.relationship('User', backref='created_categories')
+    posts = db.relationship('ForumPost', backref='category', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<ForumCategory {self.name}>'
+    
+    @property
+    def post_count(self):
+        """Numero di post nella categoria"""
+        return len(self.posts)
+    
+    @property
+    def last_post(self):
+        """Ultimo post nella categoria"""
+        return ForumPost.query.filter_by(category_id=self.id).order_by(ForumPost.created_at.desc()).first()
+
+
+class ForumPost(db.Model):
+    """Modello per i post del forum"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    is_pinned = db.Column(db.Boolean, default=False)
+    is_locked = db.Column(db.Boolean, default=False)
+    views = db.Column(db.Integer, default=0)
+    
+    # Relazioni
+    category_id = db.Column(db.Integer, db.ForeignKey('forum_category.id'), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    author = db.relationship('User', backref='forum_posts')
+    comments = db.relationship('ForumComment', backref='post', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<ForumPost {self.title}>'
+    
+    @property
+    def comment_count(self):
+        """Numero di commenti nel post"""
+        return len(self.comments)
+    
+    @property
+    def last_comment(self):
+        """Ultimo commento nel post"""
+        return ForumComment.query.filter_by(post_id=self.id).order_by(ForumComment.created_at.desc()).first()
+    
+    def increment_views(self):
+        """Incrementa il contatore delle visualizzazioni"""
+        self.views += 1
+        db.session.commit()
+
+
+class ForumComment(db.Model):
+    """Modello per i commenti dei post del forum"""
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    
+    # Relazioni
+    post_id = db.Column(db.Integer, db.ForeignKey('forum_post.id'), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('forum_comment.id'))  # Per reply annidate
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    author = db.relationship('User', backref='forum_comments')
+    parent = db.relationship('ForumComment', remote_side=[id], backref='replies')
+    
+    def __repr__(self):
+        return f'<ForumComment by {self.author.username}>'
+    
+    @property
+    def content_preview(self):
+        """Anteprima del contenuto (massimo 100 caratteri)"""
+        if len(self.content) <= 100:
+            return self.content
+        return f"{self.content[:97]}..."

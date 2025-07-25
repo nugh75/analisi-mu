@@ -20,12 +20,26 @@ def create_app():
     """Factory function per creare l'applicazione Flask"""
     app = Flask(__name__)
     
-    # Configurazione
+    # Configurazione con supporto per ambienti multipli
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///analisi_mu.db')
+    
+    # Database URL - supporta sia sviluppo che produzione
+    default_db = 'sqlite:///instance/analisi_mu.db'
+    if os.environ.get('DEV_MODE') == '1':
+        default_db = 'sqlite:///analisi_mu_dev.db'
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', default_db)
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = 'uploads'
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+    
+    # Configurazioni specifiche per ambiente
+    if os.environ.get('DEV_MODE') == '1':
+        app.config['DEBUG'] = True
+        print("🔧 Modalità sviluppo attivata")
+    elif os.environ.get('DOCKER_MODE') == '1':
+        app.config['DEBUG'] = False
+        print("🐳 Modalità Docker attivata")
     
     # Inizializzazione estensioni
     db.init_app(app)
@@ -48,6 +62,7 @@ def create_app():
     from routes.statistics import statistics_bp
     from routes.questions import questions_bp
     from routes.text_documents import text_documents_bp
+    from routes.forum import forum_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp, url_prefix='/')
@@ -59,6 +74,7 @@ def create_app():
     app.register_blueprint(statistics_bp, url_prefix='/statistics')
     app.register_blueprint(questions_bp, url_prefix='/questions')
     app.register_blueprint(text_documents_bp)
+    app.register_blueprint(forum_bp)
     
     # Creazione delle cartelle necessarie con permessi corretti
     upload_folder = app.config['UPLOAD_FOLDER']
