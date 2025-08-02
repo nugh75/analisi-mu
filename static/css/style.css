@@ -2,13 +2,16 @@
 
 /* Variabili CSS */
 :root {
-    --primary-color: #007bff;
-    --success-color: #28a745;
-    --warning-color: #ffc107;
-    --danger-color: #dc3545;
-    --info-color: #17a2b8;
-    --light-color: #f8f9fa;
-    --dark-color: #343a40;
+    --primary-color: #2563eb;    /* Blu moderno */
+    --secondary-color: #6366f1;  /* Indaco */
+    --success-color: #059669;    /* Verde smeraldo */
+    --warning-color: #d97706;    /* Arancione ambra */
+    --danger-color: #dc2626;     /* Rosso moderno */
+    --info-color: #0891b2;       /* Ciano */
+    --light-color: #f8fafc;      /* Grigio chiarissimo */
+    --dark-color: #1e293b;       /* Grigio ardesia scuro */
+    --accent-color: #7c3aed;     /* Viola */
+    --muted-color: #64748b;      /* Grigio medio */
 }
 
 /* Animazioni */
@@ -24,7 +27,8 @@
 /* Layout generale */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--light-color);
+    color: var(--dark-color);
 }
 
 .navbar-brand {
@@ -44,8 +48,9 @@ body {
 }
 
 .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border-bottom: none;
     font-weight: 600;
 }
 
@@ -82,7 +87,7 @@ body {
 
 /* Tabelle */
 .table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.1);
+    background-color: rgba(37, 99, 235, 0.1);
 }
 
 /* Pagination */
@@ -101,12 +106,12 @@ body {
 /* Forms */
 .form-control:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
 }
 
 .form-select:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
 }
 
 /* Buttons */
@@ -152,7 +157,7 @@ body {
 }
 
 .dropdown-item:hover {
-    background-color: rgba(0, 123, 255, 0.1);
+    background-color: rgba(37, 99, 235, 0.1);
 }
 
 /* Loading states */
@@ -171,7 +176,7 @@ body {
     height: 20px;
     margin: -10px 0 0 -10px;
     border: 2px solid #f3f3f3;
-    border-top: 2px solid #007bff;
+    border-top: 2px solid var(--primary-color);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -240,12 +245,12 @@ body {
 
 .file-upload-area:hover {
     border-color: var(--primary-color);
-    background-color: rgba(0, 123, 255, 0.05);
+    background-color: rgba(37, 99, 235, 0.05);
 }
 
 .file-upload-area.dragover {
     border-color: var(--success-color);
-    background-color: rgba(40, 167, 69, 0.1);
+    background-color: rgba(5, 150, 105, 0.1);
 }
 
 /* AI status badge enhancements */
@@ -389,6 +394,319 @@ body {
 
 .user-select-none {
     user-select: none;
+}
+
+/* Stili specifici per il Forum */
+.forum-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 1rem 1rem;
+}
+
+.forum-header h2 {
+    color: white;
+    font-weight: 700;
+}
+
+.forum-header .text-muted {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Badge personalizzati con i nuovi colori */
+.badge {
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.badge.bg-primary,
+.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.badge.bg-secondary,
+.bg-secondary {
+    background-color: var(--muted-color) !important;
+}
+
+.badge.bg-success,
+.bg-success {
+    background-color: var(--success-color) !important;
+}
+
+.badge.bg-info,
+.bg-info {
+    background-color: var(--info-color) !important;
+}
+
+.badge.bg-warning,
+.bg-warning {
+    background-color: var(--warning-color) !important;
+    color: white !important;
+}
+
+.badge.bg-danger,
+.bg-danger {
+    background-color: var(--danger-color) !important;
+}
+
+/* Colori del testo personalizzati */
+.text-primary {
+    color: var(--primary-color) !important;
+}
+
+.text-secondary {
+    color: var(--muted-color) !important;
+}
+
+.text-success {
+    color: var(--success-color) !important;
+}
+
+.text-info {
+    color: var(--info-color) !important;
+}
+
+.text-warning {
+    color: var(--warning-color) !important;
+}
+
+.text-danger {
+    color: var(--danger-color) !important;
+}
+
+/* Bottoni personalizzati */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-success:hover,
+.btn-success:focus,
+.btn-success:active {
+    background-color: #047857;
+    border-color: #047857;
+}
+
+.btn-warning {
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+    color: white;
+}
+
+.btn-warning:hover,
+.btn-warning:focus,
+.btn-warning:active {
+    background-color: #b45309;
+    border-color: #b45309;
+    color: white;
+}
+
+.btn-info {
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+}
+
+.btn-info:hover,
+.btn-info:focus,
+.btn-info:active {
+    background-color: #0e7490;
+    border-color: #0e7490;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.btn-danger:hover,
+.btn-danger:focus,
+.btn-danger:active {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+}
+
+/* Bottoni outline personalizzati */
+.btn-outline-primary {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.btn-outline-success {
+    color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus,
+.btn-outline-success:active {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+    color: white;
+}
+
+.btn-outline-secondary {
+    color: var(--muted-color);
+    border-color: var(--muted-color);
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:active {
+    background-color: var(--muted-color);
+    border-color: var(--muted-color);
+    color: white;
+}
+
+.btn-outline-info {
+    color: var(--info-color);
+    border-color: var(--info-color);
+}
+
+.btn-outline-info:hover,
+.btn-outline-info:focus,
+.btn-outline-info:active {
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+    color: white;
+}
+
+.list-group-item:hover {
+    background-color: rgba(37, 99, 235, 0.05);
+    border-left: 4px solid var(--primary-color);
+}
+
+.card {
+    border: 1px solid rgba(37, 99, 235, 0.1);
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(37, 99, 235, 0.15);
+}
+
+/* Override per elementi specifici che potrebbero usare colori hardcoded */
+span.badge, .badge {
+    font-weight: 600 !important;
+}
+
+/* Assicuriamoci che le etichette delle annotazioni usino i nostri colori */
+.label-display {
+    background-color: var(--primary-color) !important;
+}
+
+.label-display.success {
+    background-color: var(--success-color) !important;
+}
+
+.label-display.warning {
+    background-color: var(--warning-color) !important;
+}
+
+.label-display.info {
+    background-color: var(--info-color) !important;
+}
+
+.label-display.danger {
+    background-color: var(--danger-color) !important;
+}
+
+/* Stili specifici per i label-badge nelle pagine di annotazione */
+/* Label badge styles with fallbacks for missing colors */
+.label-badge {
+    display: inline-block;
+    padding: 0.35rem 0.8rem !important;
+    margin: 0.2rem 0.15rem !important;
+    border-radius: 15px !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid rgba(0,0,0,0.1) !important;
+    text-decoration: none !important;
+    /* Fallback for labels without color */
+    background-color: var(--bs-primary, #007bff) !important;
+    color: #fff !important;
+}
+
+.label-badge:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15) !important;
+    opacity: 0.9 !important;
+}
+
+.label-badge.selected {
+    border-color: #fff !important;
+    border-width: 2px !important;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.3) !important;
+}
+
+.label-badge.processing {
+    opacity: 0.6 !important;
+    pointer-events: none !important;
+    transform: scale(0.95) !important;
+}
+
+/* Colori specifici per le etichette quando hanno attributi style */
+.label-badge[style*="background-color"] {
+    /* Mantieni il background-color inline se specificato */
+    color: white !important;
+}
+
+/* Fallback per etichette senza colore definito */
+.label-badge:not([style*="background-color"]) {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+/* Assicuriamoci che gli alert usino i nostri colori */
+.alert-primary {
+    background-color: rgba(37, 99, 235, 0.1);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.alert-success {
+    background-color: rgba(5, 150, 105, 0.1);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.alert-warning {
+    background-color: rgba(217, 119, 6, 0.1);
+    border-color: var(--warning-color);
+    color: var(--warning-color);
+}
+
+.alert-info {
+    background-color: rgba(8, 145, 178, 0.1);
+    border-color: var(--info-color);
+    color: var(--info-color);
+}
+
+.alert-danger {
+    background-color: rgba(220, 38, 38, 0.1);
+    border-color: var(--danger-color);
+    color: var(--danger-color);
 }
 
 /* Dark mode support (future implementation) */

@@ -225,7 +225,7 @@
                             <span class="label-badge {{ 'selected' if label.id in user_label_ids else '' }}"
                                   data-label-id="{{ label.id }}"
                                   data-category="{{ category if category != 'Senza categoria' else 'none' }}"
-                                  style="background-color: {{ label.color }}; color: {{ '#fff' if label.color != '#ffffff' else '#000' }};"
+                                  style="background-color: {{ label.color or '#007bff' }}; color: {{ '#fff' if (label.color or '#007bff') != '#ffffff' else '#000' }};"
                                   title="{{ label.description or label.name }}">
                                 {{ label.name }}
                             </span>

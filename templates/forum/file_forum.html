@@ -5,40 +5,45 @@
 {% block content %}
 <div class="container-fluid">
     <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-1">
-                        <i class="bi bi-chat-dots me-2"></i>Forum: {{ excel_file.original_filename }}
-                    </h2>
-                    <p class="text-muted mb-0">Discussioni e collaborazione per questo file Excel</p>
-                </div>
-                <div>
-                    <a href="{{ url_for('forum.index') }}" class="btn btn-outline-secondary me-2">
-                        <i class="bi bi-arrow-left me-1"></i>Tutti i Forum
-                    </a>
-                    <a href="{{ url_for('forum.create_post_direct', file_id=excel_file.id) }}" class="btn btn-primary me-2">
-                        <i class="bi bi-plus-circle me-1"></i>Crea Post
-                    </a>
-                    <a href="{{ url_for('forum.create_category', file_id=excel_file.id) }}" class="btn btn-success me-2">
-                        <i class="bi bi-plus-circle me-1"></i>Nuova Categoria
-                    </a>
-                    <form method="POST" action="{{ url_for('forum.regenerate_categories', file_id=excel_file.id) }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit" class="btn btn-warning" 
-                                onclick="return confirm('Rigenerare le categorie dalle domande del file Excel? Questo rimuoverà le categorie esistenti di sistema.')">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Rigenera Categorie
-                        </button>
-                    </form>
+    <div class="forum-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="bi bi-chat-dots me-2"></i>Forum: {{ excel_file.original_filename }}
+                            </h2>
+                            <p class="text-muted mb-0">Discussioni e collaborazione per questo file Excel</p>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('forum.index') }}" class="btn btn-outline-light me-2">
+                                <i class="bi bi-arrow-left me-1"></i>Tutti i Forum
+                            </a>
+                            <a href="{{ url_for('forum.create_post_direct', file_id=excel_file.id) }}" class="btn btn-success me-2">
+                                <i class="bi bi-plus-circle me-1"></i>Crea Post
+                            </a>
+                            <a href="{{ url_for('forum.create_category', file_id=excel_file.id) }}" class="btn btn-warning me-2">
+                                <i class="bi bi-plus-circle me-1"></i>Nuova Categoria
+                            </a>
+                            <form method="POST" action="{{ url_for('forum.regenerate_categories', file_id=excel_file.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-outline-light" 
+                                        onclick="return confirm('Rigenerare le categorie dalle domande del file Excel? Questo rimuoverà le categorie esistenti di sistema.')">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Rigenera Categorie
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <!-- Post del forum -->
-        <div class="col-lg-8">
+    <div class="container">
+        <div class="row">
+            <!-- Post del forum -->
+            <div class="col-lg-8">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
@@ -210,22 +215,24 @@
 </div>
 
 <!-- Ricerca rapida -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <form method="GET" action="{{ url_for('forum.search', file_id=excel_file.id) }}" class="row g-3">
-                    <div class="col-md-10">
-                        <input type="text" class="form-control" name="q" 
-                               placeholder="Cerca post, commenti o discussioni..." 
-                               value="{{ request.args.get('q', '') }}">
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-search me-1"></i>Cerca
-                        </button>
-                    </div>
-                </form>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('forum.search', file_id=excel_file.id) }}" class="row g-3">
+                        <div class="col-md-10">
+                            <input type="text" class="form-control" name="q" 
+                                   placeholder="Cerca post, commenti o discussioni..." 
+                                   value="{{ request.args.get('q', '') }}">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-search me-1"></i>Cerca
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
