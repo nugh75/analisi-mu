@@ -643,8 +643,9 @@ span.badge, .badge {
     transition: all 0.2s ease !important;
     border: 1px solid rgba(0,0,0,0.1) !important;
     text-decoration: none !important;
-    /* Fallback for labels without color */
-    background-color: var(--bs-primary, #007bff) !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    /* Fallback color only if no inline style is present */
+    background-color: var(--primary-color, #2563eb);
     color: #fff !important;
 }
 
@@ -666,13 +667,7 @@ span.badge, .badge {
     transform: scale(0.95) !important;
 }
 
-/* Colori specifici per le etichette quando hanno attributi style */
-.label-badge[style*="background-color"] {
-    /* Mantieni il background-color inline se specificato */
-    color: white !important;
-}
-
-/* Fallback per etichette senza colore definito */
+/* Override fallback only for labels without inline background-color */
 .label-badge:not([style*="background-color"]) {
     background-color: var(--primary-color) !important;
     color: white !important;
