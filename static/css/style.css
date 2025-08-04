@@ -419,34 +419,35 @@ body {
     font-size: 0.75rem;
 }
 
-.badge.bg-primary,
-.bg-primary {
+/* Badge colors - allow inline styles to override */
+.badge.bg-primary:not([style*="background-color"]),
+.bg-primary:not([style*="background-color"]) {
     background-color: var(--primary-color) !important;
 }
 
-.badge.bg-secondary,
-.bg-secondary {
+.badge.bg-secondary:not([style*="background-color"]),
+.bg-secondary:not([style*="background-color"]) {
     background-color: var(--muted-color) !important;
 }
 
-.badge.bg-success,
-.bg-success {
+.badge.bg-success:not([style*="background-color"]),
+.bg-success:not([style*="background-color"]) {
     background-color: var(--success-color) !important;
 }
 
-.badge.bg-info,
-.bg-info {
+.badge.bg-info:not([style*="background-color"]),
+.bg-info:not([style*="background-color"]) {
     background-color: var(--info-color) !important;
 }
 
-.badge.bg-warning,
-.bg-warning {
+.badge.bg-warning:not([style*="background-color"]),
+.bg-warning:not([style*="background-color"]) {
     background-color: var(--warning-color) !important;
     color: white !important;
 }
 
-.badge.bg-danger,
-.bg-danger {
+.badge.bg-danger:not([style*="background-color"]),
+.bg-danger:not([style*="background-color"]) {
     background-color: var(--danger-color) !important;
 }
 

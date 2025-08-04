@@ -2,13 +2,115 @@
 
 {% block title %}Statistiche Quesito - {{ question }}{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Stili per i filtri delle etichette */
+.card-body.border-bottom {
+    background-color: #f8f9fa !important;
+}
+
+.label-badge {
+    transition: all 0.3s ease;
+}
+
+.label-badge:hover {
+    transform: scale(1.05);
+}
+
+#label-filters-form .form-control:focus,
+#label-filters-form .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.btn-group .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Animazione per le righe filtrate */
+.label-row {
+    transition: opacity 0.3s ease;
+}
+
+.label-row.filtered-out {
+    opacity: 0.3;
+}
+
+/* Stile per il badge "Filtrate" */
+.badge.bg-secondary {
+    font-size: 0.7em;
+}
+
+/* Responsive migliorato */
+@media (max-width: 768px) {
+    #label-filters-form .col-md-3,
+    #label-filters-form .col-md-2 {
+        margin-bottom: 0.5rem;
+    }
+    
+    .btn-group .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* Evidenziazione termini cercati */
+.label-badge.highlighted {
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 5px #ffc107; }
+    50% { box-shadow: 0 0 15px #ffc107; }
+    100% { box-shadow: 0 0 5px #ffc107; }
+}
+
+/* Stili per il contenuto delle celle */
+.cell-content {
+    text-align: left !important;
+    text-indent: 0 !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Stili specifici per la tabella Annotazioni per Cella */
+.table table-sm table-hover td {
+    text-align: left !important;
+    padding-left: 0.5rem !important;
+}
+
+/* Override più specifico per la colonna Contenuto */
+.table.table-sm.table-hover td:nth-child(2) {
+    text-align: left !important;
+    padding-left: 0.25rem !important;
+    vertical-align: top !important;
+}
+
+/* Override ancora più specifico per forzare l'allineamento */
+.table.table-sm.table-hover td:nth-child(2) .cell-content {
+    text-align: left !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    text-indent: 0 !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    word-break: break-all !important;
+    overflow-wrap: break-word !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-md-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2><i class="bi bi-question-circle me-2"></i>Quesito: {{ question }}</h2>
-                <div>
+                <div class="btn-group" role="group">
                     <a href="{{ url_for('statistics.question_compare', file_id=file.id, question=question) }}" 
                        class="btn btn-success">
                         <i class="bi bi-people"></i> Confronta Annotatori
@@ -17,6 +119,27 @@
                        class="btn btn-secondary">
                         <i class="bi bi-arrow-left"></i> Torna al File
                     </a>
+                </div>
+            </div>
+
+            <!-- Pulsanti per export report completo -->
+            <div class="d-flex justify-content-center mb-4">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('csv')" title="Scarica report completo in CSV">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('excel')" title="Scarica report completo in Excel">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('word')" title="Scarica report completo in Word">
+                        <i class="bi bi-file-earmark-word"></i> Word
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('pdf')" title="Scarica report completo in PDF">
+                        <i class="bi bi-file-earmark-pdf"></i> PDF
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('text')" title="Scarica report completo in TXT">
+                        <i class="bi bi-file-earmark-text"></i> TXT
+                    </button>
                 </div>
             </div>
 
@@ -67,7 +190,7 @@
 
             <!-- Statistiche Annotatori -->
             <div class="row mb-4">
-                <div class="col-md-6">
+                <div class="col-md-12">
                     <div class="card">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
@@ -105,7 +228,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+            </div>
+
+            <!-- Tutte le Etichette del Quesito -->
+            <div class="row mb-4">
+                <div class="col-md-12">
                     <div class="card">
                         <div class="card-header">
                             <h5 class="card-title mb-0">
@@ -113,9 +240,106 @@
                                 <small class="text-muted">(Resoconto completo)</small>
                             </h5>
                         </div>
+                        
+                        <!-- Sezione Filtri -->
+                        <div class="card-body border-bottom bg-light">
+                            <form method="GET" class="row g-2" id="label-filters-form">
+                                <div class="col-md-3">
+                                    <label for="category-filter" class="form-label small mb-1">Categoria</label>
+                                    <select class="form-select form-select-sm" name="category" id="category-filter">
+                                        <option value="">Tutte le categorie</option>
+                                        {% for category in available_categories %}
+                                        <option value="{{ category }}" 
+                                                {% if current_filters.category == category %}selected{% endif %}>
+                                            {{ category }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-3">
+                                    <label for="label-name-filter" class="form-label small mb-1">Nome Etichetta</label>
+                                    <input type="text" class="form-control form-control-sm" 
+                                           name="label_name" id="label-name-filter"
+                                           value="{{ current_filters.label_name or '' }}"
+                                           placeholder="Cerca etichetta...">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label for="min-usage-filter" class="form-label small mb-1">Min Utilizzi</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           name="min_usage" id="min-usage-filter"
+                                           value="{{ current_filters.min_usage or '' }}"
+                                           min="{{ min_usage_available }}" max="{{ max_usage_available }}"
+                                           placeholder="{{ min_usage_available }}">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label for="max-usage-filter" class="form-label small mb-1">Max Utilizzi</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           name="max_usage" id="max-usage-filter"
+                                           value="{{ current_filters.max_usage or '' }}"
+                                           min="{{ min_usage_available }}" max="{{ max_usage_available }}"
+                                           placeholder="{{ max_usage_available }}">
+                                </div>
+                                
+                                <div class="col-md-2">
+                                    <label class="form-label small mb-1">&nbsp;</label>
+                                    <div class="d-flex gap-1">
+                                        <button type="submit" class="btn btn-primary btn-sm" title="Applica filtri">
+                                            <i class="bi bi-funnel"></i>
+                                        </button>
+                                        <a href="{{ url_for('statistics.question_detail', file_id=file.id, question=question) }}" 
+                                           class="btn btn-outline-secondary btn-sm" title="Reset filtri">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                                
+                                <!-- Ordinamento -->
+                                <div class="col-12">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <small class="text-muted">Ordina per:</small>
+                                        <select class="form-select form-select-sm" name="sort_by" style="width: auto;" onchange="this.form.submit()">
+                                            <option value="name" {% if current_filters.sort_by == 'name' %}selected{% endif %}>Nome</option>
+                                            <option value="category" {% if current_filters.sort_by == 'category' %}selected{% endif %}>Categoria</option>
+                                            <option value="usage" {% if current_filters.sort_by == 'usage' %}selected{% endif %}>Utilizzi</option>
+                                        </select>
+                                        <select class="form-select form-select-sm" name="sort_order" style="width: auto;" onchange="this.form.submit()">
+                                            <option value="asc" {% if current_filters.sort_order == 'asc' %}selected{% endif %}>Crescente</option>
+                                            <option value="desc" {% if current_filters.sort_order == 'desc' %}selected{% endif %}>Decrescente</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        
                         <div class="card-body">
+                            <!-- Statistiche dei risultati filtrati -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Visualizzate {{ label_stats|length }} etichette
+                                        {% if current_filters.category or current_filters.label_name or current_filters.min_usage or current_filters.max_usage %}
+                                        <span class="badge bg-secondary ms-1">Filtrate</span>
+                                        {% endif %}
+                                    </small>
+                                    {% if label_stats %}
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportLabelsCSV()" title="Esporta in CSV">
+                                            <i class="bi bi-download"></i> CSV
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleHighlight()" title="Evidenzia termini cercati">
+                                            <i class="bi bi-highlighter"></i>
+                                        </button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
                             <div class="table-responsive">
-                                <table class="table table-sm">
+                                <table class="table table-sm" id="labels-table">
                                     <thead>
                                         <tr>
                                             <th>Etichetta</th>
@@ -125,9 +349,9 @@
                                     </thead>
                                     <tbody>
                                         {% for label in label_stats %}
-                                        <tr>
+                                        <tr class="label-row" data-label-name="{{ label.name|lower }}" data-category="{{ (label.category_name or '')|lower }}">
                                             <td>
-                                                <span class="badge" style="background-color: {{ label.color }}">
+                                                <span class="badge label-badge" style="background-color: {{ label.color }}" data-label="{{ label.name }}">
                                                     {{ label.name }}
                                                 </span>
                                             </td>
@@ -147,6 +371,15 @@
                                     <i class="bi bi-info-circle me-1"></i>
                                     Totale etichette trovate: {{ label_stats|length }}
                                 </small>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-3">
+                                <i class="bi bi-search text-muted"></i>
+                                <p class="text-muted mb-0">Nessuna etichetta trovata con i filtri applicati</p>
+                                <a href="{{ url_for('statistics.question_detail', file_id=file.id, question=question) }}" 
+                                   class="btn btn-sm btn-outline-primary mt-2">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Reset Filtri
+                                </a>
                             </div>
                             {% endif %}
                         </div>
@@ -259,11 +492,10 @@
                                         {% for cell_id, annotations in cells_with_annotations.items() %}
                                         <tr>
                                             <td><code>{{ cell_id }}</code></td>
-                                            <td>
+                                            <td style="min-width: 300px; max-width: 500px; text-align: left !important; padding-left: 0.25rem !important;">
                                                 {% set cell_content = annotations[0].content %}
-                                                <div class="text-truncate" style="max-width: 200px;" 
-                                                     title="{{ cell_content }}">
-                                                    {{ cell_content }}
+                                                <div class="cell-content" style="white-space: normal; word-wrap: break-word; word-break: break-all; text-align: left !important; direction: ltr !important;">
+                                                    {{ cell_content|trim }}
                                                 </div>
                                             </td>
                                             <td>
@@ -312,4 +544,623 @@
         </div>
     </div>
 </div>
+
+<script>
+// Funzionalità avanzate per i filtri delle etichette
+
+// Variabile per lo stato di evidenziazione
+let highlightEnabled = false;
+
+// Export CSV delle etichette filtrate
+function exportLabelsCSV() {
+    const table = document.getElementById('labels-table');
+    const rows = table.querySelectorAll('tbody tr:not([style*="display: none"])');
+    
+    if (rows.length === 0) {
+        alert('Nessuna etichetta da esportare!');
+        return;
+    }
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Etichetta,Categoria,Utilizzi\n";
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const labelName = cells[0].querySelector('.label-badge').textContent.trim();
+        const category = cells[1].textContent.trim();
+        const usage = cells[2].querySelector('strong').textContent.trim();
+        
+        csvContent += `"${labelName}","${category}","${usage}"\n`;
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "etichette_quesito_{{ question|replace(' ', '_') }}_{{ file.filename|replace('.xlsx', '') }}.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Export report completo in vari formati
+function exportCompleteReport(format) {
+    // Dati per il report
+    const reportData = {
+        question: "{{ question }}",
+        filename: "{{ file.filename }}",
+        stats: {
+            totalCells: {{ cells|length }},
+            annotatedCells: {{ cells_with_annotations|length }},
+            annotators: {{ annotator_stats|length }},
+            labels: {{ label_stats|length }}
+        },
+        annotators: [
+            {% for user in annotator_stats %}
+            {
+                username: "{{ user.username }}",
+                annotationCount: {{ user.annotation_count }},
+                cellCount: {{ user.cell_count }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
+        labels: [
+            {% for label in label_stats %}
+            {
+                name: "{{ label.name }}",
+                category: "{{ label.category_name or 'Senza categoria' }}",
+                usage: {{ label.usage_count }},
+                color: "{{ label.color or '#007bff' }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ],
+        labelsWithComments: {
+            {% for label_name, comments in labels_with_comments.items() %}
+            "{{ label_name }}": [
+                {% for comment in comments %}
+                {
+                    rowNumber: {{ comment.row_number }},
+                    content: {{ comment.content|tojson }},
+                    isAiGenerated: {{ comment.is_ai_generated|tojson }},
+                    aiConfidence: {{ comment.ai_confidence or 'null' }},
+                    annotator: "{{ comment.annotator or '' }}",
+                    categoryName: "{{ comment.category_name or '' }}",
+                    color: "{{ comment.color or '' }}"
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]{% if not loop.last %},{% endif %}
+            {% endfor %}
+        },
+        annotations: [
+            {% for cell_id, annotations in cells_with_annotations.items() %}
+            {
+                cellId: "{{ cell_id }}",
+                content: {{ annotations[0].content|tojson }},
+                annotations: [
+                    {% for ann in annotations %}
+                    {
+                        annotationId: {{ ann.annotation_id }},
+                        labelName: "{{ ann.label_name }}",
+                        labelColor: "{{ ann.label_color }}",
+                        annotator: "{{ ann.annotator }}",
+                        isAiGenerated: {{ ann.is_ai_generated|tojson }},
+                        aiConfidence: {{ ann.ai_confidence or 'null' }},
+                        status: "{{ ann.status or 'active' }}"
+                    }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+    
+    switch(format) {
+        case 'csv':
+            exportToCSV(reportData);
+            break;
+        case 'excel':
+            exportToExcel(reportData);
+            break;
+        case 'word':
+            exportToWord(reportData);
+            break;
+        case 'pdf':
+            exportToPDF(reportData);
+            break;
+        case 'text':
+            exportToText(reportData);
+            break;
+        default:
+            alert('Formato non supportato');
+    }
+}
+
+// Export CSV completo
+function exportToCSV(data) {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    // Header del report
+    csvContent += `"Report Completo - ${data.question}"\n`;
+    csvContent += `"File: ${data.filename}"\n`;
+    csvContent += `"Data: ${new Date().toLocaleDateString('it-IT')}"\n\n`;
+    
+    // Statistiche generali
+    csvContent += "Statistiche Generali\n";
+    csvContent += "Tipo,Valore\n";
+    csvContent += `"Celle Totali",${data.stats.totalCells}\n`;
+    csvContent += `"Celle Annotate",${data.stats.annotatedCells}\n`;
+    csvContent += `"Annotatori",${data.stats.annotators}\n`;
+    csvContent += `"Etichette",${data.stats.labels}\n\n`;
+    
+    // Annotatori
+    csvContent += "Annotatori\n";
+    csvContent += "Username,Annotazioni,Celle\n";
+    data.annotators.forEach(user => {
+        csvContent += `"${user.username}",${user.annotationCount},${user.cellCount}\n`;
+    });
+    csvContent += "\n";
+    
+    // Etichette
+    csvContent += "Tutte le Etichette del Quesito\n";
+    csvContent += "Nome,Categoria,Utilizzi\n";
+    data.labels.forEach(label => {
+        csvContent += `"${label.name}","${label.category}",${label.usage}\n`;
+    });
+    csvContent += "\n";
+    
+    // Report Etichette con Commenti
+    csvContent += "Report Completo - Etichette con Tutti i Commenti\n";
+    csvContent += "Etichetta,Categoria,Numero Rispondente,Contenuto Commento,AI Generated,AI Confidence,Annotatore\n";
+    Object.entries(data.labelsWithComments).forEach(([labelName, comments]) => {
+        comments.forEach(comment => {
+            const aiGen = comment.isAiGenerated ? 'Sì' : 'No';
+            const aiConf = comment.aiConfidence ? `${Math.round(comment.aiConfidence * 100)}%` : '';
+            csvContent += `"${labelName}","${comment.categoryName}","#${comment.rowNumber}","${comment.content.replace(/"/g, '""')}","${aiGen}","${aiConf}","${comment.annotator}"\n`;
+        });
+    });
+    csvContent += "\n";
+    
+    // Annotazioni per Cella
+    csvContent += "Annotazioni per Cella\n";
+    csvContent += "ID Cella,Contenuto,Etichetta,Annotatore,AI Generated,AI Confidence,Status,Annotation ID\n";
+    data.annotations.forEach(cell => {
+        cell.annotations.forEach(ann => {
+            const aiGen = ann.isAiGenerated ? 'Sì' : 'No';
+            const aiConf = ann.aiConfidence ? `${Math.round(ann.aiConfidence * 100)}%` : '';
+            csvContent += `"${cell.cellId}","${cell.content.replace(/"/g, '""')}","${ann.labelName}","${ann.annotator}","${aiGen}","${aiConf}","${ann.status}","${ann.annotationId}"\n`;
+        });
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Export Excel (utilizzerà CSV per semplicità, ma con estensione xlsx per aprire in Excel)
+function exportToExcel(data) {
+    exportToCSV(data);
+    // Nota: per un vero export Excel si dovrebbe usare una libreria come SheetJS
+    alert('File CSV generato (apribile con Excel)');
+}
+
+// Export Word (HTML che si apre in Word)
+function exportToWord(data) {
+    let htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Report Completo - ${data.question}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 15px; font-size: 11px; }
+                h1, h2 { color: #2c3e50; }
+                h1 { font-size: 16px; margin-bottom: 10px; }
+                h2 { font-size: 13px; margin-bottom: 8px; margin-top: 15px; }
+                h3 { font-size: 11px; margin-bottom: 5px; margin-top: 10px; }
+                table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10px; }
+                th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                .stats-box { background-color: #f8f9fa; padding: 10px; margin: 8px 0; border-radius: 3px; font-size: 10px; }
+                .badge { color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
+                .ai-badge { background-color: #17a2b8; }
+                ul { margin: 5px 0; padding-left: 15px; }
+                li { margin-bottom: 3px; font-size: 10px; }
+                p { margin: 3px 0; }
+            </style>
+        </head>
+        <body>
+            <h1>Report Completo - ${data.question}</h1>
+            <p><strong>File:</strong> ${data.filename}</p>
+            <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')}</p>
+            
+            <h2>Statistiche Generali</h2>
+            <div class="stats-box">
+                <p><strong>Celle Totali:</strong> ${data.stats.totalCells}</p>
+                <p><strong>Celle Annotate:</strong> ${data.stats.annotatedCells}</p>
+                <p><strong>Annotatori:</strong> ${data.stats.annotators}</p>
+                <p><strong>Etichette:</strong> ${data.stats.labels}</p>
+            </div>
+            
+            <h2>Annotatori</h2>
+            <table>
+                <tr><th>Username</th><th>Annotazioni</th><th>Celle</th></tr>
+                ${data.annotators.map(user => 
+                    `<tr><td>${user.username}</td><td>${user.annotationCount}</td><td>${user.cellCount}</td></tr>`
+                ).join('')}
+            </table>
+            
+            <h2>Tutte le Etichette del Quesito</h2>
+            <table>
+                <tr><th>Etichetta</th><th>Categoria</th><th>Utilizzi</th></tr>
+                ${data.labels.map(label => 
+                    `<tr><td><span class="badge" style="background-color: ${label.color}">${label.name}</span></td><td>${label.category}</td><td>${label.usage}</td></tr>`
+                ).join('')}
+            </table>
+            
+            <h2>Report Completo - Etichette con Tutti i Commenti</h2>
+            ${Object.entries(data.labelsWithComments).map(([labelName, comments]) => {
+                const labelColor = comments[0].color || '#007bff';
+                return `
+                <h3><span class="badge" style="background-color: ${labelColor}">${labelName}</span> (${comments.length} commenti)</h3>
+                <ul>
+                    ${comments.map(comment => `
+                        <li>
+                            <strong>#${comment.rowNumber}</strong>: ${comment.content}
+                            ${comment.isAiGenerated ? '<span class="badge ai-badge">🤖 AI</span>' : ''}
+                            ${comment.aiConfidence ? `<small>(${Math.round(comment.aiConfidence * 100)}%)</small>` : ''}
+                            ${comment.annotator ? `<small>- ${comment.annotator}</small>` : ''}
+                        </li>
+                    `).join('')}
+                </ul>
+            `;}).join('')}
+            
+            <h2>Annotazioni per Cella</h2>
+            <table>
+                <tr><th>ID Cella</th><th>Contenuto</th><th>Etichette</th><th>Annotatori</th></tr>
+                ${data.annotations.map(cell => `
+                    <tr>
+                        <td style="font-family: monospace;">${cell.cellId}</td>
+                        <td style="max-width: 250px; word-wrap: break-word; font-size: 9px;">${cell.content}</td>
+                        <td>
+                            ${cell.annotations.map(ann => `
+                                <div style="margin-bottom: 2px;">
+                                    <span class="badge" style="background-color: ${ann.labelColor}">${ann.labelName}</span>
+                                    <small>(ID: ${ann.annotationId})</small>
+                                    ${ann.isAiGenerated ? '<span class="badge ai-badge">🤖 AI</span>' : ''}
+                                    ${ann.aiConfidence ? `<small>(${Math.round(ann.aiConfidence * 100)}%)</small>` : ''}
+                                </div>
+                            `).join('')}
+                        </td>
+                        <td>
+                            ${cell.annotations.map(ann => `<div style="font-size: 9px;">${ann.annotator}</div>`).join('')}
+                        </td>
+                    </tr>
+                `).join('')}
+            </table>
+        </body>
+        </html>
+    `;
+    
+    const blob = new Blob([htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Export PDF (utilizzerà window.print per ora)
+function exportToPDF(data) {
+    // Apre una nuova finestra con il contenuto formattato per stampa/PDF
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Report Completo - ${data.question}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 15px; font-size: 9px; line-height: 1.3; }
+                h1, h2 { color: #2c3e50; page-break-after: avoid; }
+                h1 { font-size: 14px; margin-bottom: 8px; }
+                h2 { font-size: 11px; margin-bottom: 6px; margin-top: 12px; }
+                h3 { font-size: 10px; margin-bottom: 4px; margin-top: 8px; }
+                table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 8px; }
+                th, td { border: 1px solid #ddd; padding: 3px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                .stats-box { background-color: #f8f9fa; padding: 8px; margin: 6px 0; border-radius: 3px; font-size: 8px; }
+                .badge { color: white; padding: 1px 4px; border-radius: 2px; font-size: 7px; font-weight: bold; }
+                .ai-badge { background-color: #17a2b8; }
+                ul { margin: 3px 0; padding-left: 12px; }
+                li { margin-bottom: 2px; font-size: 8px; }
+                p { margin: 2px 0; }
+                @media print { 
+                    body { margin: 8px; font-size: 8px; } 
+                    table { page-break-inside: avoid; margin: 5px 0; }
+                    tr { page-break-inside: avoid; }
+                    h1 { font-size: 12px; }
+                    h2 { font-size: 10px; }
+                    .stats-box { font-size: 7px; padding: 5px; }
+                }
+                .cell-content { max-width: 150px; word-wrap: break-word; font-size: 7px; }
+            </style>
+        </head>
+        <body>
+            <h1>Report Completo - ${data.question}</h1>
+            <p><strong>File:</strong> ${data.filename}</p>
+            <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')}</p>
+            
+            <h2>Statistiche Generali</h2>
+            <div class="stats-box">
+                <p><strong>Celle Totali:</strong> ${data.stats.totalCells}</p>
+                <p><strong>Celle Annotate:</strong> ${data.stats.annotatedCells}</p>
+                <p><strong>Annotatori:</strong> ${data.stats.annotators}</p>
+                <p><strong>Etichette:</strong> ${data.stats.labels}</p>
+            </div>
+            
+            <h2>Annotatori</h2>
+            <table>
+                <tr><th>Username</th><th>Annotazioni</th><th>Celle</th></tr>
+                ${data.annotators.map(user => 
+                    `<tr><td>${user.username}</td><td>${user.annotationCount}</td><td>${user.cellCount}</td></tr>`
+                ).join('')}
+            </table>
+            
+            <h2>Tutte le Etichette del Quesito</h2>
+            <table>
+                <tr><th>Etichetta</th><th>Categoria</th><th>Utilizzi</th></tr>
+                ${data.labels.map(label => 
+                    `<tr><td><span class="badge" style="background-color: ${label.color}">${label.name}</span></td><td>${label.category}</td><td>${label.usage}</td></tr>`
+                ).join('')}
+            </table>
+            
+            <h2>Report Completo - Etichette con Tutti i Commenti</h2>
+            ${Object.entries(data.labelsWithComments).map(([labelName, comments]) => {
+                const labelColor = comments[0].color || '#007bff';
+                return `
+                <h3><span class="badge" style="background-color: ${labelColor}">${labelName}</span> (${comments.length} commenti)</h3>
+                <table style="margin-left: 15px;">
+                    <tr><th>Numero</th><th>Contenuto</th><th>Info</th></tr>
+                    ${comments.map(comment => `
+                        <tr>
+                            <td style="white-space: nowrap;">#${comment.rowNumber}</td>
+                            <td class="cell-content">${comment.content}</td>
+                            <td style="white-space: nowrap;">
+                                ${comment.isAiGenerated ? '<span class="badge ai-badge">🤖</span>' : ''}
+                                ${comment.aiConfidence ? `<small>(${Math.round(comment.aiConfidence * 100)}%)</small>` : ''}
+                                ${comment.annotator ? `<small>${comment.annotator}</small>` : ''}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </table>
+            `;}).join('')}
+            
+            <h2>Annotazioni per Cella</h2>
+            <table>
+                <tr><th>ID Cella</th><th>Contenuto</th><th>Etichette</th><th>Annotatori</th></tr>
+                ${data.annotations.map(cell => `
+                    <tr>
+                        <td style="font-family: monospace; white-space: nowrap;">${cell.cellId}</td>
+                        <td class="cell-content">${cell.content}</td>
+                        <td>
+                            ${cell.annotations.map(ann => `
+                                <div style="margin-bottom: 1px;">
+                                    <span class="badge" style="background-color: ${ann.labelColor}">${ann.labelName}</span>
+                                    <small>(${ann.annotationId})</small>
+                                    ${ann.isAiGenerated ? '<span class="badge ai-badge">🤖</span>' : ''}
+                                    ${ann.aiConfidence ? `<small>(${Math.round(ann.aiConfidence * 100)}%)</small>` : ''}
+                                </div>
+                            `).join('')}
+                        </td>
+                        <td>
+                            ${cell.annotations.map(ann => `<div style="font-size: 7px;">${ann.annotator}</div>`).join('')}
+                        </td>
+                    </tr>
+                `).join('')}
+            </table>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// Export Text
+function exportToText(data) {
+    let textContent = `REPORT COMPLETO - ${data.question}\n`;
+    textContent += `${'='.repeat(50)}\n\n`;
+    textContent += `File: ${data.filename}\n`;
+    textContent += `Data: ${new Date().toLocaleDateString('it-IT')}\n\n`;
+    
+    // Statistiche generali
+    textContent += `STATISTICHE GENERALI\n`;
+    textContent += `${'-'.repeat(20)}\n`;
+    textContent += `Celle Totali: ${data.stats.totalCells}\n`;
+    textContent += `Celle Annotate: ${data.stats.annotatedCells}\n`;
+    textContent += `Annotatori: ${data.stats.annotators}\n`;
+    textContent += `Etichette: ${data.stats.labels}\n\n`;
+    
+    // Annotatori
+    textContent += `ANNOTATORI\n`;
+    textContent += `${'-'.repeat(10)}\n`;
+    data.annotators.forEach(user => {
+        textContent += `${user.username}: ${user.annotationCount} annotazioni, ${user.cellCount} celle\n`;
+    });
+    textContent += `\n`;
+    
+    // Etichette
+    textContent += `TUTTE LE ETICHETTE DEL QUESITO\n`;
+    textContent += `${'-'.repeat(32)}\n`;
+    data.labels.forEach(label => {
+        textContent += `${label.name} (${label.category}): ${label.usage} utilizzi\n`;
+    });
+    textContent += `\n`;
+    
+    // Report Etichette con Commenti
+    textContent += `REPORT COMPLETO - ETICHETTE CON TUTTI I COMMENTI\n`;
+    textContent += `${'-'.repeat(48)}\n`;
+    Object.entries(data.labelsWithComments).forEach(([labelName, comments]) => {
+        textContent += `\n${labelName.toUpperCase()} (${comments.length} commenti):\n`;
+        textContent += `${'-'.repeat(labelName.length + 15)}\n`;
+        comments.forEach(comment => {
+            textContent += `#${comment.rowNumber}: ${comment.content}`;
+            if (comment.isAiGenerated) {
+                textContent += ` [🤖 AI`;
+                if (comment.aiConfidence) {
+                    textContent += ` ${Math.round(comment.aiConfidence * 100)}%`;
+                }
+                textContent += `]`;
+            }
+            if (comment.annotator) {
+                textContent += ` - ${comment.annotator}`;
+            }
+            textContent += `\n`;
+        });
+    });
+    textContent += `\n`;
+    
+    // Annotazioni per Cella
+    textContent += `ANNOTAZIONI PER CELLA\n`;
+    textContent += `${'-'.repeat(20)}\n`;
+    data.annotations.forEach(cell => {
+        textContent += `\nCella ${cell.cellId}:\n`;
+        textContent += `Contenuto: ${cell.content}\n`;
+        textContent += `Annotazioni:\n`;
+        cell.annotations.forEach(ann => {
+            textContent += `  - ${ann.labelName} (ID: ${ann.annotationId}) - ${ann.annotator}`;
+            if (ann.isAiGenerated) {
+                textContent += ` [🤖 AI`;
+                if (ann.aiConfidence) {
+                    textContent += ` ${Math.round(ann.aiConfidence * 100)}%`;
+                }
+                textContent += `]`;
+            }
+            if (ann.status !== 'active') {
+                textContent += ` [Status: ${ann.status}]`;
+            }
+            textContent += `\n`;
+        });
+    });
+    
+    const blob = new Blob([textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Toggle evidenziazione termini cercati
+function toggleHighlight() {
+    highlightEnabled = !highlightEnabled;
+    const searchTerm = document.getElementById('label-name-filter').value.toLowerCase();
+    const badges = document.querySelectorAll('.label-badge');
+    
+    badges.forEach(badge => {
+        if (highlightEnabled && searchTerm) {
+            const text = badge.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                badge.style.boxShadow = '0 0 10px #ffc107';
+                badge.style.border = '2px solid #ffc107';
+            }
+        } else {
+            badge.style.boxShadow = '';
+            badge.style.border = '';
+        }
+    });
+    
+    // Cambia icona del pulsante
+    const btn = event.target.closest('button');
+    const icon = btn.querySelector('i');
+    if (highlightEnabled) {
+        icon.className = 'bi bi-highlighter-fill';
+        btn.classList.add('active');
+    } else {
+        icon.className = 'bi bi-highlighter';
+        btn.classList.remove('active');
+    }
+}
+
+// Auto-submit del form quando si cambia un filtro (opzionale)
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('label-filters-form');
+    const inputs = form.querySelectorAll('input[type="text"], input[type="number"]');
+    
+    // Aggiungi debounce per evitare troppe richieste
+    let timeout;
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                // Auto-submit è disabilitato di default, decommentare se necessario
+                // form.submit();
+            }, 1000);
+        });
+    });
+    
+    // Evidenzia automaticamente se c'è un termine di ricerca
+    const searchTerm = document.getElementById('label-name-filter').value;
+    if (searchTerm) {
+        toggleHighlight();
+    }
+    
+    // Aggiungi contatori in tempo reale
+    updateFilterCounters();
+});
+
+// Aggiorna contatori dei filtri
+function updateFilterCounters() {
+    const totalRows = document.querySelectorAll('#labels-table tbody tr').length;
+    const visibleRows = document.querySelectorAll('#labels-table tbody tr:not([style*="display: none"])').length;
+    
+    // Aggiorna il contatore se necessario
+    const counter = document.querySelector('.text-muted small');
+    if (counter && totalRows !== visibleRows) {
+        counter.innerHTML = `<i class="bi bi-info-circle me-1"></i>Visualizzate ${visibleRows} di ${totalRows} etichette <span class="badge bg-secondary ms-1">Filtrate</span>`;
+    }
+}
+
+// Funzione per reset rapido dei filtri
+function resetFilters() {
+    window.location.href = "{{ url_for('statistics.question_detail', file_id=file.id, question=question) }}";
+}
+
+// Shortcuts da tastiera
+document.addEventListener('keydown', function(e) {
+    // Ctrl+F per focus sulla ricerca
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        document.getElementById('label-name-filter').focus();
+    }
+    
+    // Escape per reset filtri
+    if (e.key === 'Escape') {
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.id === 'label-name-filter' || activeElement.name)) {
+            resetFilters();
+        }
+    }
+});
+
+// Tooltip per spiegare i filtri
+document.addEventListener('DOMContentLoaded', function() {
+    // Aggiungi tooltip se Bootstrap è disponibile
+    if (typeof bootstrap !== 'undefined') {
+        const tooltipElements = document.querySelectorAll('[title]');
+        tooltipElements.forEach(el => {
+            new bootstrap.Tooltip(el);
+        });
+    }
+});
+</script>
+
 {% endblock %}

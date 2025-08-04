@@ -676,6 +676,14 @@ def question_detail(file_id, question):
         flash('Quesito non trovato.', 'error')
         return redirect(url_for('statistics.file_detail', file_id=file_id))
     
+    # Parametri per il filtraggio delle etichette
+    category_filter = request.args.get('category')
+    label_name_filter = request.args.get('label_name', '').strip()
+    min_usage = request.args.get('min_usage', type=int)
+    max_usage = request.args.get('max_usage', type=int)
+    sort_by = request.args.get('sort_by', default='name')
+    sort_order = request.args.get('sort_order', default='asc')
+    
     # Celle del quesito
     cells = TextCell.query.filter_by(
         excel_file_id=file_id, 
@@ -696,8 +704,8 @@ def question_detail(file_id, question):
      .order_by(desc('annotation_count'))\
      .all()
     
-    # Tutte le etichette utilizzate per questo quesito (non solo le più usate)
-    label_stats = db.session.query(
+    # Tutte le etichette utilizzate per questo quesito (con filtri)
+    label_stats_query = db.session.query(
         Label.id,
         Label.name,
         Label.color,
@@ -708,9 +716,72 @@ def question_detail(file_id, question):
      .outerjoin(Category, Label.category_id == Category.id)\
      .filter(TextCell.excel_file_id == file_id)\
      .filter(TextCell.column_name == question)\
+     .group_by(Label.id)
+    
+    # Applica filtri se specificati
+    if category_filter:
+        label_stats_query = label_stats_query.filter(Category.name == category_filter)
+    
+    if label_name_filter:
+        label_stats_query = label_stats_query.filter(Label.name.ilike(f'%{label_name_filter}%'))
+    
+    if min_usage is not None:
+        label_stats_query = label_stats_query.having(func.count(CellAnnotation.id) >= min_usage)
+    
+    if max_usage is not None:
+        label_stats_query = label_stats_query.having(func.count(CellAnnotation.id) <= max_usage)
+    
+    # Applica ordinamento
+    if sort_by == 'category':
+        if sort_order == 'desc':
+            label_stats_query = label_stats_query.order_by(desc(Category.name))
+        else:
+            label_stats_query = label_stats_query.order_by(Category.name)
+    elif sort_by == 'usage':
+        if sort_order == 'desc':
+            label_stats_query = label_stats_query.order_by(desc('usage_count'))
+        else:
+            label_stats_query = label_stats_query.order_by('usage_count')
+    else:  # sort_by == 'name' (default)
+        if sort_order == 'desc':
+            label_stats_query = label_stats_query.order_by(desc(Label.name))
+        else:
+            label_stats_query = label_stats_query.order_by(Label.name)
+    
+    label_stats = label_stats_query.all()
+    
+    # Ottieni tutte le categorie disponibili per il dropdown dei filtri
+    available_categories = db.session.query(Category.name)\
+        .join(Label, Label.category_id == Category.id)\
+        .join(CellAnnotation, CellAnnotation.label_id == Label.id)\
+        .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+        .filter(TextCell.excel_file_id == file_id)\
+        .filter(TextCell.column_name == question)\
+        .distinct()\
+        .order_by(Category.name)\
+        .all()
+    
+    # Statistiche per i filtri (min/max utilizzi)
+    # Prima otteniamo tutti i conteggi degli utilizzi
+    usage_counts_subquery = db.session.query(
+        func.count(CellAnnotation.id).label('usage_count')
+    ).select_from(Label)\
+     .join(CellAnnotation)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
      .group_by(Label.id)\
-     .order_by(Label.name)\
-     .all()
+     .subquery()
+    
+    # Poi calcoliamo min e max da questi conteggi
+    usage_stats = db.session.query(
+        func.min(usage_counts_subquery.c.usage_count).label('min_usage'),
+        func.max(usage_counts_subquery.c.usage_count).label('max_usage')
+    ).first()
+    
+    # Valori di default per min/max se non ci sono dati
+    min_usage_available = usage_stats.min_usage if usage_stats and usage_stats.min_usage else 1
+    max_usage_available = usage_stats.max_usage if usage_stats and usage_stats.max_usage else 1
     
     # Raggruppamento etichetta + commento con ID
     cell_annotations = db.session.query(
@@ -773,7 +844,20 @@ def question_detail(file_id, question):
                          annotator_stats=annotator_stats,
                          label_stats=label_stats,
                          cells_with_annotations=dict(cells_with_annotations),
-                         labels_with_comments=dict(labels_with_comments))
+                         labels_with_comments=dict(labels_with_comments),
+                         # Dati per i filtri
+                         available_categories=[cat.name for cat in available_categories],
+                         min_usage_available=min_usage_available,
+                         max_usage_available=max_usage_available,
+                         # Valori correnti dei filtri
+                         current_filters={
+                             'category': category_filter,
+                             'label_name': label_name_filter,
+                             'min_usage': min_usage,
+                             'max_usage': max_usage,
+                             'sort_by': sort_by,
+                             'sort_order': sort_order
+                         })
 
 @statistics_bp.route('/question/<int:file_id>/<question>/compare')
 @login_required
