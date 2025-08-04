@@ -128,3 +128,18 @@ init: ## Inizializza il progetto (prima volta)
 	@make build
 	@make up
 	@echo "$(GREEN)Project initialized! Access at http://localhost:5000$(NC)"
+
+# Comandi per la sincronizzazione etichette
+sync-colors: ## Sincronizza i colori delle etichette (esegue nel container)
+	@echo "$(GREEN)Sincronizzando i colori delle etichette...$(NC)"
+	docker exec $(CONTAINER_NAME) python sync_all_label_colors.py --verbose
+
+sync-colors-force: ## Forza la sincronizzazione dei colori (ATTENZIONE: sovrascrive colori personalizzati)
+	@echo "$(RED)ATTENZIONE: Questa operazione sovrascriverà tutti i colori personalizzati!$(NC)"
+	@read -p "Sei sicuro di voler continuare? (y/N): " confirm && [ "$$confirm" = "y" ] || exit 1
+	@echo "$(GREEN)Forzando la sincronizzazione dei colori...$(NC)"
+	docker exec $(CONTAINER_NAME) python sync_all_label_colors.py --force --verbose
+
+sync-colors-dry: ## Simula la sincronizzazione senza salvare (test)
+	@echo "$(BLUE)Simulando la sincronizzazione dei colori (dry-run)...$(NC)"
+	docker exec $(CONTAINER_NAME) python sync_all_label_colors.py --dry-run --verbose

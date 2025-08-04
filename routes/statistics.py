@@ -33,9 +33,11 @@ def overview():
     # Etichette più usate
     top_labels = db.session.query(
         Label.name,
-        Label.color,
+        func.coalesce(Category.color, Label.color).label('color'),
         func.count(CellAnnotation.id).label('usage_count')
-    ).join(CellAnnotation).group_by(Label.id).order_by(desc('usage_count')).limit(10).all()
+    ).join(CellAnnotation)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .group_by(Label.id).order_by(desc('usage_count')).limit(10).all()
     
     # Statistiche per file
     file_stats = db.session.query(
@@ -60,9 +62,11 @@ def overview():
     # Distribuzione etichette (per grafico)
     label_chart_data = db.session.query(
         Label.name,
-        Label.color,
+        func.coalesce(Category.color, Label.color).label('color'),
         func.count(CellAnnotation.id).label('count')
-    ).join(CellAnnotation).group_by(Label.id).order_by(desc('count')).limit(10).all()
+    ).join(CellAnnotation)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .group_by(Label.id).order_by(desc('count')).limit(10).all()
     
     # Timeline attività
     timeline_data = db.session.query(
@@ -104,10 +108,10 @@ def user_detail(user_id):
     # Distribuzione etichette
     label_usage = db.session.query(
         Label.name,
-        Label.color,
+        func.coalesce(Category.color, Label.color).label('color'),
         Category.name.label('category_name'),
         func.count(CellAnnotation.id).label('count')
-    ).select_from(CellAnnotation).join(Label).join(Category).filter(
+    ).select_from(CellAnnotation).join(Label).outerjoin(Category, Label.category_id == Category.id).filter(
         CellAnnotation.user_id == user_id
     ).group_by(Label.id).order_by(desc('count')).all()
     
@@ -629,7 +633,7 @@ def file_detail(file_id):
     # Etichette più utilizzate in questo file
     label_stats = db.session.query(
         Label.name,
-        Label.color,
+        func.coalesce(Category.color, Label.color).label('color'),  # Usa il colore della categoria se esiste, altrimenti quello dell'etichetta
         Category.name.label('category_name'),
         func.count(CellAnnotation.id).label('usage_count')
     ).join(CellAnnotation)\

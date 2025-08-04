@@ -17,6 +17,7 @@ def list_labels():
     page = request.args.get('page', 1, type=int)
     category_filter = request.args.get('category')
     show_inactive = request.args.get('show_inactive', False, type=bool)
+    show_all = request.args.get('show_all', False, type=bool)
 
     # Query di base per etichette attive con JOIN esplicito per categoria
     query = Label.query.options(db.joinedload(Label.category_obj))
@@ -31,9 +32,27 @@ def list_labels():
         query = query.filter_by(category_id=int(category_filter))
         current_category = int(category_filter)
 
-    labels = query.order_by(Label.name).paginate(
-        page=page, per_page=20, error_out=False
-    )
+    # Gestione paginazione: se show_all è True, mostra tutto senza paginazione
+    if show_all:
+        labels = query.order_by(Label.name).all()
+        # Simula oggetto paginazione per compatibilità template
+        class FakePagination:
+            def __init__(self, items):
+                self.items = items
+                self.page = 1
+                self.pages = 1
+                self.has_prev = False
+                self.has_next = False
+                self.prev_num = None
+                self.next_num = None
+                self.total = len(items)
+                self.per_page = len(items)
+        
+        labels = FakePagination(labels)
+    else:
+        labels = query.order_by(Label.name).paginate(
+            page=page, per_page=20, error_out=False
+        )
 
     # Liste delle categorie attive per il filtro
     categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
@@ -46,6 +65,7 @@ def list_labels():
                          categories=categories,
                          current_category=current_category,
                          show_inactive=show_inactive,
+                         show_all=show_all,
                          uncategorized_count=uncategorized_count)
 
 @labels_bp.route('/create', methods=['GET', 'POST'])
@@ -85,12 +105,20 @@ def create_label():
         elif form.category_id.data and form.category_id.data != 0:
             category_id = form.category_id.data
         
+        # Determina il colore dell'etichetta
+        label_color = form.color.data
+        if category_id:
+            # Se ha una categoria, usa il colore della categoria a meno che non sia stato specificato un colore diverso nel form
+            category = Category.query.get(category_id)
+            if category and (not form.color.data or form.color.data == '#007bff'):  # Se colore non specificato o è il default
+                label_color = category.color
+        
         # Crea l'etichetta
         label = Label(
             name=form.name.data.strip(),
             description=form.description.data,
             category_id=category_id,
-            color=form.color.data,
+            color=label_color,
             is_active=True
         )
         
@@ -105,7 +133,11 @@ def create_label():
             db.session.rollback()
             flash(f'Errore durante la creazione: {str(e)}', 'error')
     
-    return render_template('labels/create_label.html', form=form)
+    # Prepara i colori delle categorie per il template
+    categories = Category.query.filter_by(is_active=True).all()
+    category_colors = {cat.id: cat.color for cat in categories}
+    
+    return render_template('labels/create_label.html', form=form, category_colors=category_colors)
 
 @labels_bp.route('/edit/<int:label_id>', methods=['GET', 'POST'])
 @login_required
@@ -126,8 +158,23 @@ def edit_label(label_id):
         else:
             label.name = form.name.data
             label.description = form.description.data
-            label.category_id = form.category_id.data
-            label.color = form.color.data
+            
+            # Gestione categoria e colore
+            old_category_id = label.category_id
+            new_category_id = form.category_id.data
+            label.category_id = new_category_id
+            
+            # Se la categoria è cambiata, aggiorna il colore se l'etichetta non ha un colore personalizzato
+            if old_category_id != new_category_id:
+                if new_category_id:
+                    # Ha una nuova categoria: eredita il colore se non personalizzato
+                    category = Category.query.get(new_category_id)
+                    if category and not label.has_custom_color():
+                        label.color = category.color
+                # Se viene rimossa la categoria, mantiene il colore attuale
+            else:
+                # Se la categoria non è cambiata, aggiorna comunque il colore dal form
+                label.color = form.color.data
             
             db.session.commit()
             
@@ -197,7 +244,7 @@ def api_search_labels():
         'name': label.name,
         'description': label.description,
         'category': label.category_obj.name if label.category_obj else None,
-        'color': label.color
+        'color': label.get_effective_color()
     } for label in labels])
 
 @labels_bp.route('/merge', methods=['GET', 'POST'])
@@ -276,7 +323,7 @@ def merge_labels():
             'id': label.id,
             'name': label.name,
             'description': label.description,
-            'color': label.color,
+            'color': label.get_effective_color(),
             'annotation_count': annotation_count
         }
         labels_by_category[category].append(label_data)
@@ -321,7 +368,7 @@ def api_suggest_merge():
                             'id': label.id,
                             'name': label.name,
                             'description': label.description,
-                            'color': label.color,
+                            'color': label.get_effective_color(),
                             'annotation_count': CellAnnotation.query.filter_by(label_id=label.id).count()
                         } for label in group_labels]
                     }
@@ -690,7 +737,7 @@ def api_labels_for_ai():
             'name': label.name,
             'description': label.description,
             'category': category_name,
-            'color': label.color
+            'color': label.get_effective_color()
         })
     
     return jsonify(labels_data)
@@ -713,3 +760,246 @@ def api_categories_for_ai():
         })
     
     return jsonify(categories_data)
+
+
+# NUOVE ROUTES PER GESTIONE COLORI
+
+@labels_bp.route('/categories/colors')
+@login_required
+def manage_category_colors():
+    """Pagina per gestire i colori delle categorie con slider"""
+    if not current_user.is_admin:
+        flash('Non hai i permessi per questa operazione.', 'error')
+        return redirect(url_for('labels.list_categories'))
+    
+    categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+    
+    # Calcola statistiche per ogni categoria
+    category_stats = {}
+    for category in categories:
+        category_stats[category.id] = {
+            'label_count': Label.query.filter_by(category_id=category.id, is_active=True).count(),
+            'annotation_count': db.session.query(CellAnnotation).join(Label).filter(
+                Label.category_id == category.id,
+                Label.is_active == True
+            ).count()
+        }
+    
+    return render_template('labels/category_colors.html', 
+                         categories=categories,
+                         category_stats=category_stats)
+
+@labels_bp.route('/test-csrf')
+@login_required
+def test_csrf():
+    """Route di test per il CSRF"""
+    return render_template('labels/test_csrf.html')
+
+@labels_bp.route('/categories/colors/update', methods=['POST'])
+@login_required
+def update_category_colors():
+    """Aggiorna i colori delle categorie"""
+    if not current_user.is_admin:
+        flash('Non hai i permessi per questa operazione.', 'error')
+        return redirect(url_for('labels.list_categories'))
+    
+    try:
+        # Processa i dati inviati dal form
+        updated_count = 0
+        errors = []
+        
+        for key, value in request.form.items():
+            if key.startswith('color_'):
+                category_id = int(key.replace('color_', ''))
+                category = Category.query.get_or_404(category_id)
+                
+                try:
+                    # Valida e aggiorna il colore
+                    category.update_color(value)
+                    updated_count += 1
+                except ValueError as e:
+                    errors.append(f"Categoria '{category.name}': {str(e)}")
+        
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+        
+        if updated_count > 0:
+            db.session.commit()
+            flash(f'Aggiornati i colori di {updated_count} categorie.', 'success')
+        else:
+            flash('Nessun colore è stato modificato.', 'info')
+    
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore durante l\'aggiornamento: {str(e)}', 'error')
+    
+    return redirect(url_for('labels.manage_category_colors'))
+
+@labels_bp.route('/categories/colors/sync', methods=['POST'])
+@login_required
+def sync_label_colors():
+    """Sincronizza i colori delle etichette con le categorie"""
+    if not current_user.is_admin:
+        flash('Non hai i permessi per questa operazione.', 'error')
+        return redirect(url_for('labels.list_categories'))
+    
+    try:
+        # Verifica se forzare la sincronizzazione
+        force_sync = request.form.get('force_sync') == 'true'
+        
+        # Trova tutte le etichette che hanno una categoria
+        labels_with_category = Label.query.filter(Label.category_id.isnot(None)).all()
+        
+        updated_count = 0
+        updated_labels = []
+        
+        for label in labels_with_category:
+            if label.category_obj:
+                old_color = label.color
+                # Se force_sync è True, aggiorna tutte le etichette
+                # Altrimenti solo quelle che non hanno un colore personalizzato
+                if force_sync or not label.has_custom_color():
+                    label.color = label.category_obj.color
+                    updated_count += 1
+                    updated_labels.append({
+                        'name': label.name,
+                        'old_color': old_color,
+                        'new_color': label.color,
+                        'category': label.category_obj.name
+                    })
+        
+        if updated_count > 0:
+            db.session.commit()
+            sync_type = "forzata" if force_sync else "standard"
+            flash(f'Sincronizzazione {sync_type} completata: aggiornate {updated_count} etichette con i colori delle categorie.', 'success')
+        else:
+            flash('Tutte le etichette sono già sincronizzate.', 'info')
+    
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore durante la sincronizzazione: {str(e)}', 'error')
+    
+    return redirect(url_for('labels.manage_category_colors'))
+
+@labels_bp.route('/api/sync-colors', methods=['POST'])
+@login_required
+def api_sync_label_colors():
+    """API endpoint per sincronizzare i colori delle etichette con le categorie"""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'error': 'Non hai i permessi per questa operazione.'}), 403
+    
+    try:
+        # Verifica se forzare la sincronizzazione
+        force_sync = request.json.get('force_sync', False) if request.is_json else request.form.get('force_sync') == 'true'
+        
+        # Trova tutte le etichette che hanno una categoria
+        labels_with_category = Label.query.filter(Label.category_id.isnot(None)).all()
+        
+        updated_count = 0
+        updated_labels = []
+        skipped_labels = []
+        
+        for label in labels_with_category:
+            if label.category_obj:
+                old_color = label.color
+                # Se force_sync è True, aggiorna tutte le etichette
+                # Altrimenti solo quelle che non hanno un colore personalizzato
+                if force_sync or not label.has_custom_color():
+                    label.color = label.category_obj.color
+                    updated_count += 1
+                    updated_labels.append({
+                        'id': label.id,
+                        'name': label.name,
+                        'old_color': old_color,
+                        'new_color': label.color,
+                        'category': label.category_obj.name,
+                        'reason': 'forced' if force_sync else 'no_custom_color'
+                    })
+                else:
+                    skipped_labels.append({
+                        'id': label.id,
+                        'name': label.name,
+                        'color': label.color,
+                        'category': label.category_obj.name,
+                        'reason': 'has_custom_color'
+                    })
+        
+        if updated_count > 0:
+            db.session.commit()
+        
+        sync_type = "forzata" if force_sync else "standard"
+        
+        return jsonify({
+            'success': True,
+            'updated_count': updated_count,
+            'total_count': len(labels_with_category),
+            'sync_type': sync_type,
+            'updated_labels': updated_labels,
+            'skipped_labels': skipped_labels,
+            'message': f'Sincronizzazione {sync_type} completata: aggiornate {updated_count} etichette.'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Errore durante la sincronizzazione: {str(e)}'
+        }), 500
+
+@labels_bp.route('/categories/colors/reset/<int:category_id>', methods=['POST'])
+@login_required
+def reset_category_color(category_id):
+    """Reset del colore di una categoria al default della palette"""
+    if not current_user.is_admin:
+        flash('Non hai i permessi per questa operazione.', 'error')
+        return redirect(url_for('labels.list_categories'))
+    
+    try:
+        category = Category.query.get_or_404(category_id)
+        
+        # Assegna un nuovo colore dalla palette
+        new_color = Category.assign_next_color()
+        category.update_color(new_color)
+        
+        db.session.commit()
+        flash(f'Colore della categoria "{category.name}" ripristinato.', 'success')
+    
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore durante il ripristino: {str(e)}', 'error')
+    
+    return redirect(url_for('labels.manage_category_colors'))
+
+@labels_bp.route('/api/category-color-preview')
+@login_required
+def api_category_color_preview():
+    """API per l'anteprima dei colori delle categorie"""
+    category_id = request.args.get('category_id', type=int)
+    hue = request.args.get('hue', type=float)
+    saturation = request.args.get('saturation', type=float)
+    lightness = request.args.get('lightness', type=float)
+    
+    if not all([category_id, hue is not None, saturation is not None, lightness is not None]):
+        return jsonify({'error': 'Parametri mancanti'}), 400
+    
+    try:
+        from utils.color_palette import ColorPalette
+        
+        # Converti HSL in esadecimale
+        new_color = ColorPalette.hsl_to_hex(hue, saturation / 100, lightness / 100)
+        text_color = ColorPalette.get_contrasting_text_color(new_color)
+        
+        # Trova alcune etichette di esempio per l'anteprima
+        category = Category.query.get_or_404(category_id)
+        sample_labels = Label.query.filter_by(category_id=category_id, is_active=True).limit(3).all()
+        
+        return jsonify({
+            'color': new_color,
+            'text_color': text_color,
+            'sample_labels': [{'id': label.id, 'name': label.name} for label in sample_labels],
+            'valid': ColorPalette.validate_color(new_color)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

@@ -70,6 +70,96 @@ class Category(db.Model):
     
     def __repr__(self):
         return f'<Category {self.name}>'
+    
+    @classmethod
+    def assign_next_color(cls):
+        """
+        Assegna automaticamente il prossimo colore disponibile dalla palette
+        
+        Returns:
+            str: Codice esadecimale del colore assegnato
+        """
+        from utils.color_palette import ColorPalette
+        
+        # Ottieni tutti i colori già utilizzati
+        used_colors = [cat.color for cat in cls.query.all() if cat.color]
+        
+        return ColorPalette.get_next_color(used_colors)
+    
+    def get_effective_color(self):
+        """
+        Restituisce il colore effettivo della categoria
+        
+        Returns:
+            str: Codice esadecimale del colore
+        """
+        return self.color or '#6c757d'
+    
+    def get_text_color(self):
+        """
+        Restituisce il colore del testo ottimale per questa categoria
+        
+        Returns:
+            str: '#ffffff' per testo bianco, '#000000' per testo nero
+        """
+        from utils.color_palette import ColorPalette
+        return ColorPalette.get_contrasting_text_color(self.get_effective_color())
+    
+    def update_color(self, new_color):
+        """
+        Aggiorna il colore della categoria e propaga a tutte le etichette
+        che non hanno un colore personalizzato
+        
+        Args:
+            new_color (str): Nuovo colore in formato esadecimale
+        """
+        from utils.color_palette import ColorPalette
+        
+        if not ColorPalette.validate_color(new_color):
+            raise ValueError(f"Colore non valido: {new_color}")
+        
+        # Aggiorna il colore della categoria
+        self.color = new_color
+        
+        # Propaga il nuovo colore a tutte le etichette che non hanno un colore personalizzato
+        self.propagate_color_to_labels(force=False)
+    
+    def propagate_color_to_labels(self, force=False):
+        """
+        Propaga il colore della categoria a tutte le sue etichette
+        
+        Args:
+            force (bool): Se True, sovrascrive anche i colori personalizzati
+        """
+        for label in self.labels:
+            if force or not label.has_custom_color():
+                label.color = self.color
+    
+    def get_hsl(self):
+        """
+        Restituisce i valori HSL del colore della categoria
+        
+        Returns:
+            tuple: (hue, saturation, lightness) dove:
+                   - hue è tra 0-360
+                   - saturation è tra 0-1
+                   - lightness è tra 0-1
+        """
+        from utils.color_palette import ColorPalette
+        return ColorPalette.hex_to_hsl(self.get_effective_color())
+    
+    def set_hsl(self, hue, saturation, lightness):
+        """
+        Imposta il colore della categoria usando valori HSL
+        
+        Args:
+            hue (float): Tonalità (0-360)
+            saturation (float): Saturazione (0-1)
+            lightness (float): Luminosità (0-1)
+        """
+        from utils.color_palette import ColorPalette
+        hex_color = ColorPalette.hsl_to_hex(hue, saturation, lightness)
+        self.update_color(hex_color)
 
 class Label(db.Model):
     """Modello per le etichette globali"""
@@ -89,6 +179,62 @@ class Label(db.Model):
     
     def __repr__(self):
         return f'<Label {self.name}>'
+    
+    def get_effective_color(self):
+        """
+        Restituisce il colore effettivo dell'etichetta
+        Se l'etichetta ha una categoria, usa il colore della categoria
+        altrimenti usa il colore proprio dell'etichetta
+        
+        Returns:
+            str: Codice esadecimale del colore
+        """
+        if self.category_obj and not self.has_custom_color():
+            return self.category_obj.get_effective_color()
+        return self.color or '#007bff'
+    
+    def has_custom_color(self):
+        """
+        Verifica se l'etichetta ha un colore personalizzato diverso da quello della categoria
+        
+        Returns:
+            bool: True se ha un colore personalizzato
+        """
+        if not self.category_obj:
+            return True  # Se non ha categoria, il colore è sempre personalizzato
+        
+        return self.color != self.category_obj.color
+    
+    def inherit_category_color(self):
+        """
+        Fa ereditare il colore dalla categoria (rimuove personalizzazione)
+        """
+        if self.category_obj:
+            self.color = self.category_obj.color
+    
+    def get_text_color(self):
+        """
+        Restituisce il colore del testo ottimale per questa etichetta
+        
+        Returns:
+            str: '#ffffff' per testo bianco, '#000000' per testo nero
+        """
+        from utils.color_palette import ColorPalette
+        return ColorPalette.get_contrasting_text_color(self.get_effective_color())
+    
+    def set_color(self, new_color):
+        """
+        Imposta un nuovo colore per l'etichetta
+        
+        Args:
+            new_color (str): Nuovo colore in formato esadecimale
+        """
+        from utils.color_palette import ColorPalette
+        
+        if not ColorPalette.validate_color(new_color):
+            raise ValueError(f"Colore non valido: {new_color}")
+        
+        self.color = new_color
 
 class ExcelFile(db.Model):
     """Modello per i file Excel caricati"""

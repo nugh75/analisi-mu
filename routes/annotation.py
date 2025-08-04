@@ -12,7 +12,8 @@ import os
 import logging
 from collections import defaultdict
 
-from models import TextCell, Label, CellAnnotation, ExcelFile, User, AnnotationAction, db
+from models import TextCell, Label, CellAnnotation, ExcelFile, User, AnnotationAction, Category, db
+from sqlalchemy import func
 
 annotation_bp = Blueprint('annotation', __name__)
 
@@ -614,12 +615,16 @@ def statistics():
         .all()
     
     # Etichette più utilizzate
-    label_stats = db.session.query(Label.name, Label.color, db.func.count(CellAnnotation.id))\
-        .join(CellAnnotation)\
-        .group_by(Label.id)\
-        .order_by(db.desc(db.func.count(CellAnnotation.id)))\
-        .limit(20)\
-        .all()
+    label_stats = db.session.query(
+        Label.name, 
+        func.coalesce(Category.color, Label.color).label('color'), 
+        db.func.count(CellAnnotation.id)
+    ).join(CellAnnotation)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .group_by(Label.id)\
+     .order_by(db.desc(db.func.count(CellAnnotation.id)))\
+     .limit(20)\
+     .all()
     
     # Progress per file
     file_progress = db.session.query(
@@ -693,11 +698,12 @@ def get_file_label_statistics():
         # Statistiche per etichetta in questo file
         label_stats = db.session.query(
             Label.name,
-            Label.color,
+            func.coalesce(Category.color, Label.color).label('color'),
             Label.category,
             db.func.count(CellAnnotation.id).label('count')
         ).select_from(Label)\
          .join(CellAnnotation, Label.id == CellAnnotation.label_id)\
+         .outerjoin(Category, Label.category_id == Category.id)\
          .join(TextCell, CellAnnotation.text_cell_id == TextCell.id)\
          .filter(TextCell.excel_file_id == file.id)\
          .group_by(Label.id)\

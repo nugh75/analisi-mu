@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
-from models import ExcelFile, TextCell, CellAnnotation, Label, db
+from models import ExcelFile, TextCell, CellAnnotation, Label, Category, db
 from forms import UploadForm
 
 excel_bp = Blueprint('excel', __name__)
@@ -263,9 +263,13 @@ def view_question(file_id, question_name):
         .distinct().count()
     
     # Etichette più usate per questa domanda
-    popular_labels = db.session.query(Label.name, Label.color, db.func.count(CellAnnotation.id).label('count'))\
-        .join(CellAnnotation)\
+    popular_labels = db.session.query(
+        Label.name, 
+        db.func.coalesce(Category.color, Label.color).label('color'), 
+        db.func.count(CellAnnotation.id).label('count')
+    ).join(CellAnnotation)\
         .join(TextCell)\
+        .outerjoin(Category, Label.category_id == Category.id)\
         .filter(TextCell.excel_file_id == file_id)\
         .filter(TextCell.column_name == question_name)\
         .group_by(Label.id)\

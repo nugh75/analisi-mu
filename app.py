@@ -46,6 +46,10 @@ def create_app():
     login_manager.init_app(app)
     csrf.init_app(app)
     
+    # Esenzione CSRF per route specifiche
+    csrf.exempt('labels.update_category_colors')
+    csrf.exempt('labels.reset_category_color')
+    
     # Configurazione Flask-Login
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Effettua il login per accedere a questa pagina.'

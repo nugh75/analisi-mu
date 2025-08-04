@@ -5,7 +5,7 @@ Routes principali dell'applicazione
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 
-from models import User, ExcelFile, TextCell, Label, CellAnnotation, db
+from models import User, ExcelFile, TextCell, Label, CellAnnotation, Category, db
 
 main_bp = Blueprint('main', __name__)
 
@@ -24,8 +24,11 @@ def index():
     # File recenti
     recent_files = ExcelFile.query.order_by(ExcelFile.uploaded_at.desc()).limit(5).all()
     
-    # Etichette popolari
-    popular_labels = db.session.query(Label, db.func.count(CellAnnotation.id).label('count'))\
+    # Etichette popolari con colori calcolati
+    popular_labels = db.session.query(
+        Label,
+        db.func.count(CellAnnotation.id).label('count')
+    ).options(db.joinedload(Label.category_obj))\
         .join(CellAnnotation)\
         .group_by(Label.id)\
         .order_by(db.desc('count'))\

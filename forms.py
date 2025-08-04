@@ -109,3 +109,7 @@ class TextDocumentForm(FlaskForm):
                                ],
                                default='other',
                                validators=[DataRequired()])
+
+class CategoryColorsForm(FlaskForm):
+    """Form per l'aggiornamento dei colori delle categorie"""
+    pass  # I campi verranno aggiunti dinamicamente nella vista

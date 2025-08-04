@@ -208,10 +208,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const newCategorySection = document.getElementById('newCategorySection');
     const categorySelect = document.getElementById('categorySelect');
     
+    // Mappa dei colori delle categorie (passata dal backend)
+    const categoryColors = {
+        {% for option in form.category_id.choices %}
+        {% if option[0] != 0 %}
+        '{{ option[0] }}': '{{ category_colors.get(option[0], "#007bff") }}',
+        {% endif %}
+        {% endfor %}
+    };
+    
     // Aggiorna preview del colore
     function updateColorPreview() {
         if (colorInput && colorPreview) {
             colorPreview.style.backgroundColor = colorInput.value;
+        }
+    }
+    
+    // Eredita il colore dalla categoria selezionata
+    function inheritCategoryColor() {
+        if (categorySelect && colorInput && !showNewCategoryCheckbox.checked) {
+            const selectedCategoryId = categorySelect.value;
+            if (selectedCategoryId && selectedCategoryId !== '0' && categoryColors[selectedCategoryId]) {
+                colorInput.value = categoryColors[selectedCategoryId];
+                updateColorPreview();
+            }
         }
     }
     
@@ -222,6 +242,13 @@ document.addEventListener('DOMContentLoaded', function() {
         updateColorPreview();
     }
     
+    // Gestisci cambio categoria per ereditare il colore
+    if (categorySelect) {
+        categorySelect.addEventListener('change', inheritCategoryColor);
+        // Eredita il colore al caricamento se una categoria è già selezionata
+        inheritCategoryColor();
+    }
+    
     // Gestisci visualizzazione sezione nuova categoria
     if (showNewCategoryCheckbox && newCategorySection && categorySelect) {
         showNewCategoryCheckbox.addEventListener('change', function() {
@@ -229,12 +256,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 newCategorySection.style.display = 'block';
                 categorySelect.disabled = true;
                 categorySelect.value = '0'; // Nessuna categoria
+                // Ripristina colore default per nuova categoria
+                colorInput.value = '#007bff';
+                updateColorPreview();
             } else {
                 newCategorySection.style.display = 'none';
                 categorySelect.disabled = false;
                 // Pulisci i campi della nuova categoria
                 const newCategoryInputs = newCategorySection.querySelectorAll('input, textarea');
                 newCategoryInputs.forEach(input => input.value = '');
+                // Eredita il colore della categoria selezionata
+                inheritCategoryColor();
             }
         });
     }

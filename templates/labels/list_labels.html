@@ -16,6 +16,28 @@
                 <a href="{{ url_for('labels.list_categories') }}" class="btn btn-info me-2">
                     <i class="bi bi-collection me-2"></i>Gestisci Categorie
                 </a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('labels.manage_category_colors') }}" class="btn btn-success me-2">
+                    <i class="bi bi-palette me-2"></i>Gestisci Colori
+                </a>
+                <div class="btn-group me-2" role="group">
+                    <button type="button" class="btn btn-warning dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-arrow-repeat me-2"></i>Sincronizza
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <button type="button" class="dropdown-item" onclick="syncLabelColors(false)">
+                                <i class="bi bi-arrow-repeat me-2"></i>Sincronizzazione Standard
+                            </button>
+                        </li>
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" onclick="syncLabelColors(true)">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Forza Sincronizzazione
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
                 <a href="{{ url_for('labels.merge_labels') }}" class="btn btn-warning me-2">
                     <i class="bi bi-arrow-down-up me-2"></i>Unisci Etichette
                 </a>
@@ -62,6 +84,14 @@
                                    {% if show_inactive %}checked{% endif %}>
                             <label class="form-check-label" for="show_inactive">
                                 Mostra anche etichette inattive
+                            </label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" name="show_all" value="true" 
+                                   id="show_all" onchange="this.form.submit()" 
+                                   {% if show_all %}checked{% endif %}>
+                            <label class="form-check-label" for="show_all">
+                                Mostra tutto (senza paginazione)
                             </label>
                         </div>
                         <button type="submit" class="btn btn-primary me-2">
@@ -173,7 +203,7 @@
                                 {% endif %}
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        <span class="badge me-2" style="background-color: {{ label.color }}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
+                                        <span class="badge me-2" style="background-color: {{ label.get_effective_color() }}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
                                         <strong>{{ label.name }}</strong>
                                     </div>
                                 </td>
@@ -281,7 +311,7 @@
     <ul class="pagination justify-content-center">
         {% if labels.has_prev %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.prev_num, category=current_category, show_inactive=show_inactive) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.prev_num, category=current_category, show_inactive=show_inactive, show_all=show_all) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
@@ -291,7 +321,7 @@
         {% if page_num %}
         {% if page_num != labels.page %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=page_num, category=current_category, show_inactive=show_inactive) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=page_num, category=current_category, show_inactive=show_inactive, show_all=show_all) }}">
                 {{ page_num }}
             </a>
         </li>
@@ -309,7 +339,7 @@
 
         {% if labels.has_next %}
         <li class="page-item">
-            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.next_num, category=current_category, show_inactive=show_inactive) }}">
+            <a class="page-link" href="{{ url_for('labels.list_labels', page=labels.next_num, category=current_category, show_inactive=show_inactive, show_all=show_all) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
@@ -407,8 +437,189 @@
 </div>
 {% endblock %}
 
+<!-- Modal per risultati sincronizzazione -->
+<div class="modal fade" id="syncResultModal" tabindex="-1" aria-labelledby="syncResultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="syncResultModalLabel">
+                    <i class="bi bi-arrow-repeat"></i> Risultati Sincronizzazione
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="syncResultContent">
+                    <!-- Contenuto dinamico -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                    <i class="bi bi-arrow-clockwise"></i> Ricarica Pagina
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% block scripts %}
 <script>
+// Funzione per sincronizzare i colori delle etichette
+async function syncLabelColors(forceSync = false) {
+    const syncType = forceSync ? 'forzata' : 'standard';
+    const confirmMessage = forceSync ? 
+        'ATTENZIONE: Questa operazione sovrascriverà TUTTI i colori personalizzati delle etichette. Continuare?' :
+        'Sincronizzare i colori delle etichette che non hanno colori personalizzati?';
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Mostra indicatore di caricamento
+    const loadingHtml = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Sincronizzazione in corso...</span>
+            </div>
+            <p class="mt-2">Sincronizzazione ${syncType} in corso...</p>
+        </div>
+    `;
+    
+    document.getElementById('syncResultContent').innerHTML = loadingHtml;
+    const modal = new bootstrap.Modal(document.getElementById('syncResultModal'));
+    modal.show();
+    
+    try {
+        // Ottieni il token CSRF
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                         document.querySelector('input[name="csrf_token"]')?.value;
+        
+        const response = await fetch('{{ url_for("labels.api_sync_label_colors") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                force_sync: forceSync
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSyncSuccess(result);
+        } else {
+            showSyncError(result.error);
+        }
+        
+    } catch (error) {
+        console.error('Errore durante la sincronizzazione:', error);
+        showSyncError('Errore di connessione durante la sincronizzazione.');
+    }
+}
+
+function showSyncSuccess(result) {
+    const { updated_count, total_count, sync_type, updated_labels, skipped_labels } = result;
+    
+    let html = `
+        <div class="alert alert-success">
+            <h6><i class="bi bi-check-circle"></i> Sincronizzazione ${sync_type} completata!</h6>
+            <p>Aggiornate <strong>${updated_count}</strong> etichette su <strong>${total_count}</strong> totali.</p>
+        </div>
+    `;
+    
+    if (updated_labels.length > 0) {
+        html += `
+            <h6><i class="bi bi-arrow-repeat"></i> Etichette aggiornate (${updated_labels.length}):</h6>
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Etichetta</th>
+                            <th>Categoria</th>
+                            <th>Colore Precedente</th>
+                            <th>Nuovo Colore</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        updated_labels.forEach(label => {
+            html += `
+                <tr>
+                    <td><strong>${label.name}</strong></td>
+                    <td><span class="badge bg-secondary">${label.category}</span></td>
+                    <td>
+                        <span class="badge" style="background-color: ${label.old_color}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
+                        <code>${label.old_color}</code>
+                    </td>
+                    <td>
+                        <span class="badge" style="background-color: ${label.new_color}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
+                        <code>${label.new_color}</code>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    if (skipped_labels.length > 0) {
+        html += `
+            <h6 class="mt-3"><i class="bi bi-info-circle"></i> Etichette non modificate (${skipped_labels.length}):</h6>
+            <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Etichetta</th>
+                            <th>Categoria</th>
+                            <th>Colore Personalizzato</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        skipped_labels.forEach(label => {
+            html += `
+                <tr>
+                    <td><strong>${label.name}</strong></td>
+                    <td><span class="badge bg-secondary">${label.category}</span></td>
+                    <td>
+                        <span class="badge" style="background-color: ${label.color}; width: 20px; height: 20px; border-radius: 50%;">&nbsp;</span>
+                        <code>${label.color}</code>
+                    </td>
+                    <td><small class="text-muted">Ha colore personalizzato</small></td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    document.getElementById('syncResultContent').innerHTML = html;
+}
+
+function showSyncError(error) {
+    const html = `
+        <div class="alert alert-danger">
+            <h6><i class="bi bi-exclamation-triangle"></i> Errore durante la sincronizzazione</h6>
+            <p>${error}</p>
+        </div>
+    `;
+    
+    document.getElementById('syncResultContent').innerHTML = html;
+}
+
 function confirmDelete(labelName, deleteUrl) {
     if (confirm(`Sei sicuro di voler eliminare l'etichetta "${labelName}"?\n\nQuesta azione non può essere annullata.`)) {
         // Crea un form per l'eliminazione

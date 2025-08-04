@@ -148,7 +148,7 @@
                     {% for label, count in popular_labels %}
                     <div class="list-group-item d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
-                            <span class="badge me-2" style="background-color: {{ label.color }};">
+                            <span class="badge me-2" style="background-color: {{ label.get_effective_color() }};">
                                 &nbsp;
                             </span>
                             <div>
