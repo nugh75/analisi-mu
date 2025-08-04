@@ -4,7 +4,7 @@ Guida completa per l'integrazione e configurazione delle funzionalità di **Inte
 
 ## 🎯 Panoramica
 
-Analisi MU integra modelli di linguaggio avanzati per:
+Anatema integra modelli di linguaggio avanzati per:
 - **Annotazione automatica**: Classificazione automatica delle celle testuali
 - **Suggerimenti intelligenti**: Raccomandazioni di etichette basate su AI
 - **Analisi del sentiment**: Analisi automatica del sentiment

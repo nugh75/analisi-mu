@@ -15,7 +15,7 @@ class OpenRouterClient:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://anatema.ai4educ.org",
-            "X-Title": "Analisi MU - AI Annotation System"
+            "X-Title": "Anatema - AI Annotation System"
         }
     
     def test_connection(self) -> bool:

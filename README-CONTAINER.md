@@ -1,10 +1,10 @@
 # 📦 Container Guide -Anatema
 
-Guida completa per l'utilizzo di **Analisi MU** in ambienti containerizzati. Include configurazioni per Docker, Kubernetes e orchestrazione avanzata.
+Guida completa per l'utilizzo di **Anatema** in ambienti containerizzati. Include configurazioni per Docker, Kubernetes e orchestrazione avanzata.
 
 ## 🎯 Panoramica
 
-Analisi MU è progettato per essere facilmente containerizzato e deployato in diversi ambienti:
+Anatema è progettato per essere facilmente containerizzato e deployato in diversi ambienti:
 - **Sviluppo locale**: Docker Compose per sviluppo rapido
 - **Produzione**: Configurazioni ottimizzate per performance
 - **Kubernetes**: Deployment scalabili e resilienti
@@ -443,7 +443,7 @@ scrape_configs:
 ```json
 {
   "dashboard": {
-    "title": "Analisi MU Dashboard",
+    "title": "Anatema Dashboard",
     "panels": [
       {
         "title": "Request Rate",

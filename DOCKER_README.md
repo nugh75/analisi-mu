@@ -1,6 +1,6 @@
 # 🐳 Docker Deployment Guide -Anatema
 
-Questa guida ti aiuterà a configurare e deployare **Analisi MU** utilizzando Docker e Docker Compose per un ambiente di produzione robusto e scalabile.
+Questa guida ti aiuterà a configurare e deployare **Anatema** utilizzando Docker e Docker Compose per un ambiente di produzione robusto e scalabile.
 
 ## 📋 Prerequisiti
 
