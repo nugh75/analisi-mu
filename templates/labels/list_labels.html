@@ -434,6 +434,16 @@
 </div>
 {% endblock %}
 
+<!-- Pulsante fluttuante per creare nuova etichetta -->
+<a href="{{ url_for('labels.create_label') }}" 
+   class="btn btn-primary position-fixed rounded-circle shadow-lg" 
+   style="bottom: 30px; right: 30px; width: 60px; height: 60px; z-index: 1050;"
+   title="Crea Nuova Etichetta"
+   data-bs-toggle="tooltip"
+   data-bs-placement="left">
+    <i class="bi bi-plus-lg" style="font-size: 1.5rem; line-height: 1;"></i>
+</a>
+
 <!-- Modal per risultati sincronizzazione -->
 <div class="modal fade" id="syncResultModal" tabindex="-1" aria-labelledby="syncResultModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -819,6 +829,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Aggiungi listener a tutte le checkbox
     document.querySelectorAll('.label-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectedCount);
+    });
+    
+    // Inizializza i tooltip per il pulsante fluttuante
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 });
 </script>

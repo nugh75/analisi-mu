@@ -278,7 +278,6 @@ def view_question(file_id, question_name):
         .all()
     
     # Ottieni tutte le categorie attive per la selezione AI
-    from models import Category
     categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
     
     return render_template('excel/view_question.html',
