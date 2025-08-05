@@ -605,6 +605,229 @@ def api_global_stats():
         }
     })
 
+@statistics_bp.route('/api/question_chart_data/<int:file_id>/<chart_type>')
+@login_required
+def question_chart_data(file_id, chart_type):
+    """API per dati dei grafici delle pagine dei quesiti"""
+    question = request.args.get('question')
+    if not question:
+        return jsonify({'error': 'Question parameter required'}), 400
+    
+    # Parametri per il filtraggio
+    category_filter = request.args.get('category')
+    label_name_filter = request.args.get('label_name', '').strip()
+    min_usage = request.args.get('min_usage', type=int)
+    max_usage = request.args.get('max_usage', type=int)
+    
+    try:
+        if chart_type == 'labels_histogram':
+            return _get_labels_histogram_data(file_id, question, category_filter, label_name_filter, min_usage, max_usage)
+        elif chart_type == 'annotators_histogram':
+            return _get_annotators_histogram_data(file_id, question, category_filter, label_name_filter, min_usage, max_usage)
+        elif chart_type == 'categories_distribution':
+            return _get_categories_distribution_data(file_id, question)
+        elif chart_type == 'coverage_analysis':
+            return _get_coverage_analysis_data(file_id, question)
+        else:
+            return jsonify({'error': 'Chart type not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def _get_labels_histogram_data(file_id, question, category_filter=None, label_name_filter=None, min_usage=None, max_usage=None):
+    """Ottieni dati per istogramma etichette"""
+    query = db.session.query(
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        func.count(CellAnnotation.id).label('usage_count')
+    ).join(CellAnnotation)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(Label.id)
+    
+    # Applica filtri
+    if category_filter:
+        query = query.filter(Category.name == category_filter)
+    
+    if label_name_filter:
+        query = query.filter(Label.name.ilike(f'%{label_name_filter}%'))
+    
+    if min_usage is not None:
+        query = query.having(func.count(CellAnnotation.id) >= min_usage)
+    
+    if max_usage is not None:
+        query = query.having(func.count(CellAnnotation.id) <= max_usage)
+    
+    # Ordina per utilizzo decrescente
+    data = query.order_by(desc('usage_count')).all()
+    
+    return jsonify({
+        'labels': [item.name for item in data],
+        'values': [item.usage_count for item in data],
+        'colors': [item.color or '#007bff' for item in data],
+        'categories': [item.category_name or 'Senza categoria' for item in data]
+    })
+
+def _get_annotators_histogram_data(file_id, question, category_filter=None, label_name_filter=None, min_usage=None, max_usage=None):
+    """Ottieni dati per istogramma annotatori con filtri applicati alle etichette"""
+    
+    # Query base per le annotazioni nel quesito
+    base_query = db.session.query(CellAnnotation.id)\
+                          .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+                          .join(Label, Label.id == CellAnnotation.label_id)\
+                          .outerjoin(Category, Label.category_id == Category.id)\
+                          .filter(TextCell.excel_file_id == file_id)\
+                          .filter(TextCell.column_name == question)
+    
+    # Applica filtri etichette
+    if category_filter:
+        base_query = base_query.filter(Category.name == category_filter)
+    
+    if label_name_filter:
+        base_query = base_query.filter(Label.name.ilike(f'%{label_name_filter}%'))
+    
+    # Per i filtri di utilizzo, dobbiamo prima identificare le etichette che soddisfano i criteri
+    if min_usage is not None or max_usage is not None:
+        valid_labels_query = db.session.query(Label.id)\
+                                      .join(CellAnnotation)\
+                                      .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+                                      .filter(TextCell.excel_file_id == file_id)\
+                                      .filter(TextCell.column_name == question)\
+                                      .group_by(Label.id)
+        
+        if min_usage is not None:
+            valid_labels_query = valid_labels_query.having(func.count(CellAnnotation.id) >= min_usage)
+        
+        if max_usage is not None:
+            valid_labels_query = valid_labels_query.having(func.count(CellAnnotation.id) <= max_usage)
+        
+        valid_label_ids = [row[0] for row in valid_labels_query.all()]
+        base_query = base_query.filter(Label.id.in_(valid_label_ids))
+    
+    # Sottosquery per le annotazioni filtrate
+    filtered_annotations = base_query.subquery()
+    
+    # Query per statistiche annotatori
+    annotator_stats = db.session.query(
+        User.username,
+        User.id,
+        func.count(CellAnnotation.id).label('annotation_count'),
+        func.count(distinct(CellAnnotation.text_cell_id)).label('cell_count')
+    ).join(CellAnnotation, User.id == CellAnnotation.user_id)\
+     .filter(CellAnnotation.id.in_(
+         db.session.query(filtered_annotations.c.id)
+     ))\
+     .group_by(User.id)\
+     .order_by(desc('annotation_count'))\
+     .all()
+    
+    return jsonify({
+        'labels': [stat.username for stat in annotator_stats],
+        'annotations': [stat.annotation_count for stat in annotator_stats],
+        'cells': [stat.cell_count for stat in annotator_stats]
+    })
+
+def _get_categories_distribution_data(file_id, question):
+    """Ottieni dati per distribuzione categorie"""
+    data = db.session.query(
+        Category.name.label('category_name'),
+        func.count(CellAnnotation.id).label('annotation_count'),
+        func.count(distinct(Label.id)).label('unique_labels')
+    ).join(Label, Label.category_id == Category.id)\
+     .join(CellAnnotation, CellAnnotation.label_id == Label.id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(Category.id)\
+     .order_by(desc('annotation_count'))\
+     .all()
+    
+    # Aggiungi categoria "Senza categoria" se ci sono etichette senza categoria
+    uncategorized = db.session.query(
+        func.count(CellAnnotation.id).label('annotation_count'),
+        func.count(distinct(Label.id)).label('unique_labels')
+    ).join(Label, Label.id == CellAnnotation.label_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .filter(Label.category_id.is_(None))\
+     .first()
+    
+    categories = [item.category_name for item in data]
+    annotations = [item.annotation_count for item in data]
+    labels_count = [item.unique_labels for item in data]
+    
+    if uncategorized and uncategorized.annotation_count > 0:
+        categories.append('Senza categoria')
+        annotations.append(uncategorized.annotation_count)
+        labels_count.append(uncategorized.unique_labels)
+    
+    return jsonify({
+        'categories': categories,
+        'annotations': annotations,
+        'labels_count': labels_count
+    })
+
+def _get_coverage_analysis_data(file_id, question):
+    """Ottieni dati per analisi copertura"""
+    # Totale celle nel quesito
+    total_cells = TextCell.query.filter_by(
+        excel_file_id=file_id, 
+        column_name=question
+    ).count()
+    
+    # Celle annotate
+    annotated_cells = db.session.query(TextCell.id)\
+        .filter(TextCell.excel_file_id == file_id)\
+        .filter(TextCell.column_name == question)\
+        .join(CellAnnotation)\
+        .distinct().count()
+    
+    unannotated_cells = total_cells - annotated_cells
+    coverage_percentage = (annotated_cells / total_cells * 100) if total_cells > 0 else 0
+    
+    # Distribuzione intensità (numero di annotazioni per cella)
+    intensity_data = db.session.query(
+        func.count(CellAnnotation.id).label('annotations_per_cell'),
+        func.count(TextCell.id).label('cell_count')
+    ).select_from(TextCell)\
+     .outerjoin(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(TextCell.id)\
+     .subquery()
+    
+    distribution = db.session.query(
+        intensity_data.c.annotations_per_cell,
+        func.count(intensity_data.c.cell_count).label('cells_with_this_intensity')
+    ).group_by(intensity_data.c.annotations_per_cell)\
+     .order_by(intensity_data.c.annotations_per_cell)\
+     .all()
+    
+    distribution_labels = []
+    distribution_values = []
+    
+    for item in distribution:
+        ann_count = item.annotations_per_cell
+        if ann_count == 0:
+            distribution_labels.append('Non annotate')
+        elif ann_count == 1:
+            distribution_labels.append('1 annotazione')
+        else:
+            distribution_labels.append(f'{ann_count} annotazioni')
+        distribution_values.append(item.cells_with_this_intensity)
+    
+    return jsonify({
+        'total_cells': total_cells,
+        'annotated_cells': annotated_cells,
+        'unannotated_cells': unannotated_cells,
+        'coverage_percentage': coverage_percentage,
+        'distribution_labels': distribution_labels,
+        'distribution_values': distribution_values
+    })
+
 @statistics_bp.route('/file/<int:file_id>')
 @login_required
 def file_detail(file_id):
@@ -975,3 +1198,557 @@ def calculate_question_comparison(file_id, question, user1_id, user2_id):
         'user1_annotations': user1_annotations,
         'user2_annotations': user2_annotations
     }
+
+@statistics_bp.route('/export/question/<int:file_id>/<question>/<format>')
+@login_required
+def export_question_report(file_id, question, format):
+    """Esporta report completo per un quesito specifico"""
+    from flask import make_response
+    import csv
+    import io
+    from datetime import datetime
+    
+    file_obj = ExcelFile.query.get_or_404(file_id)
+    
+    # Verifica che il quesito esista
+    question_exists = TextCell.query.filter_by(
+        excel_file_id=file_id, 
+        column_name=question
+    ).first()
+    
+    if not question_exists:
+        flash('Quesito non trovato.', 'error')
+        return redirect(url_for('statistics.file_detail', file_id=file_id))
+    
+    # Raccogli tutti i dati necessari per il report
+    report_data = _collect_question_report_data(file_id, question, file_obj)
+    
+    if format == 'csv':
+        return _export_question_csv(report_data)
+    elif format == 'json':
+        return _export_question_json(report_data)
+    elif format == 'txt':
+        return _export_question_txt(report_data)
+    elif format == 'word':
+        return _export_question_word_html(report_data)
+    else:
+        flash('Formato di esportazione non supportato.', 'error')
+        return redirect(url_for('statistics.question_detail', file_id=file_id, question=question))
+
+def _collect_question_report_data(file_id, question, file_obj):
+    """Raccoglie tutti i dati necessari per il report del quesito"""
+    
+    # Statistiche generali
+    cells = TextCell.query.filter_by(
+        excel_file_id=file_id, 
+        column_name=question
+    ).all()
+    
+    # Statistiche annotatori
+    annotator_stats = db.session.query(
+        User.username,
+        User.id,
+        func.count(CellAnnotation.id).label('annotation_count'),
+        func.count(distinct(CellAnnotation.text_cell_id)).label('cell_count')
+    ).join(CellAnnotation, User.id == CellAnnotation.user_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(User.id)\
+     .order_by(desc('annotation_count'))\
+     .all()
+    
+    # Statistiche etichette
+    label_stats = db.session.query(
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        func.count(CellAnnotation.id).label('usage_count')
+    ).join(CellAnnotation)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .group_by(Label.id)\
+     .order_by(desc('usage_count'))\
+     .all()
+    
+    # Report completo etichette con commenti
+    label_comments_report = db.session.query(
+        Label.id,
+        Label.name,
+        Label.color,
+        Category.name.label('category_name'),
+        TextCell.id.label('cell_id'),
+        TextCell.row_index.label('row_number'),
+        TextCell.text_content.label('content'),
+        CellAnnotation.id.label('annotation_id'),
+        User.username.label('annotator'),
+        CellAnnotation.is_ai_generated,
+        CellAnnotation.ai_confidence,
+        CellAnnotation.status
+    ).join(CellAnnotation, Label.id == CellAnnotation.label_id)\
+     .join(TextCell, TextCell.id == CellAnnotation.text_cell_id)\
+     .join(User, User.id == CellAnnotation.user_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .order_by(Label.name, TextCell.row_index)\
+     .all()
+    
+    # Raggruppa per etichetta
+    labels_with_comments = defaultdict(list)
+    for item in label_comments_report:
+        labels_with_comments[item.name].append(item)
+    
+    # Annotazioni per cella
+    cell_annotations = db.session.query(
+        TextCell.id.label('cell_id'),
+        TextCell.text_content.label('content'),
+        CellAnnotation.id.label('annotation_id'),
+        CellAnnotation.status,
+        CellAnnotation.is_ai_generated,
+        CellAnnotation.ai_confidence,
+        Label.name.label('label_name'),
+        Label.color.label('label_color'),
+        Category.name.label('category_name'),
+        User.username.label('annotator')
+    ).join(CellAnnotation, TextCell.id == CellAnnotation.text_cell_id)\
+     .join(Label, Label.id == CellAnnotation.label_id)\
+     .join(User, User.id == CellAnnotation.user_id)\
+     .outerjoin(Category, Label.category_id == Category.id)\
+     .filter(TextCell.excel_file_id == file_id)\
+     .filter(TextCell.column_name == question)\
+     .order_by(TextCell.id, Label.name)\
+     .all()
+    
+    # Raggruppa per cella
+    cells_with_annotations = defaultdict(list)
+    for ann in cell_annotations:
+        cells_with_annotations[ann.cell_id].append(ann)
+    
+    return {
+        'file': file_obj,
+        'question': question,
+        'cells': cells,
+        'annotator_stats': annotator_stats,
+        'label_stats': label_stats,
+        'labels_with_comments': dict(labels_with_comments),
+        'cells_with_annotations': dict(cells_with_annotations),
+        'export_timestamp': datetime.now()
+    }
+
+def _export_question_csv(report_data):
+    """Esporta il report del quesito in formato CSV"""
+    from flask import make_response
+    import csv
+    import io
+    
+    output = io.StringIO()
+    
+    # Header del report
+    output.write(f"Report Completo - {report_data['question']}\n")
+    output.write(f"File: {report_data['file'].filename}\n")
+    output.write(f"Data: {report_data['export_timestamp'].strftime('%d/%m/%Y %H:%M:%S')}\n\n")
+    
+    # Statistiche generali
+    output.write("STATISTICHE GENERALI\n")
+    output.write("Tipo,Valore\n")
+    output.write(f"Celle Totali,{len(report_data['cells'])}\n")
+    output.write(f"Celle Annotate,{len(report_data['cells_with_annotations'])}\n")
+    output.write(f"Annotatori,{len(report_data['annotator_stats'])}\n")
+    output.write(f"Etichette,{len(report_data['label_stats'])}\n\n")
+    
+    # Annotatori
+    output.write("ANNOTATORI\n")
+    output.write("Username,Annotazioni,Celle\n")
+    for user in report_data['annotator_stats']:
+        output.write(f"{user.username},{user.annotation_count},{user.cell_count}\n")
+    output.write("\n")
+    
+    # Etichette
+    output.write("TUTTE LE ETICHETTE DEL QUESITO\n")
+    output.write("Nome,Categoria,Utilizzi,Colore\n")
+    for label in report_data['label_stats']:
+        category = label.category_name or 'Senza categoria'
+        output.write(f'"{label.name}","{category}",{label.usage_count},"{label.color}"\n')
+    output.write("\n")
+    
+    # Report Etichette con Commenti
+    output.write("REPORT COMPLETO - ETICHETTE CON TUTTI I COMMENTI\n")
+    output.write("Etichetta,Categoria,Numero Rispondente,Contenuto Commento,AI Generated,AI Confidence,Annotatore,Annotation ID\n")
+    for label_name, comments in report_data['labels_with_comments'].items():
+        for comment in comments:
+            ai_gen = 'Sì' if comment.is_ai_generated else 'No'
+            ai_conf = f"{comment.ai_confidence:.2f}" if comment.ai_confidence else ''
+            content = comment.content.replace('"', '""') if comment.content else ''
+            category = comment.category_name or 'Senza categoria'
+            output.write(f'"{label_name}","{category}","#{comment.row_number}","{content}","{ai_gen}","{ai_conf}","{comment.annotator}","{comment.annotation_id}"\n')
+    output.write("\n")
+    
+    # Annotazioni per Cella
+    output.write("ANNOTAZIONI PER CELLA\n")
+    output.write("ID Cella,Contenuto,Etichetta,Categoria,Annotatore,AI Generated,AI Confidence,Status,Annotation ID\n")
+    for cell_id, annotations in report_data['cells_with_annotations'].items():
+        cell_content = annotations[0].content.replace('"', '""') if annotations[0].content else ''
+        for ann in annotations:
+            ai_gen = 'Sì' if ann.is_ai_generated else 'No'
+            ai_conf = f"{ann.ai_confidence:.2f}" if ann.ai_confidence else ''
+            category = ann.category_name or 'Senza categoria'
+            output.write(f'"{cell_id}","{cell_content}","{ann.label_name}","{category}","{ann.annotator}","{ai_gen}","{ai_conf}","{ann.status}","{ann.annotation_id}"\n')
+    
+    # Prepara la risposta
+    output.seek(0)
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    
+    # Nome file sicuro
+    safe_question = "".join(c for c in report_data['question'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    safe_filename = "".join(c for c in report_data['file'].filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+    timestamp = report_data['export_timestamp'].strftime('%Y%m%d_%H%M%S')
+    filename = f"report_completo_{safe_question}_{safe_filename}_{timestamp}.csv"
+    
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+def _export_question_json(report_data):
+    """Esporta il report del quesito in formato JSON"""
+    import json
+    from flask import make_response
+    
+    # Converte i dati in formato JSON-serializable
+    json_data = {
+        'file': {
+            'id': report_data['file'].id,
+            'filename': report_data['file'].filename
+        },
+        'question': report_data['question'],
+        'export_timestamp': report_data['export_timestamp'].isoformat(),
+        'statistics': {
+            'total_cells': len(report_data['cells']),
+            'annotated_cells': len(report_data['cells_with_annotations']),
+            'total_annotators': len(report_data['annotator_stats']),
+            'total_labels': len(report_data['label_stats'])
+        },
+        'annotators': [
+            {
+                'username': user.username,
+                'annotation_count': user.annotation_count,
+                'cell_count': user.cell_count
+            }
+            for user in report_data['annotator_stats']
+        ],
+        'labels': [
+            {
+                'name': label.name,
+                'category': label.category_name or 'Senza categoria',
+                'usage_count': label.usage_count,
+                'color': label.color
+            }
+            for label in report_data['label_stats']
+        ],
+        'labels_with_comments': {
+            label_name: [
+                {
+                    'row_number': comment.row_number,
+                    'content': comment.content,
+                    'is_ai_generated': comment.is_ai_generated,
+                    'ai_confidence': comment.ai_confidence,
+                    'annotator': comment.annotator,
+                    'category_name': comment.category_name,
+                    'annotation_id': comment.annotation_id,
+                    'status': comment.status
+                }
+                for comment in comments
+            ]
+            for label_name, comments in report_data['labels_with_comments'].items()
+        },
+        'cells_with_annotations': {
+            str(cell_id): {
+                'content': annotations[0].content if annotations else '',
+                'annotations': [
+                    {
+                        'annotation_id': ann.annotation_id,
+                        'label_name': ann.label_name,
+                        'label_color': ann.label_color,
+                        'category_name': ann.category_name,
+                        'annotator': ann.annotator,
+                        'is_ai_generated': ann.is_ai_generated,
+                        'ai_confidence': ann.ai_confidence,
+                        'status': ann.status
+                    }
+                    for ann in annotations
+                ]
+            }
+            for cell_id, annotations in report_data['cells_with_annotations'].items()
+        }
+    }
+    
+    # Crea la risposta JSON
+    json_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+    response = make_response(json_str)
+    response.headers['Content-Type'] = 'application/json; charset=utf-8'
+    
+    # Nome file sicuro
+    safe_question = "".join(c for c in report_data['question'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    safe_filename = "".join(c for c in report_data['file'].filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+    timestamp = report_data['export_timestamp'].strftime('%Y%m%d_%H%M%S')
+    filename = f"report_completo_{safe_question}_{safe_filename}_{timestamp}.json"
+    
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+def _export_question_txt(report_data):
+    """Esporta il report del quesito in formato TXT"""
+    from flask import make_response
+    
+    # Crea il contenuto testuale
+    content = []
+    content.append(f"REPORT COMPLETO - {report_data['question']}")
+    content.append("=" * 80)
+    content.append("")
+    content.append(f"File: {report_data['file'].filename}")
+    content.append(f"Data: {report_data['export_timestamp'].strftime('%d/%m/%Y %H:%M:%S')}")
+    content.append("")
+    
+    # Statistiche generali
+    content.append("STATISTICHE GENERALI")
+    content.append("-" * 20)
+    content.append(f"Celle Totali: {len(report_data['cells'])}")
+    content.append(f"Celle Annotate: {len(report_data['cells_with_annotations'])}")
+    content.append(f"Annotatori: {len(report_data['annotator_stats'])}")
+    content.append(f"Etichette: {len(report_data['label_stats'])}")
+    content.append("")
+    
+    # Annotatori
+    content.append("ANNOTATORI")
+    content.append("-" * 10)
+    for user in report_data['annotator_stats']:
+        content.append(f"{user.username}: {user.annotation_count} annotazioni, {user.cell_count} celle")
+    content.append("")
+    
+    # Etichette
+    content.append("TUTTE LE ETICHETTE DEL QUESITO")
+    content.append("-" * 32)
+    for label in report_data['label_stats']:
+        category = label.category_name or 'Senza categoria'
+        content.append(f"{label.name} ({category}): {label.usage_count} utilizzi")
+    content.append("")
+    
+    # Report Etichette con Commenti
+    content.append("REPORT COMPLETO - ETICHETTE CON TUTTI I COMMENTI")
+    content.append("-" * 48)
+    for label_name, comments in report_data['labels_with_comments'].items():
+        content.append("")
+        content.append(f"{label_name.upper()} ({len(comments)} commenti):")
+        content.append("-" * (len(label_name) + 15))
+        for comment in comments:
+            ai_info = ""
+            if comment.is_ai_generated:
+                ai_info = " [🤖 AI"
+                if comment.ai_confidence:
+                    ai_info += f" {comment.ai_confidence:.0%}"
+                ai_info += "]"
+            
+            annotator_info = f" - {comment.annotator}" if comment.annotator else ""
+            content.append(f"#{comment.row_number}: {comment.content}{ai_info}{annotator_info}")
+    content.append("")
+    
+    # Annotazioni per Cella
+    content.append("ANNOTAZIONI PER CELLA")
+    content.append("-" * 20)
+    for cell_id, annotations in report_data['cells_with_annotations'].items():
+        content.append("")
+        content.append(f"Cella {cell_id}:")
+        content.append(f"Contenuto: {annotations[0].content if annotations else 'N/A'}")
+        content.append("Annotazioni:")
+        for ann in annotations:
+            ai_info = ""
+            if ann.is_ai_generated:
+                ai_info = " [🤖 AI"
+                if ann.ai_confidence:
+                    ai_info += f" {ann.ai_confidence:.0%}"
+                ai_info += "]"
+            
+            status_info = f" [Status: {ann.status}]" if ann.status != 'active' else ""
+            content.append(f"  - {ann.label_name} (ID: {ann.annotation_id}) - {ann.annotator}{ai_info}{status_info}")
+    
+    # Unisce tutto il contenuto
+    text_content = "\n".join(content)
+    
+    # Crea la risposta
+    response = make_response(text_content)
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    
+    # Nome file sicuro
+    safe_question = "".join(c for c in report_data['question'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    safe_filename = "".join(c for c in report_data['file'].filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+    timestamp = report_data['export_timestamp'].strftime('%Y%m%d_%H%M%S')
+    filename = f"report_completo_{safe_question}_{safe_filename}_{timestamp}.txt"
+    
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+def _export_question_word_html(report_data):
+    """Esporta il report del quesito in formato HTML compatibile con Word"""
+    from flask import make_response
+    
+    # Crea il contenuto HTML compatibile con Word
+    html_content = f"""<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+    <meta charset="utf-8">
+    <meta name="ProgId" content="Word.Document">
+    <title>Report Completo - {report_data['question']}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 15mm; font-size: 11pt; line-height: 1.3; }}
+        h1, h2 {{ color: #2c3e50; }}
+        h1 {{ font-size: 16pt; margin-bottom: 10pt; text-align: center; }}
+        h2 {{ font-size: 13pt; margin-bottom: 8pt; margin-top: 15pt; border-bottom: 1pt solid #ccc; }}
+        h3 {{ font-size: 11pt; margin-bottom: 5pt; margin-top: 10pt; font-weight: bold; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 12pt 0; font-size: 10pt; }}
+        th, td {{ border: 1pt solid #ddd; padding: 4pt; text-align: left; vertical-align: top; }}
+        th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .stats-box {{ background-color: #f8f9fa; padding: 10pt; margin: 8pt 0; border: 1pt solid #ddd; }}
+        .badge {{ color: white; padding: 2pt 6pt; border-radius: 3pt; font-size: 9pt; font-weight: bold; display: inline-block; margin: 1pt; }}
+        .ai-badge {{ background-color: #17a2b8; }}
+        .cell-content {{ max-width: 200pt; word-wrap: break-word; font-size: 9pt; }}
+    </style>
+</head>
+<body>
+    <h1>Report Completo - {report_data['question']}</h1>
+    
+    <div class="stats-box">
+        <p><strong>File:</strong> {report_data['file'].filename}</p>
+        <p><strong>Data Report:</strong> {report_data['export_timestamp'].strftime('%d/%m/%Y %H:%M:%S')}</p>
+    </div>
+    
+    <h2>Statistiche Generali</h2>
+    <div class="stats-box">
+        <p><strong>Celle Totali:</strong> {len(report_data['cells'])}</p>
+        <p><strong>Celle Annotate:</strong> {len(report_data['cells_with_annotations'])}</p>
+        <p><strong>Annotatori:</strong> {len(report_data['annotator_stats'])}</p>
+        <p><strong>Etichette Utilizzate:</strong> {len(report_data['label_stats'])}</p>
+    </div>
+    
+    <h2>Annotatori</h2>
+    <table>
+        <tr><th>Username</th><th>Totale Annotazioni</th><th>Celle Annotate</th></tr>"""
+    
+    for user in report_data['annotator_stats']:
+        html_content += f"""
+        <tr>
+            <td>{user.username}</td>
+            <td>{user.annotation_count}</td>
+            <td>{user.cell_count}</td>
+        </tr>"""
+    
+    html_content += """
+    </table>
+    
+    <h2>Tutte le Etichette del Quesito</h2>
+    <table>
+        <tr><th>Etichetta</th><th>Categoria</th><th>Utilizzi</th></tr>"""
+    
+    for label in report_data['label_stats']:
+        category = label.category_name or 'Senza categoria'
+        color = label.color or '#007bff'
+        html_content += f"""
+        <tr>
+            <td><span class="badge" style="background-color: {color}">{label.name}</span></td>
+            <td>{category}</td>
+            <td>{label.usage_count}</td>
+        </tr>"""
+    
+    html_content += """
+    </table>
+    
+    <h2>Report Completo - Etichette con Tutti i Commenti</h2>"""
+    
+    for label_name, comments in report_data['labels_with_comments'].items():
+        if comments:
+            label_color = comments[0].color or '#007bff'
+            category = comments[0].category_name or 'Senza categoria'
+            html_content += f"""
+    <h3><span class="badge" style="background-color: {label_color}">{label_name}</span> ({len(comments)} commenti)</h3>
+    <table>
+        <tr><th>Numero</th><th>Contenuto</th><th>Info</th></tr>"""
+            
+            for comment in comments:
+                ai_info = ""
+                if comment.is_ai_generated:
+                    ai_info += '<span class="ai-badge">🤖 AI</span>'
+                    if comment.ai_confidence:
+                        ai_info += f' <small>({comment.ai_confidence:.0%})</small>'
+                
+                annotator_info = f'<small>{comment.annotator}</small>' if comment.annotator else ''
+                
+                content = (comment.content or '').replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+                
+                html_content += f"""
+        <tr>
+            <td><strong>#{comment.row_number}</strong></td>
+            <td class="cell-content">{content}</td>
+            <td>{ai_info}<br>{annotator_info}</td>
+        </tr>"""
+            
+            html_content += """
+    </table>"""
+    
+    html_content += """
+    
+    <h2>Annotazioni per Cella</h2>
+    <table>
+        <tr><th>ID Cella</th><th>Contenuto</th><th>Etichette</th><th>Annotatori</th></tr>"""
+    
+    for cell_id, annotations in report_data['cells_with_annotations'].items():
+        if annotations:
+            content = (annotations[0].content or '').replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+            
+            etichette_html = ""
+            annotatori_html = ""
+            
+            for ann in annotations:
+                etichette_html += f"""<div><span class="badge" style="background-color: {ann.label_color}">{ann.label_name}</span> <small>(ID: {ann.annotation_id})</small>"""
+                
+                if ann.is_ai_generated:
+                    etichette_html += ' <span class="ai-badge">🤖 AI</span>'
+                    if ann.ai_confidence:
+                        etichette_html += f' <small>({ann.ai_confidence:.0%})</small>'
+                
+                etichette_html += "</div>"
+                annotatori_html += f'<div>{ann.annotator}</div>'
+            
+            html_content += f"""
+        <tr>
+            <td>{cell_id}</td>
+            <td class="cell-content">{content}</td>
+            <td>{etichette_html}</td>
+            <td>{annotatori_html}</td>
+        </tr>"""
+    
+    html_content += """
+    </table>
+    
+    <div style="margin-top: 20pt; text-align: center; font-size: 9pt; color: #666;">
+        <p>--- Fine del Report ---</p>
+    </div>
+</body>
+</html>"""
+    
+    # Crea la risposta con content-type per Word
+    response = make_response(html_content)
+    response.headers['Content-Type'] = 'application/msword; charset=utf-8'
+    
+    # Nome file sicuro
+    safe_question = "".join(c for c in report_data['question'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    safe_filename = "".join(c for c in report_data['file'].filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+    timestamp = report_data['export_timestamp'].strftime('%Y%m%d_%H%M%S')
+    filename = f"report_completo_{safe_question}_{safe_filename}_{timestamp}.doc"
+    
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response

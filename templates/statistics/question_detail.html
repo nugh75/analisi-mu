@@ -226,20 +226,24 @@
             <!-- Pulsanti per export report completo -->
             <div class="d-flex justify-content-center mb-4">
                 <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('csv')" title="Scarica report completo in CSV">
+                    <a href="{{ url_for('statistics.export_question_report', file_id=file.id, question=question, format='csv') }}" 
+                       class="btn btn-outline-success btn-sm" title="Scarica report completo in CSV">
                         <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                    </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('excel')" title="Scarica report completo in Excel">
-                        <i class="bi bi-file-earmark-excel"></i> Excel
-                    </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('word')" title="Scarica report completo in Word">
+                    </a>
+                    <a href="{{ url_for('statistics.export_question_report', file_id=file.id, question=question, format='json') }}" 
+                       class="btn btn-outline-success btn-sm" title="Scarica report completo in JSON">
+                        <i class="bi bi-file-earmark-code"></i> JSON
+                    </a>
+                    <a href="{{ url_for('statistics.export_question_report', file_id=file.id, question=question, format='txt') }}" 
+                       class="btn btn-outline-success btn-sm" title="Scarica report completo in TXT">
+                        <i class="bi bi-file-earmark-text"></i> TXT
+                    </a>
+                    <a href="{{ url_for('statistics.export_question_report', file_id=file.id, question=question, format='word') }}" 
+                       class="btn btn-outline-success btn-sm" title="Scarica report completo in Word">
                         <i class="bi bi-file-earmark-word"></i> Word
-                    </button>
+                    </a>
                     <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('pdf')" title="Scarica report completo in PDF">
                         <i class="bi bi-file-earmark-pdf"></i> PDF
-                    </button>
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportCompleteReport('text')" title="Scarica report completo in TXT">
-                        <i class="bi bi-file-earmark-text"></i> TXT
                     </button>
                 </div>
             </div>
@@ -924,480 +928,31 @@ function exportLabelsCSV() {
 
 // Export report completo in vari formati
 function exportCompleteReport(format) {
-    // Dati per il report
-    const reportData = {
-        question: "{{ question }}",
-        filename: "{{ file.filename }}",
-        stats: {
-            totalCells: {{ cells|length }},
-            annotatedCells: {{ cells_with_annotations|length }},
-            annotators: {{ annotator_stats|length }},
-            labels: {{ label_stats|length }}
-        },
-        annotators: [
-            {% for user in annotator_stats %}
-            {
-                username: "{{ user.username }}",
-                annotationCount: {{ user.annotation_count }},
-                cellCount: {{ user.cell_count }}
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        ],
-        labels: [
-            {% for label in label_stats %}
-            {
-                name: "{{ label.name }}",
-                category: "{{ label.category_name or 'Senza categoria' }}",
-                usage: {{ label.usage_count }},
-                color: "{{ label.color or '#007bff' }}"
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        ],
-        labelsWithComments: {
-            {% for label_name, comments in labels_with_comments.items() %}
-            "{{ label_name }}": [
-                {% for comment in comments %}
-                {
-                    rowNumber: {{ comment.row_number }},
-                    content: {{ comment.content|tojson }},
-                    isAiGenerated: {{ comment.is_ai_generated|tojson }},
-                    aiConfidence: {{ comment.ai_confidence or 'null' }},
-                    annotator: "{{ comment.annotator or '' }}",
-                    categoryName: "{{ comment.category_name or '' }}",
-                    color: "{{ comment.color or '' }}"
-                }{% if not loop.last %},{% endif %}
-                {% endfor %}
-            ]{% if not loop.last %},{% endif %}
-            {% endfor %}
-        },
-        annotations: [
-            {% for cell_id, annotations in cells_with_annotations.items() %}
-            {
-                cellId: "{{ cell_id }}",
-                content: {{ annotations[0].content|tojson }},
-                annotations: [
-                    {% for ann in annotations %}
-                    {
-                        annotationId: {{ ann.annotation_id }},
-                        labelName: "{{ ann.label_name }}",
-                        labelColor: "{{ ann.label_color }}",
-                        annotator: "{{ ann.annotator }}",
-                        isAiGenerated: {{ ann.is_ai_generated|tojson }},
-                        aiConfidence: {{ ann.ai_confidence or 'null' }},
-                        status: "{{ ann.status or 'active' }}"
-                    }{% if not loop.last %},{% endif %}
-                    {% endfor %}
-                ]
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        ]
-    };
-    
-    switch(format) {
-        case 'csv':
-            exportToCSV(reportData);
-            break;
-        case 'excel':
-            exportToExcel(reportData);
-            break;
-        case 'word':
-            exportToWord(reportData);
-            break;
-        case 'pdf':
-            exportToPDF(reportData);
-            break;
-        case 'text':
-            exportToText(reportData);
-            break;
-        default:
-            alert('Formato non supportato');
+    if (format === 'word') {
+        // Per Word, usiamo l'endpoint TXT e lo apriamo come documento Word-compatibile
+        fetch(`{{ url_for('statistics.export_question_report', file_id=file.id, question=question, format='txt') }}`)
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `report_completo_{{ question|replace(' ', '_') }}_{{ file.filename|replace('.xlsx', '') }}.doc`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            })
+            .catch(error => {
+                console.error('Errore nell\'export Word:', error);
+                alert('Errore durante l\'esportazione in formato Word');
+            });
+    } else if (format === 'pdf') {
+        // Per PDF, apriamo una finestra di stampa
+        window.print();
+    } else {
+        console.log(`Export in formato ${format} non supportato lato client`);
+        alert(`Usa i pulsanti di esportazione diretti per il formato ${format.toUpperCase()}`);
     }
-}
-
-// Export CSV completo
-function exportToCSV(data) {
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    // Header del report
-    csvContent += `"Report Completo - ${data.question}"\n`;
-    csvContent += `"File: ${data.filename}"\n`;
-    csvContent += `"Data: ${new Date().toLocaleDateString('it-IT')}"\n\n`;
-    
-    // Statistiche generali
-    csvContent += "Statistiche Generali\n";
-    csvContent += "Tipo,Valore\n";
-    csvContent += `"Celle Totali",${data.stats.totalCells}\n`;
-    csvContent += `"Celle Annotate",${data.stats.annotatedCells}\n`;
-    csvContent += `"Annotatori",${data.stats.annotators}\n`;
-    csvContent += `"Etichette",${data.stats.labels}\n\n`;
-    
-    // Annotatori
-    csvContent += "Annotatori\n";
-    csvContent += "Username,Annotazioni,Celle\n";
-    data.annotators.forEach(user => {
-        csvContent += `"${user.username}",${user.annotationCount},${user.cellCount}\n`;
-    });
-    csvContent += "\n";
-    
-    // Etichette
-    csvContent += "Tutte le Etichette del Quesito\n";
-    csvContent += "Nome,Categoria,Utilizzi\n";
-    data.labels.forEach(label => {
-        csvContent += `"${label.name}","${label.category}",${label.usage}\n`;
-    });
-    csvContent += "\n";
-    
-    // Report Etichette con Commenti
-    csvContent += "Report Completo - Etichette con Tutti i Commenti\n";
-    csvContent += "Etichetta,Categoria,Numero Rispondente,Contenuto Commento,AI Generated,AI Confidence,Annotatore\n";
-    Object.entries(data.labelsWithComments).forEach(([labelName, comments]) => {
-        comments.forEach(comment => {
-            const aiGen = comment.isAiGenerated ? 'Sì' : 'No';
-            const aiConf = comment.aiConfidence ? `${Math.round(comment.aiConfidence * 100)}%` : '';
-            csvContent += `"${labelName}","${comment.categoryName}","#${comment.rowNumber}","${comment.content.replace(/"/g, '""')}","${aiGen}","${aiConf}","${comment.annotator}"\n`;
-        });
-    });
-    csvContent += "\n";
-    
-    // Annotazioni per Cella
-    csvContent += "Annotazioni per Cella\n";
-    csvContent += "ID Cella,Contenuto,Etichetta,Annotatore,AI Generated,AI Confidence,Status,Annotation ID\n";
-    data.annotations.forEach(cell => {
-        cell.annotations.forEach(ann => {
-            const aiGen = ann.isAiGenerated ? 'Sì' : 'No';
-            const aiConf = ann.aiConfidence ? `${Math.round(ann.aiConfidence * 100)}%` : '';
-            csvContent += `"${cell.cellId}","${cell.content.replace(/"/g, '""')}","${ann.labelName}","${ann.annotator}","${aiGen}","${aiConf}","${ann.status}","${ann.annotationId}"\n`;
-        });
-    });
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Export Excel (utilizzerà CSV per semplicità, ma con estensione xlsx per aprire in Excel)
-function exportToExcel(data) {
-    exportToCSV(data);
-    // Nota: per un vero export Excel si dovrebbe usare una libreria come SheetJS
-    alert('File CSV generato (apribile con Excel)');
-}
-
-// Export Word (HTML che si apre in Word)
-function exportToWord(data) {
-    let htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Report Completo - ${data.question}</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 15px; font-size: 11px; }
-                h1, h2 { color: #2c3e50; }
-                h1 { font-size: 16px; margin-bottom: 10px; }
-                h2 { font-size: 13px; margin-bottom: 8px; margin-top: 15px; }
-                h3 { font-size: 11px; margin-bottom: 5px; margin-top: 10px; }
-                table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10px; }
-                th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-                .stats-box { background-color: #f8f9fa; padding: 10px; margin: 8px 0; border-radius: 3px; font-size: 10px; }
-                .badge { color: white; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; }
-                .ai-badge { background-color: #17a2b8; }
-                ul { margin: 5px 0; padding-left: 15px; }
-                li { margin-bottom: 3px; font-size: 10px; }
-                p { margin: 3px 0; }
-            </style>
-        </head>
-        <body>
-            <h1>Report Completo - ${data.question}</h1>
-            <p><strong>File:</strong> ${data.filename}</p>
-            <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')}</p>
-            
-            <h2>Statistiche Generali</h2>
-            <div class="stats-box">
-                <p><strong>Celle Totali:</strong> ${data.stats.totalCells}</p>
-                <p><strong>Celle Annotate:</strong> ${data.stats.annotatedCells}</p>
-                <p><strong>Annotatori:</strong> ${data.stats.annotators}</p>
-                <p><strong>Etichette:</strong> ${data.stats.labels}</p>
-            </div>
-            
-            <h2>Annotatori</h2>
-            <table>
-                <tr><th>Username</th><th>Annotazioni</th><th>Celle</th></tr>
-                ${data.annotators.map(user => 
-                    `<tr><td>${user.username}</td><td>${user.annotationCount}</td><td>${user.cellCount}</td></tr>`
-                ).join('')}
-            </table>
-            
-            <h2>Tutte le Etichette del Quesito</h2>
-            <table>
-                <tr><th>Etichetta</th><th>Categoria</th><th>Utilizzi</th></tr>
-                ${data.labels.map(label => 
-                    `<tr><td><span class="badge" style="background-color: ${label.color}">${label.name}</span></td><td>${label.category}</td><td>${label.usage}</td></tr>`
-                ).join('')}
-            </table>
-            
-            <h2>Report Completo - Etichette con Tutti i Commenti</h2>
-            ${Object.entries(data.labelsWithComments).map(([labelName, comments]) => {
-                const labelColor = comments[0].color || '#007bff';
-                return `
-                <h3><span class="badge" style="background-color: ${labelColor}">${labelName}</span> (${comments.length} commenti)</h3>
-                <ul>
-                    ${comments.map(comment => `
-                        <li>
-                            <strong>#${comment.rowNumber}</strong>: ${comment.content}
-                            ${comment.isAiGenerated ? '<span class="badge ai-badge">🤖 AI</span>' : ''}
-                            ${comment.aiConfidence ? `<small>(${Math.round(comment.aiConfidence * 100)}%)</small>` : ''}
-                            ${comment.annotator ? `<small>- ${comment.annotator}</small>` : ''}
-                        </li>
-                    `).join('')}
-                </ul>
-            `;}).join('')}
-            
-            <h2>Annotazioni per Cella</h2>
-            <table>
-                <tr><th>ID Cella</th><th>Contenuto</th><th>Etichette</th><th>Annotatori</th></tr>
-                ${data.annotations.map(cell => `
-                    <tr>
-                        <td style="font-family: monospace;">${cell.cellId}</td>
-                        <td style="max-width: 250px; word-wrap: break-word; font-size: 9px;">${cell.content}</td>
-                        <td>
-                            ${cell.annotations.map(ann => `
-                                <div style="margin-bottom: 2px;">
-                                    <span class="badge" style="background-color: ${ann.labelColor}">${ann.labelName}</span>
-                                    <small>(ID: ${ann.annotationId})</small>
-                                    ${ann.isAiGenerated ? '<span class="badge ai-badge">🤖 AI</span>' : ''}
-                                    ${ann.aiConfidence ? `<small>(${Math.round(ann.aiConfidence * 100)}%)</small>` : ''}
-                                </div>
-                            `).join('')}
-                        </td>
-                        <td>
-                            ${cell.annotations.map(ann => `<div style="font-size: 9px;">${ann.annotator}</div>`).join('')}
-                        </td>
-                    </tr>
-                `).join('')}
-            </table>
-        </body>
-        </html>
-    `;
-    
-    const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
-
-// Export PDF (utilizzerà window.print per ora)
-function exportToPDF(data) {
-    // Apre una nuova finestra con il contenuto formattato per stampa/PDF
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Report Completo - ${data.question}</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 15px; font-size: 9px; line-height: 1.3; }
-                h1, h2 { color: #2c3e50; page-break-after: avoid; }
-                h1 { font-size: 14px; margin-bottom: 8px; }
-                h2 { font-size: 11px; margin-bottom: 6px; margin-top: 12px; }
-                h3 { font-size: 10px; margin-bottom: 4px; margin-top: 8px; }
-                table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 8px; }
-                th, td { border: 1px solid #ddd; padding: 3px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-                .stats-box { background-color: #f8f9fa; padding: 8px; margin: 6px 0; border-radius: 3px; font-size: 8px; }
-                .badge { color: white; padding: 1px 4px; border-radius: 2px; font-size: 7px; font-weight: bold; }
-                .ai-badge { background-color: #17a2b8; }
-                ul { margin: 3px 0; padding-left: 12px; }
-                li { margin-bottom: 2px; font-size: 8px; }
-                p { margin: 2px 0; }
-                @media print { 
-                    body { margin: 8px; font-size: 8px; } 
-                    table { page-break-inside: avoid; margin: 5px 0; }
-                    tr { page-break-inside: avoid; }
-                    h1 { font-size: 12px; }
-                    h2 { font-size: 10px; }
-                    .stats-box { font-size: 7px; padding: 5px; }
-                }
-                .cell-content { max-width: 150px; word-wrap: break-word; font-size: 7px; }
-            </style>
-        </head>
-        <body>
-            <h1>Report Completo - ${data.question}</h1>
-            <p><strong>File:</strong> ${data.filename}</p>
-            <p><strong>Data:</strong> ${new Date().toLocaleDateString('it-IT')}</p>
-            
-            <h2>Statistiche Generali</h2>
-            <div class="stats-box">
-                <p><strong>Celle Totali:</strong> ${data.stats.totalCells}</p>
-                <p><strong>Celle Annotate:</strong> ${data.stats.annotatedCells}</p>
-                <p><strong>Annotatori:</strong> ${data.stats.annotators}</p>
-                <p><strong>Etichette:</strong> ${data.stats.labels}</p>
-            </div>
-            
-            <h2>Annotatori</h2>
-            <table>
-                <tr><th>Username</th><th>Annotazioni</th><th>Celle</th></tr>
-                ${data.annotators.map(user => 
-                    `<tr><td>${user.username}</td><td>${user.annotationCount}</td><td>${user.cellCount}</td></tr>`
-                ).join('')}
-            </table>
-            
-            <h2>Tutte le Etichette del Quesito</h2>
-            <table>
-                <tr><th>Etichetta</th><th>Categoria</th><th>Utilizzi</th></tr>
-                ${data.labels.map(label => 
-                    `<tr><td><span class="badge" style="background-color: ${label.color}">${label.name}</span></td><td>${label.category}</td><td>${label.usage}</td></tr>`
-                ).join('')}
-            </table>
-            
-            <h2>Report Completo - Etichette con Tutti i Commenti</h2>
-            ${Object.entries(data.labelsWithComments).map(([labelName, comments]) => {
-                const labelColor = comments[0].color || '#007bff';
-                return `
-                <h3><span class="badge" style="background-color: ${labelColor}">${labelName}</span> (${comments.length} commenti)</h3>
-                <table style="margin-left: 15px;">
-                    <tr><th>Numero</th><th>Contenuto</th><th>Info</th></tr>
-                    ${comments.map(comment => `
-                        <tr>
-                            <td style="white-space: nowrap;">#${comment.rowNumber}</td>
-                            <td class="cell-content">${comment.content}</td>
-                            <td style="white-space: nowrap;">
-                                ${comment.isAiGenerated ? '<span class="badge ai-badge">🤖</span>' : ''}
-                                ${comment.aiConfidence ? `<small>(${Math.round(comment.aiConfidence * 100)}%)</small>` : ''}
-                                ${comment.annotator ? `<small>${comment.annotator}</small>` : ''}
-                            </td>
-                        </tr>
-                    `).join('')}
-                </table>
-            `;}).join('')}
-            
-            <h2>Annotazioni per Cella</h2>
-            <table>
-                <tr><th>ID Cella</th><th>Contenuto</th><th>Etichette</th><th>Annotatori</th></tr>
-                ${data.annotations.map(cell => `
-                    <tr>
-                        <td style="font-family: monospace; white-space: nowrap;">${cell.cellId}</td>
-                        <td class="cell-content">${cell.content}</td>
-                        <td>
-                            ${cell.annotations.map(ann => `
-                                <div style="margin-bottom: 1px;">
-                                    <span class="badge" style="background-color: ${ann.labelColor}">${ann.labelName}</span>
-                                    <small>(${ann.annotationId})</small>
-                                    ${ann.isAiGenerated ? '<span class="badge ai-badge">🤖</span>' : ''}
-                                    ${ann.aiConfidence ? `<small>(${Math.round(ann.aiConfidence * 100)}%)</small>` : ''}
-                                </div>
-                            `).join('')}
-                        </td>
-                        <td>
-                            ${cell.annotations.map(ann => `<div style="font-size: 7px;">${ann.annotator}</div>`).join('')}
-                        </td>
-                    </tr>
-                `).join('')}
-            </table>
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
-}
-
-// Export Text
-function exportToText(data) {
-    let textContent = `REPORT COMPLETO - ${data.question}\n`;
-    textContent += `${'='.repeat(50)}\n\n`;
-    textContent += `File: ${data.filename}\n`;
-    textContent += `Data: ${new Date().toLocaleDateString('it-IT')}\n\n`;
-    
-    // Statistiche generali
-    textContent += `STATISTICHE GENERALI\n`;
-    textContent += `${'-'.repeat(20)}\n`;
-    textContent += `Celle Totali: ${data.stats.totalCells}\n`;
-    textContent += `Celle Annotate: ${data.stats.annotatedCells}\n`;
-    textContent += `Annotatori: ${data.stats.annotators}\n`;
-    textContent += `Etichette: ${data.stats.labels}\n\n`;
-    
-    // Annotatori
-    textContent += `ANNOTATORI\n`;
-    textContent += `${'-'.repeat(10)}\n`;
-    data.annotators.forEach(user => {
-        textContent += `${user.username}: ${user.annotationCount} annotazioni, ${user.cellCount} celle\n`;
-    });
-    textContent += `\n`;
-    
-    // Etichette
-    textContent += `TUTTE LE ETICHETTE DEL QUESITO\n`;
-    textContent += `${'-'.repeat(32)}\n`;
-    data.labels.forEach(label => {
-        textContent += `${label.name} (${label.category}): ${label.usage} utilizzi\n`;
-    });
-    textContent += `\n`;
-    
-    // Report Etichette con Commenti
-    textContent += `REPORT COMPLETO - ETICHETTE CON TUTTI I COMMENTI\n`;
-    textContent += `${'-'.repeat(48)}\n`;
-    Object.entries(data.labelsWithComments).forEach(([labelName, comments]) => {
-        textContent += `\n${labelName.toUpperCase()} (${comments.length} commenti):\n`;
-        textContent += `${'-'.repeat(labelName.length + 15)}\n`;
-        comments.forEach(comment => {
-            textContent += `#${comment.rowNumber}: ${comment.content}`;
-            if (comment.isAiGenerated) {
-                textContent += ` [🤖 AI`;
-                if (comment.aiConfidence) {
-                    textContent += ` ${Math.round(comment.aiConfidence * 100)}%`;
-                }
-                textContent += `]`;
-            }
-            if (comment.annotator) {
-                textContent += ` - ${comment.annotator}`;
-            }
-            textContent += `\n`;
-        });
-    });
-    textContent += `\n`;
-    
-    // Annotazioni per Cella
-    textContent += `ANNOTAZIONI PER CELLA\n`;
-    textContent += `${'-'.repeat(20)}\n`;
-    data.annotations.forEach(cell => {
-        textContent += `\nCella ${cell.cellId}:\n`;
-        textContent += `Contenuto: ${cell.content}\n`;
-        textContent += `Annotazioni:\n`;
-        cell.annotations.forEach(ann => {
-            textContent += `  - ${ann.labelName} (ID: ${ann.annotationId}) - ${ann.annotator}`;
-            if (ann.isAiGenerated) {
-                textContent += ` [🤖 AI`;
-                if (ann.aiConfidence) {
-                    textContent += ` ${Math.round(ann.aiConfidence * 100)}%`;
-                }
-                textContent += `]`;
-            }
-            if (ann.status !== 'active') {
-                textContent += ` [Status: ${ann.status}]`;
-            }
-            textContent += `\n`;
-        });
-    });
-    
-    const blob = new Blob([textContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `report_completo_${data.question.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
 
 // Toggle evidenziazione termini cercati
 function toggleHighlight() {
@@ -2621,10 +2176,13 @@ function exportLabelsCSV() {
 
 // Export report completo in vari formati
 function exportCompleteReport(format) {
-    // Codice per export report (mantenuto dall'implementazione precedente)
-    // ... (resto del codice di export) ...
-    console.log(`Export in formato ${format} richiesto`);
-    alert(`Funzione export ${format} in sviluppo`);
+    if (format === 'pdf') {
+        // Per PDF, apriamo una finestra di stampa
+        window.print();
+    } else {
+        console.log(`Export in formato ${format} non supportato lato client`);
+        alert(`Usa i pulsanti di esportazione diretti per il formato ${format.toUpperCase()}`);
+    }
 }
 
 // Toggle evidenziazione termini cercati
