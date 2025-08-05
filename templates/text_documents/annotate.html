@@ -108,16 +108,38 @@
                         </div>
                         <div class="card-body" style="max-height: 300px; overflow-y: auto;">
                             {% if labels_json %}
+                                {% set categories = {} %}
                                 {% for label in labels_json %}
-                                <div class="d-flex align-items-center mb-2 label-item" 
-                                     data-label-id="{{ label.id }}"
-                                     data-label-name="{{ label.name }}"
-                                     data-label-color="{{ label.color or '#007bff' }}">
-                                    <div class="label-color-indicator me-2" 
-                                         style="width: 12px; height: 12px; background-color: {{ label.color or '#007bff' }}; border-radius: 2px;"></div>
-                                    <span class="flex-grow-1">{{ label.name }}</span>
-                                    <small class="text-muted">0</small>
-                                </div>
+                                    {% if label.category %}
+                                        {% if label.category not in categories %}
+                                            {% set _ = categories.update({label.category: []}) %}
+                                        {% endif %}
+                                        {% set _ = categories[label.category].append(label) %}
+                                    {% else %}
+                                        {% if 'Senza categoria' not in categories %}
+                                            {% set _ = categories.update({'Senza categoria': []}) %}
+                                        {% endif %}
+                                        {% set _ = categories['Senza categoria'].append(label) %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% for category_name, category_labels in categories.items() %}
+                                    <div class="mb-3">
+                                        <h6 class="text-muted small fw-bold mb-2">
+                                            <i class="bi bi-folder"></i> {{ category_name }}
+                                        </h6>
+                                        {% for label in category_labels %}
+                                        <div class="d-flex align-items-center mb-2 label-item ps-2" 
+                                             data-label-id="{{ label.id }}"
+                                             data-label-name="{{ label.name }}"
+                                             data-label-color="{{ label.color or '#007bff' }}">
+                                            <div class="label-color-indicator me-2" 
+                                                 style="width: 12px; height: 12px; background-color: {{ label.color or '#007bff' }}; border-radius: 2px;"></div>
+                                            <span class="flex-grow-1">{{ label.name }}</span>
+                                            <small class="text-muted">0</small>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
                                 {% endfor %}
                             {% else %}
                                 <p class="text-muted small">Nessuna etichetta disponibile.</p>
@@ -169,10 +191,30 @@
                     <label for="labelSelect" class="form-label">Seleziona Etichetta:</label>
                     <select class="form-select" id="labelSelect" required>
                         <option value="">-- Seleziona un'etichetta --</option>
+                        {% set categories = {} %}
                         {% for label in labels_json %}
-                        <option value="{{ label.id }}" data-color="{{ label.color or '#007bff' }}">
-                            {{ label.name }}
-                        </option>
+                            {% if label.category %}
+                                {% if label.category not in categories %}
+                                    {% set _ = categories.update({label.category: []}) %}
+                                {% endif %}
+                                {% set _ = categories[label.category].append(label) %}
+                            {% else %}
+                                {% if 'Senza categoria' not in categories %}
+                                    {% set _ = categories.update({'Senza categoria': []}) %}
+                                {% endif %}
+                                {% set _ = categories['Senza categoria'].append(label) %}
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% for category_name, category_labels in categories.items() %}
+                            <optgroup label="{{ category_name }}">
+                                {% for label in category_labels %}
+                                <option value="{{ label.id }}" data-color="{{ label.color or '#007bff' }}">
+                                    {{ label.name }}
+                                    {% if label.description %} - {{ label.description[:50] }}{% if label.description|length > 50 %}...{% endif %}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
                         {% endfor %}
                     </select>
                 </div>

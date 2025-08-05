@@ -1570,12 +1570,20 @@ function protectChartFilters() {
 
 // Carica grafico istogramma etichette
 function loadLabelsChart() {
+    console.log('🔄 loadLabelsChart() chiamata');
+    
     if (labelsChart) {
+        console.log('🗑️ Distruggendo grafico esistente');
         labelsChart.destroy();
     }
     
     const canvas = document.getElementById('labelsHistogramChart');
-    if (!canvas) return;
+    if (!canvas) {
+        console.error('❌ Canvas labelsHistogramChart non trovato!');
+        return;
+    }
+    
+    console.log('✅ Canvas trovato:', canvas);
     
     const ctx = canvas.getContext('2d');
     
@@ -1584,12 +1592,28 @@ function loadLabelsChart() {
     
     // Ottieni filtri correnti
     const filters = getCurrentChartFilters();
+    
+    // Aggiungi il quesito ai parametri
+    filters.question = `{{ question|e }}`;
+    
     const queryString = new URLSearchParams(filters).toString();
     
-    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/labels_histogram?${queryString}`)
-        .then(response => response.json())
+    const url = `/statistics/api/question_chart_data/{{ file.id }}/labels_histogram?${queryString}`;
+    console.log('🌐 Chiamata API:', url);
+    
+    fetch(url)
+        .then(response => {
+            console.log('📡 Risposta ricevuta:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('📊 Dati ricevuti:', data);
+            
             if (data.labels.length === 0) {
+                console.warn('⚠️ Nessun dato trovato');
                 showChartError(ctx, 'Nessun dato trovato con i filtri applicati');
                 updateLabelsLegend({labels: [], categories: [], colors: [], values: []});
                 return;
@@ -1667,31 +1691,56 @@ function loadLabelsChart() {
             updateLabelsLegend(data);
         })
         .catch(error => {
-            console.error('Errore nel caricamento del grafico etichette:', error);
-            showChartError(ctx, 'Errore nel caricamento dei dati delle etichette');
+            console.error('❌ Errore nel caricamento del grafico etichette:', error);
+            showChartError(ctx, `Errore nel caricamento dei dati delle etichette: ${error.message}`);
+            updateLabelsLegend({labels: [], categories: [], colors: [], values: []});
         });
 }
 
 // Carica grafico annotatori
 function loadAnnotatorsChart() {
+    console.log('🔄 loadAnnotatorsChart() chiamata');
+    
     if (annotatorsChart) {
+        console.log('🗑️ Distruggendo grafico annotatori esistente');
         annotatorsChart.destroy();
     }
     
     const canvas = document.getElementById('annotatorsHistogramChart');
-    if (!canvas) return;
+    if (!canvas) {
+        console.error('❌ Canvas annotatorsHistogramChart non trovato!');
+        return;
+    }
+    
+    console.log('✅ Canvas annotatori trovato:', canvas);
     
     const ctx = canvas.getContext('2d');
     showChartLoader(ctx);
     
     // Ottieni filtri correnti
     const filters = getCurrentChartFilters();
+    
+    // Aggiungi il quesito ai parametri
+    filters.question = `{{ question|e }}`;
+    
     const queryString = new URLSearchParams(filters).toString();
     
-    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/annotators_histogram?${queryString}`)
-        .then(response => response.json())
+    const url = `/statistics/api/question_chart_data/{{ file.id }}/annotators_histogram?${queryString}`;
+    console.log('🌐 Chiamata API annotatori:', url);
+    
+    fetch(url)
+        .then(response => {
+            console.log('📡 Risposta annotatori ricevuta:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('📊 Dati annotatori ricevuti:', data);
+            
             if (data.labels.length === 0) {
+                console.warn('⚠️ Nessun annotatore trovato');
                 showChartError(ctx, 'Nessun annotatore trovato con i filtri applicati');
                 updateAnnotatorsStats({labels: [], annotations: [], cells: []});
                 return;
@@ -1772,8 +1821,9 @@ function loadAnnotatorsChart() {
             updateAnnotatorsStats(data);
         })
         .catch(error => {
-            console.error('Errore nel caricamento del grafico annotatori:', error);
-            showChartError(ctx, 'Errore nel caricamento dei dati degli annotatori');
+            console.error('❌ Errore nel caricamento del grafico annotatori:', error);
+            showChartError(ctx, `Errore nel caricamento dei dati degli annotatori: ${error.message}`);
+            updateAnnotatorsStats({labels: [], annotations: [], cells: []});
         });
 }
 
@@ -1789,7 +1839,7 @@ function loadCategoriesChart() {
     const ctx = canvas.getContext('2d');
     showChartLoader(ctx);
     
-    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/categories_distribution`)
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/categories_distribution?question={{ question|urlencode }}`)
         .then(response => response.json())
         .then(data => {
             const colors = [
@@ -1872,7 +1922,7 @@ function loadCoverageCharts() {
     showChartLoader(ctx1);
     showChartLoader(ctx2);
     
-    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/coverage_analysis`)
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/coverage_analysis?question={{ question|urlencode }}`)
         .then(response => response.json())
         .then(data => {
             // Grafico overview copertura
@@ -2302,7 +2352,7 @@ function loadCategoriesChart() {
     const filters = getCurrentChartFilters();
     const queryString = new URLSearchParams(filters).toString();
     
-    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/categories_distribution?${queryString}`)
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/categories_distribution?${queryString}&question={{ question|urlencode }}`)
         .then(response => response.json())
         .then(data => {
             if (data.categories.length === 0) {

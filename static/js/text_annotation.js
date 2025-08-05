@@ -73,6 +73,48 @@ class TextAnnotationSystem {
         });
     }
     
+    reattachEventListeners() {
+        // Rimuovi tutti i listener esistenti dal container per evitare duplicati
+        const newContainer = this.container.cloneNode(true);
+        this.container.parentNode.replaceChild(newContainer, this.container);
+        this.container = newContainer;
+        
+        // Riattiva i listener degli eventi
+        // Selezione testo
+        this.container.addEventListener('mouseup', (e) => {
+            setTimeout(() => this.handleTextSelection(e), 10);
+        });
+        
+        // Anche per touch devices
+        this.container.addEventListener('touchend', (e) => {
+            setTimeout(() => this.handleTextSelection(e), 10);
+        });
+        
+        // Click su annotazioni esistenti
+        this.container.addEventListener('click', (e) => {
+            if (e.target.classList.contains('annotation-highlight')) {
+                e.preventDefault();
+                
+                // Gestisci annotazioni multiple
+                if (e.target.dataset.multipleAnnotations) {
+                    const annotationIds = e.target.dataset.multipleAnnotations.split(',').map(id => parseInt(id));
+                    const annotations = this.annotations.filter(a => annotationIds.includes(a.id));
+                    this.showMultipleAnnotationsModal(annotations);
+                } else if (e.target.dataset.annotationId) {
+                    // Annotazione singola
+                    this.showAnnotationDetails(e.target.dataset.annotationId);
+                }
+            }
+        });
+        
+        // Previeni selezione su annotazioni esistenti durante la creazione
+        this.container.addEventListener('selectstart', (e) => {
+            if (e.target.classList.contains('annotation-highlight')) {
+                e.preventDefault();
+            }
+        });
+    }
+    
     setupModals() {
         this.annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
         this.detailsModal = new bootstrap.Modal(document.getElementById('annotationDetailsModal'));
@@ -94,6 +136,19 @@ class TextAnnotationSystem {
         
         // Verifica che la selezione sia all'interno del container
         if (!this.container.contains(range.commonAncestorContainer)) {
+            return;
+        }
+        
+        // Verifica che non stiamo selezionando parti di annotazioni esistenti
+        const startElement = range.startContainer.nodeType === Node.TEXT_NODE ? 
+                            range.startContainer.parentElement : range.startContainer;
+        const endElement = range.endContainer.nodeType === Node.TEXT_NODE ? 
+                          range.endContainer.parentElement : range.endContainer;
+        
+        // Se stiamo selezionando all'interno di un'annotazione esistente, ignora
+        if (startElement.closest('.annotation-highlight') || endElement.closest('.annotation-highlight')) {
+            console.log('Selezione all\'interno di annotazione esistente, ignorata');
+            selection.removeAllRanges();
             return;
         }
         
@@ -121,6 +176,8 @@ class TextAnnotationSystem {
             end: endPos,
             range: range.cloneRange()
         };
+        
+        console.log('Testo selezionato:', selectedText, 'Posizioni:', startPos, '-', endPos);
         
         this.showAnnotationModal();
     }
@@ -205,22 +262,24 @@ class TextAnnotationSystem {
                 // Aggiorna l'array locale delle annotazioni
                 this.annotations.push({
                     id: data.annotation.id,
-                    start_position: this.selectedRange.start,
-                    end_position: this.selectedRange.end,
-                    text_selection: this.selectedText,
-                    label_id: labelId,
+                    start_position: data.annotation.start_position,
+                    end_position: data.annotation.end_position,
+                    text_selection: data.annotation.text_selection,
+                    label_id: data.annotation.label_id,
                     label_name: data.annotation.label_name,
                     label_color: data.annotation.label_color,
-                    user_id: data.annotation.user_id || window.currentUserId,
-                    user_name: data.annotation.user_name || window.currentUserName,
+                    label_category: data.annotation.label_category,
+                    user_id: data.annotation.user_id,
+                    user_name: data.annotation.user_name,
                     created_at: data.annotation.created_at
                 });
 
-                // Aggiorna tutte le annotazioni locali con i dati più recenti di etichetta e utente
-                this.updateExistingAnnotationsWithLabels();
+                console.log('Nuova annotazione aggiunta:', data.annotation);
+                console.log('Totale annotazioni:', this.annotations.length);
 
                 // Ricostruisci il rendering delle annotazioni
                 this.renderAnnotations();
+                
                 // Aggiorna la lista compatta "Annotazione (n)"
                 this.rebuildAnnotationsList();
                 
@@ -263,6 +322,8 @@ class TextAnnotationSystem {
 
         if (this.annotations.length === 0) {
             this.container.textContent = textContent;
+            // Riattiva i listener dopo aver ricreato il contenuto
+            this.reattachEventListeners();
             return;
         }
 
@@ -328,6 +389,31 @@ class TextAnnotationSystem {
         this.container.style.userSelect = 'text';
         this.container.style.webkitUserSelect = 'text';
         this.container.style.mozUserSelect = 'text';
+        
+        // IMPORTANTE: Riattiva i listener dopo aver ricreato il contenuto
+        this.reattachEventListeners();
+    }
+
+    /**
+     * Assicura che il container sia selezionabile per nuove annotazioni
+     */
+    ensureContainerSelectable() {
+        // Ripristina le proprietà di selezione del testo
+        this.container.style.userSelect = 'text';
+        this.container.style.webkitUserSelect = 'text';
+        this.container.style.mozUserSelect = 'text';
+        this.container.style.msUserSelect = 'text';
+        
+        // Assicurati che il container mantenga il focus per la selezione
+        this.container.setAttribute('tabindex', '0');
+        
+        // Riattiva la capacità di selezione
+        this.container.style.cursor = 'text';
+        
+        // Force reflow per assicurarsi che i cambiamenti siano applicati
+        this.container.offsetHeight;
+        
+        console.log('Container reso selezionabile per nuove annotazioni');
     }
 
     createAnnotatedSegment(text, annotations) {
@@ -336,6 +422,12 @@ class TextAnnotationSystem {
         span.textContent = text;
         span.style.cursor = 'pointer';
         span.style.position = 'relative';
+        
+        // IMPORTANTE: Non rendere selezionabile il contenuto delle annotazioni esistenti
+        span.style.userSelect = 'none';
+        span.style.webkitUserSelect = 'none';
+        span.style.mozUserSelect = 'none';
+        span.style.msUserSelect = 'none';
 
         if (annotations.length === 1) {
             // Singola annotazione
@@ -360,6 +452,7 @@ class TextAnnotationSystem {
             // Aggiungi listener per click su annotazioni multiple
             span.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 this.showMultipleAnnotationsModal(annotations);
             });
         }
@@ -628,6 +721,11 @@ class TextAnnotationSystem {
         if (this.annotationModal) {
             this.annotationModal.hide();
         }
+        
+        // IMPORTANTE: Mantieni il container selezionabile per future annotazioni
+        this.ensureContainerSelectable();
+        
+        console.log('Selezione pulita, container pronto per nuove annotazioni');
     }
     
     updateStats() {
@@ -738,6 +836,7 @@ class TextAnnotationSystem {
             if (label) {
                 annotation.label_name = label.name;
                 annotation.label_color = label.color;
+                annotation.label_category = label.category;
             }
             
             // Assicurati che ci siano dati utente di base
@@ -779,12 +878,34 @@ class TextAnnotationSystem {
         // Svuota e ricompila
         labelSelect.innerHTML = '<option value="">-- Seleziona un\'etichetta --</option>';
         
+        // Raggruppa le etichette per categoria
+        const categories = {};
         this.labels.forEach(label => {
-            const option = document.createElement('option');
-            option.value = label.id;
-            option.textContent = label.name;
-            option.dataset.color = label.color || '#007bff';
-            labelSelect.appendChild(option);
+            const categoryName = label.category || 'Senza categoria';
+            if (!categories[categoryName]) {
+                categories[categoryName] = [];
+            }
+            categories[categoryName].push(label);
+        });
+        
+        // Crea optgroups per ogni categoria
+        Object.keys(categories).sort().forEach(categoryName => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = categoryName;
+            
+            categories[categoryName].forEach(label => {
+                const option = document.createElement('option');
+                option.value = label.id;
+                option.textContent = label.name;
+                if (label.description && label.description.length > 0) {
+                    const desc = label.description.length > 50 ? label.description.substring(0, 50) + '...' : label.description;
+                    option.textContent += ` - ${desc}`;
+                }
+                option.dataset.color = label.color || '#007bff';
+                optgroup.appendChild(option);
+            });
+            
+            labelSelect.appendChild(optgroup);
         });
         
         // Ripristina la selezione se ancora valida

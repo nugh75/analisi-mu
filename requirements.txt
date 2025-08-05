@@ -13,3 +13,4 @@ aiohttp==3.9.5
 plotly>=5.0.0
 python-docx==0.8.11
 bleach==6.0.0
+reportlab==4.0.5

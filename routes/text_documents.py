@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from docx import Document
 import bleach
 
-from models import db, TextDocument, TextAnnotation, Label
+from models import db, TextDocument, TextAnnotation, Label, Category
 from forms import TextDocumentForm
 
 text_documents_bp = Blueprint('text_documents', __name__, url_prefix='/text-documents')
@@ -213,13 +213,16 @@ def annotate(document_id):
         flash('Non hai i permessi per visualizzare questo documento', 'error')
         return redirect(url_for('text_documents.list_documents'))
     
-    # Carica etichette disponibili
-    labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
+    # Carica etichette disponibili con le loro categorie
+    labels = db.session.query(Label)\
+                      .options(db.joinedload(Label.category_obj))\
+                      .filter_by(is_active=True)\
+                      .order_by(Label.name).all()
     
     # Carica annotazioni esistenti con dettagli utente e etichetta
     annotations = db.session.query(TextAnnotation)\
                            .options(db.joinedload(TextAnnotation.user))\
-                           .options(db.joinedload(TextAnnotation.label))\
+                           .options(db.joinedload(TextAnnotation.label).joinedload(Label.category_obj))\
                            .filter(TextAnnotation.document_id == document_id)\
                            .order_by(TextAnnotation.start_position).all()
     
@@ -242,8 +245,8 @@ def annotate(document_id):
             'id': label.id,
             'name': label.name,
             'description': label.description,
-            'category': label.category,
-            'color': label.color
+            'category': label.category_obj.name if label.category_obj else None,
+            'color': label.get_effective_color()
         }
         for label in labels
     ]
@@ -256,7 +259,8 @@ def annotate(document_id):
             'text_selection': ann.text_selection,
             'label_id': ann.label_id,
             'label_name': ann.label.name if ann.label else f'Etichetta {ann.label_id}',
-            'label_color': ann.label.color if ann.label else '#007bff',
+            'label_color': ann.label.get_effective_color() if ann.label else '#007bff',
+            'label_category': ann.label.category_obj.name if ann.label and ann.label.category_obj else None,
             'user_id': ann.user_id,
             'user_name': ann.user.username if ann.user else 'Utente sconosciuto',
             'created_at': ann.created_at.strftime('%d/%m/%Y %H:%M') if ann.created_at else ''
@@ -326,9 +330,13 @@ def api_annotate():
             'message': 'Annotazione creata con successo',
             'annotation': {
                 'id': annotation.id,
-                'label_name': label.name,
-                'label_color': label.color,
+                'start_position': annotation.start_position,
+                'end_position': annotation.end_position,
                 'text_selection': annotation.text_selection,
+                'label_id': annotation.label_id,
+                'label_name': label.name,
+                'label_color': label.get_effective_color(),
+                'label_category': label.category_obj.name if label.category_obj else None,
                 'user_id': annotation.user_id,
                 'user_name': current_user.username,
                 'created_at': annotation.created_at.strftime('%d/%m/%Y %H:%M')
@@ -351,16 +359,27 @@ def annotations(document_id):
         flash('Non hai i permessi per visualizzare questo documento', 'error')
         return redirect(url_for('text_documents.list_documents'))
     
-    # Carica annotazioni con dettagli utente e etichetta
-    annotations = db.session.query(TextAnnotation)\
-                           .options(db.joinedload(TextAnnotation.label))\
-                           .options(db.joinedload(TextAnnotation.user))\
-                           .filter(TextAnnotation.document_id == document_id)\
-                           .order_by(TextAnnotation.start_position)\
-                           .all()
+    # Parametri di filtro
+    selected_categories = request.args.getlist('categories')
+    
+    # Query base per le annotazioni
+    annotations_query = db.session.query(TextAnnotation)\
+                               .options(db.joinedload(TextAnnotation.label).joinedload(Label.category_obj))\
+                               .options(db.joinedload(TextAnnotation.user))\
+                               .filter(TextAnnotation.document_id == document_id)
+    
+    # Applica filtro per categoria se specificato
+    if selected_categories:
+        annotations_query = annotations_query.join(Label).join(Category)\
+                                           .filter(Category.name.in_(selected_categories))
+    
+    annotations = annotations_query.order_by(TextAnnotation.start_position).all()
     
     # Carica tutte le etichette per statistiche
     labels = Label.query.filter_by(is_active=True).order_by(Label.name).all()
+    
+    # Carica tutte le categorie per il filtro
+    categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
     
     # Statistiche
     stats = {
@@ -379,6 +398,8 @@ def annotations(document_id):
                          document=document,
                          annotations=annotations,
                          labels=labels,
+                         categories=categories,
+                         selected_categories=selected_categories,
                          stats=stats)
 
 @text_documents_bp.route('/delete/<int:document_id>', methods=['POST'])
@@ -488,3 +509,55 @@ def api_delete_annotation(annotation_id):
         current_app.logger.error(f"Errore eliminazione annotazione: {str(e)}")
         db.session.rollback()
         return jsonify({'success': False, 'message': 'Errore interno del server'}), 500
+
+@text_documents_bp.route('/export/<int:document_id>/<format_type>')
+@login_required
+def export_annotations(document_id, format_type):
+    """Esporta le annotazioni di un documento nei formati PDF, Word o LaTeX"""
+    try:
+        from services.annotation_export import AnnotationExporter
+        
+        document = TextDocument.query.get_or_404(document_id)
+        
+        # Verifica permessi
+        if not current_user.is_admin and document.user_id != current_user.id:
+            flash('Non hai i permessi per visualizzare questo documento', 'error')
+            return redirect(url_for('text_documents.list_documents'))
+        
+        # Parametri di filtro
+        selected_categories = request.args.getlist('categories')
+        
+        # Query per le annotazioni con filtro categoria
+        annotations_query = db.session.query(TextAnnotation)\
+                                   .options(db.joinedload(TextAnnotation.label).joinedload(Label.category_obj))\
+                                   .options(db.joinedload(TextAnnotation.user))\
+                                   .filter(TextAnnotation.document_id == document_id)
+        
+        # Applica filtro per categoria se specificato
+        if selected_categories:
+            annotations_query = annotations_query.join(Label).join(Category)\
+                                               .filter(Category.name.in_(selected_categories))
+        
+        annotations = annotations_query.order_by(TextAnnotation.start_position).all()
+        
+        # Crea l'esportatore
+        exporter = AnnotationExporter(document, annotations, selected_categories)
+        
+        # Esegui l'esportazione nel formato richiesto
+        if format_type.lower() == 'pdf':
+            return exporter.export_to_pdf()
+        elif format_type.lower() == 'word':
+            return exporter.export_to_word()
+        elif format_type.lower() == 'latex':
+            return exporter.export_to_latex()
+        else:
+            flash('Formato di esportazione non supportato', 'error')
+            return redirect(url_for('text_documents.annotations', document_id=document_id))
+            
+    except ImportError:
+        flash('Modulo di esportazione non disponibile. Installare le dipendenze necessarie.', 'error')
+        return redirect(url_for('text_documents.annotations', document_id=document_id))
+    except Exception as e:
+        current_app.logger.error(f"Errore nell'esportazione: {str(e)}")
+        flash('Errore durante l\'esportazione del documento', 'error')
+        return redirect(url_for('text_documents.annotations', document_id=document_id))
