@@ -92,7 +92,9 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            <canvas id="labelDistributionChart" width="400" height="300"></canvas>
+                            <div class="chart-container">
+                                <canvas id="labelDistributionChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -104,7 +106,9 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            <canvas id="timelineChart" width="400" height="300"></canvas>
+                            <div class="chart-container">
+                                <canvas id="timelineChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -265,7 +269,16 @@ document.addEventListener('DOMContentLoaded', function() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            },
+            layout: {
+                padding: {
+                    bottom: 20
                 }
             }
         }
@@ -300,6 +313,11 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: {
                     display: false
+                }
+            },
+            layout: {
+                padding: {
+                    bottom: 20
                 }
             }
         }

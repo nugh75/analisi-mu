@@ -212,10 +212,10 @@
                         
                         <div class="col-lg-6 col-xl-4 mb-4">
                             <div class="card h-100 border-start border-4 {{ 'border-success' if question_progress == 100 else 'border-warning' if question_progress > 0 else 'border-secondary' }}">
-                                <div class="card-header bg-light py-2">
+                                <div class="card-header py-2">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div class="flex-grow-1">
-                                            <h6 class="mb-1">{{ question_name }}</h6>
+                                            <h6 class="mb-1 text-white">{{ question_name }}</h6>
                                             <div class="d-flex gap-2 mb-2">
                                                 <span class="badge bg-primary">{{ total_responses }} risposte</span>
                                                 {% if annotated_responses > 0 %}
@@ -242,7 +242,7 @@
                                              aria-valuemax="100">
                                         </div>
                                     </div>
-                                    <small class="text-muted">Progresso: {{ "%.0f"|format(question_progress) }}%</small>
+                                    <small class="text-white">Progresso: {{ "%.0f"|format(question_progress) }}%</small>
                                 </div>
                                 
                                 <div class="card-body py-2">
@@ -250,17 +250,17 @@
                                     {% set sample_responses = cells.items|selectattr('column_name', 'equalto', question_name)|list %}
                                     {% if sample_responses[:2] %}
                                     <div class="mb-3">
-                                        <small class="text-muted d-block mb-2">Anteprima risposte (pagina corrente):</small>
+                                        <small class="text-dark d-block mb-2">Anteprima risposte (pagina corrente):</small>
                                         {% for response in sample_responses[:2] %}
                                         <div class="p-2 bg-light rounded mb-1">
-                                            <small>{{ response.text_content[:80] }}{{ '...' if response.text_content|length > 80 else '' }}</small>
+                                            <small class="text-dark">{{ response.text_content[:80] }}{{ '...' if response.text_content|length > 80 else '' }}</small>
                                         </div>
                                         {% endfor %}
                                     </div>
                                     {% endif %}
                                 </div>
                                 
-                                <div class="card-footer bg-light py-2">
+                                <div class="card-footer py-2">
                                     <div class="d-flex gap-1 justify-content-center">
                                         <a href="{{ url_for('excel.view_question', file_id=excel_file.id, question_name=question_name) }}" 
                                            class="btn btn-sm btn-primary">
@@ -312,11 +312,11 @@
                         {% for cell in cells.items %}
                         <div class="col-md-6 mb-4">
                             <div class="card h-100 border-start border-4 border-primary">
-                                <div class="card-header bg-light py-2">
+                                <div class="card-header py-2">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
-                                            <strong>{{ cell.sheet_name }}:{{ cell.cell_reference }}</strong>
-                                            <small class="text-muted ms-2">{{ cell.column_name }}</small>
+                                            <strong class="text-white">{{ cell.sheet_name }}:{{ cell.cell_reference }}</strong>
+                                            <small class="text-white ms-2">{{ cell.column_name }}</small>
                                         </div>
                                         <div class="d-flex gap-1">
                                             <a href="{{ url_for('annotation.annotate_cell', cell_id=cell.id) }}" 
@@ -356,12 +356,12 @@
                                     </div>
                                     {% endif %}
                                 </div>
-                                <div class="card-footer bg-light py-2">
+                                <div class="card-footer py-2">
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <small class="text-muted">
+                                        <small class="text-white">
                                             Riga {{ cell.row_index + 1 }}, Colonna {{ cell.column_index + 1 }}
                                         </small>
-                                        <small class="text-muted">
+                                        <small class="text-white">
                                             {{ cell.text_content|length }} caratteri
                                         </small>
                                     </div>
