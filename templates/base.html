@@ -87,11 +87,12 @@
                             <li><a class="dropdown-item" href="{{ url_for('questions.manage_questions') }}">
                                 <i class="bi bi-patch-question me-1"></i>Gestisci Domande
                             </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('statistics.overview') }}">
-                                <i class="bi bi-graph-up me-1"></i>Statistiche
-                            </a></li>
                         </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('statistics.overview') }}">
+                            <i class="bi bi-graph-up me-1"></i>Statistiche
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('forum.index') }}">

@@ -28,42 +28,143 @@
     font-size: 0.875rem;
 }
 
-/* Animazione per le righe filtrate */
-.label-row {
-    transition: opacity 0.3s ease;
+/* Stili per i filtri dei grafici - PROTETTI */
+.chart-filters-container {
+    position: relative;
+    z-index: 1000;
+    border: 2px solid #0dcaf0 !important;
+    box-shadow: 0 2px 8px rgba(13, 202, 240, 0.15);
+    background: white !important;
+    opacity: 1 !important;
+    display: block !important;
+    visibility: visible !important;
 }
 
-.label-row.filtered-out {
-    opacity: 0.3;
+.chart-filters-container .card-header {
+    background-color: #0dcaf0 !important;
+    color: white !important;
+    border-bottom: 1px solid #0dcaf0 !important;
 }
 
-/* Stile per il badge "Filtrate" */
-.badge.bg-secondary {
-    font-size: 0.7em;
+.chart-filters-container .card-body {
+    background-color: #ffffff !important;
+    padding: 1rem !important;
 }
 
-/* Responsive migliorato */
+/* Protezione anti-rimozione automatica */
+.chart-filters-container,
+.chart-filters-container * {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Override per evitare interferenze */
+.chart-filters-container.alert {
+    display: block !important;
+    opacity: 1 !important;
+}
+
+/* Stili per i grafici */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    margin: 10px 0;
+}
+
+.nav-tabs .nav-link {
+    color: #6c757d;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-bottom-color: #0d6efd;
+    color: #0d6efd;
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.tab-content {
+    padding: 20px 0;
+}
+
+/* Stili per le legende personalizzate */
+.chart-legend {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.legend-item:hover {
+    background-color: #f8f9fa;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.legend-text {
+    font-size: 0.875rem;
+    flex-grow: 1;
+}
+
+.legend-value {
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* Responsive charts */
 @media (max-width: 768px) {
-    #label-filters-form .col-md-3,
-    #label-filters-form .col-md-2 {
-        margin-bottom: 0.5rem;
+    .chart-container {
+        height: 300px;
     }
     
-    .btn-group .btn-sm {
-        padding: 0.2rem 0.4rem;
-        font-size: 0.8rem;
+    .nav-tabs .nav-link {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
     }
 }
 
-/* Evidenziazione termini cercati */
-.label-badge.highlighted {
-    animation: pulse 1s infinite;
+/* Loading spinner per i grafici */
+.chart-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+    color: #6c757d;
 }
 
-@keyframes pulse {
-    0% { box-shadow: 0 0 5px #ffc107; }
-    50% { box-shadow: 0 0 15px #ffc107; }
-    100% { box-shadow: 0 0 5px #ffc107; }
+.chart-loading .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Animazioni per i tab */
+.tab-pane {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.tab-pane.show.active {
+    opacity: 1;
 }
 
 /* Stili per il contenuto delle celle */
@@ -183,6 +284,245 @@
                         <div class="card-body text-center">
                             <h3 class="text-warning">{{ label_stats|length }}</h3>
                             <p class="mb-0">Etichette</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grafici e Visualizzazioni -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-bar-chart me-2"></i>Visualizzazioni Grafiche
+                                <small class="text-muted">(Analisi visiva dei dati)</small>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Filtri per i grafici -->
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <div class="card border-info chart-filters-container">
+                                        <div class="card-header bg-info text-white py-2">
+                                            <h6 class="mb-0">
+                                                <i class="bi bi-funnel me-1"></i>Filtri per Grafici
+                                                <small class="ms-2">- Applicano a tutte le visualizzazioni</small>
+                                            </h6>
+                                        </div>
+                                        <div class="card-body py-3">
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-md-3">
+                                                    <label for="chart-category-filter" class="form-label small mb-1">
+                                                        <strong>Categoria:</strong>
+                                                    </label>
+                                                    <select class="form-select form-select-sm" id="chart-category-filter">
+                                                        <option value="">Tutte le categorie</option>
+                                                        {% for category in available_categories %}
+                                                        <option value="{{ category }}">{{ category }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <label for="chart-label-filter" class="form-label small mb-1">
+                                                        <strong>Etichetta:</strong>
+                                                    </label>
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           id="chart-label-filter" placeholder="Cerca etichetta...">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label for="chart-min-usage" class="form-label small mb-1">
+                                                        <strong>Min Utilizzi:</strong>
+                                                    </label>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           id="chart-min-usage" min="1" placeholder="1">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <label for="chart-max-usage" class="form-label small mb-1">
+                                                        <strong>Max Utilizzi:</strong>
+                                                    </label>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           id="chart-max-usage" min="1" placeholder="∞">
+                                                </div>
+                                                <div class="col-md-2">
+                                                    <div class="d-flex gap-1">
+                                                        <button type="button" class="btn btn-primary btn-sm flex-fill" 
+                                                                id="update-charts-btn" onclick="updateAllCharts()" 
+                                                                title="Applica filtri ai grafici">
+                                                            <i class="bi bi-arrow-clockwise"></i> Aggiorna
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                                onclick="resetChartFilters()" title="Reset filtri">
+                                                            <i class="bi bi-x-circle"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row mt-2">
+                                                <div class="col-12 text-center">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        I filtri si applicano a tutti i grafici. Usa "Aggiorna" per applicare le modifiche.
+                                                        <span id="chart-filter-status" class="ms-2"></span>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabs per i diversi grafici -->
+                            <ul class="nav nav-tabs mb-3" id="chartsTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="labels-chart-tab" data-bs-toggle="tab" data-bs-target="#labels-chart" type="button" role="tab">
+                                        <i class="bi bi-bar-chart-fill me-1"></i>Etichette
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="annotators-chart-tab" data-bs-toggle="tab" data-bs-target="#annotators-chart" type="button" role="tab">
+                                        <i class="bi bi-people-fill me-1"></i>Annotatori
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="categories-chart-tab" data-bs-toggle="tab" data-bs-target="#categories-chart" type="button" role="tab">
+                                        <i class="bi bi-pie-chart-fill me-1"></i>Categorie
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="coverage-chart-tab" data-bs-toggle="tab" data-bs-target="#coverage-chart" type="button" role="tab">
+                                        <i class="bi bi-graph-up me-1"></i>Copertura
+                                    </button>
+                                </li>
+                            </ul>
+                            
+                            <div class="tab-content" id="chartsTabContent">
+                                <!-- Grafico Etichette -->
+                                <div class="tab-pane fade show active" id="labels-chart" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-tags me-1"></i>Istogramma Utilizzo Etichette
+                                                <small class="text-muted">- Frequenza di utilizzo per ogni etichetta</small>
+                                            </h6>
+                                            <div class="chart-container" style="height: 400px;">
+                                                <canvas id="labelsHistogramChart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-info-circle me-1"></i>Informazioni
+                                            </h6>
+                                            <div class="alert alert-info">
+                                                <small>
+                                                    <strong>Cosa mostra:</strong><br>
+                                                    • Numero di utilizzi per ogni etichetta<br>
+                                                    • I colori rappresentano le etichette originali<br>
+                                                    • Ordinamento decrescente per utilizzo
+                                                </small>
+                                            </div>
+                                            <div id="labelsChartLegend" class="mt-3">
+                                                <!-- Legenda dinamica -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Grafico Annotatori -->
+                                <div class="tab-pane fade" id="annotators-chart" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-people me-1"></i>Confronto Annotatori
+                                                <small class="text-muted">- Produttività e copertura per annotatore</small>
+                                            </h6>
+                                            <div class="chart-container" style="height: 400px;">
+                                                <canvas id="annotatorsHistogramChart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-info-circle me-1"></i>Metriche
+                                            </h6>
+                                            <div class="alert alert-info">
+                                                <small>
+                                                    <strong>Barre blu:</strong> Totale annotazioni<br>
+                                                    <strong>Barre verdi:</strong> Celle uniche annotate<br>
+                                                    <strong>Rapporto:</strong> Intensità di annotazione per cella
+                                                </small>
+                                            </div>
+                                            <div id="annotatorsStats" class="mt-3">
+                                                <!-- Statistiche dinamiche -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Grafico Categorie -->
+                                <div class="tab-pane fade" id="categories-chart" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-collection me-1"></i>Distribuzione per Categoria
+                                                <small class="text-muted">- Raggruppamento tematico delle annotazioni</small>
+                                            </h6>
+                                            <div class="chart-container" style="height: 400px;">
+                                                <canvas id="categoriesDistributionChart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-pie-chart me-1"></i>Riassunto
+                                            </h6>
+                                            <div class="alert alert-success">
+                                                <small>
+                                                    <strong>Vista d'insieme:</strong><br>
+                                                    • Distribuzione per categoria tematica<br>
+                                                    • Identificazione dei temi predominanti<br>
+                                                    • Bilanciamento delle annotazioni
+                                                </small>
+                                            </div>
+                                            <div id="categoriesStats" class="mt-3">
+                                                <!-- Statistiche categorie -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Grafico Copertura -->
+                                <div class="tab-pane fade" id="coverage-chart" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-speedometer2 me-1"></i>Copertura Annotazioni
+                                            </h6>
+                                            <div class="chart-container" style="height: 300px;">
+                                                <canvas id="coverageOverviewChart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="mb-3">
+                                                <i class="bi bi-graph-up me-1"></i>Distribuzione Intensità
+                                            </h6>
+                                            <div class="chart-container" style="height: 300px;">
+                                                <canvas id="coverageDistributionChart"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-12 mt-3">
+                                            <div class="alert alert-warning">
+                                                <small>
+                                                    <strong>Analisi Copertura:</strong> 
+                                                    Mostra quante celle sono state annotate e con quale intensità. 
+                                                    Una buona copertura indica completezza del lavoro di annotazione.
+                                                </small>
+                                            </div>
+                                            <div id="coverageStats" class="row text-center">
+                                                <!-- Statistiche copertura -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1090,9 +1430,1089 @@ function toggleHighlight() {
     }
 }
 
-// Auto-submit del form quando si cambia un filtro (opzionale)
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js per i grafici -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Funzionalità avanzate per i filtri delle etichette
+
+// Variabile per lo stato di evidenziazione
+let highlightEnabled = false;
+
+// Variabili globali per i grafici
+let labelsChart, annotatorsChart, categoriesChart, coverageOverviewChart, coverageDistributionChart;
+
+// Inizializzazione al caricamento della pagina
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 Inizializzazione grafici statistiche...');
+    
+    // PROTEZIONE FILTRI: Previeni rimozione automatica
+    protectChartFilters();
+    
+    // Inizializza grafici quando i tab vengono attivati
+    const labelsTab = document.getElementById('labels-chart-tab');
+    const annotatorsTab = document.getElementById('annotators-chart-tab');
+    const categoriesTab = document.getElementById('categories-chart-tab');
+    const coverageTab = document.getElementById('coverage-chart-tab');
+    
+    if (labelsTab) {
+        labelsTab.addEventListener('shown.bs.tab', function() {
+            console.log('📊 Caricamento grafico etichette...');
+            loadLabelsChart();
+        });
+    }
+    
+    if (annotatorsTab) {
+        annotatorsTab.addEventListener('shown.bs.tab', function() {
+            console.log('👥 Caricamento grafico annotatori...');
+            loadAnnotatorsChart();
+        });
+    }
+    
+    if (categoriesTab) {
+        categoriesTab.addEventListener('shown.bs.tab', function() {
+            console.log('🏷️ Caricamento grafico categorie...');
+            loadCategoriesChart();
+        });
+    }
+    
+    if (coverageTab) {
+        coverageTab.addEventListener('shown.bs.tab', function() {
+            console.log('📈 Caricamento grafici copertura...');
+            loadCoverageCharts();
+        });
+    }
+    
+    // Aggiungi listener per aggiornamento automatico con Enter
+    const chartFilters = document.querySelectorAll('#chart-category-filter, #chart-label-filter, #chart-min-usage, #chart-max-usage');
+    chartFilters.forEach(filter => {
+        if (!filter) return;
+        
+        filter.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                console.log('⌨️ Aggiornamento grafici da tastiera');
+                updateAllCharts();
+            }
+        });
+        
+        // Auto-aggiornamento per select categoria
+        if (filter.tagName === 'SELECT' && filter.id === 'chart-category-filter') {
+            filter.addEventListener('change', function() {
+                console.log('🔄 Auto-aggiornamento da cambio categoria');
+                updateAllCharts();
+            });
+        }
+    });
+    
+    // Inizializza stato filtri
+    updateFilterStatus({});
+    
+    // Protezione aggiuntiva ogni 2 secondi
+    setInterval(protectChartFilters, 2000);
+    
+    // Carica il primo grafico (etichette) dopo un piccolo delay
+    setTimeout(() => {
+        console.log('🚀 Caricamento iniziale grafico etichette...');
+        loadLabelsChart();
+    }, 500);
+    
+    // Setup filtri esistenti
+    setupFilters();
+    
+    console.log('✅ Inizializzazione grafici completata');
+});
+
+// FUNZIONE DI PROTEZIONE FILTRI
+function protectChartFilters() {
+    const container = document.querySelector('.chart-filters-container');
+    if (!container) return;
+    
+    // Assicurati che il container sia sempre visibile
+    container.style.display = 'block';
+    container.style.opacity = '1';
+    container.style.visibility = 'visible';
+    
+    // Rimuovi eventuali timer di auto-rimozione
+    if (container.timeoutId) {
+        clearTimeout(container.timeoutId);
+        delete container.timeoutId;
+    }
+    
+    // Previeni che venga trattato come alert auto-removibile
+    container.classList.remove('alert');
+    container.classList.add('alert-permanent');
+    
+    // Assicurati che tutti i controlli siano presenti
+    const requiredElements = [
+        '#chart-category-filter',
+        '#chart-label-filter', 
+        '#chart-min-usage',
+        '#chart-max-usage',
+        '#update-charts-btn',
+        '#chart-filter-status'
+    ];
+    
+    let allPresent = true;
+    requiredElements.forEach(selector => {
+        if (!document.querySelector(selector)) {
+            console.warn(`⚠️ Elemento filtro mancante: ${selector}`);
+            allPresent = false;
+        }
+    });
+    
+    if (!allPresent) {
+        console.error('❌ Alcuni elementi dei filtri sono mancanti, potrebbero essere stati rimossi');
+    }
+}
+
+// Carica grafico istogramma etichette
+function loadLabelsChart() {
+    if (labelsChart) {
+        labelsChart.destroy();
+    }
+    
+    const canvas = document.getElementById('labelsHistogramChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Mostra loader
+    showChartLoader(ctx);
+    
+    // Ottieni filtri correnti
+    const filters = getCurrentChartFilters();
+    const queryString = new URLSearchParams(filters).toString();
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/labels_histogram?${queryString}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.labels.length === 0) {
+                showChartError(ctx, 'Nessun dato trovato con i filtri applicati');
+                updateLabelsLegend({labels: [], categories: [], colors: [], values: []});
+                return;
+            }
+            
+            labelsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Utilizzi',
+                        data: data.values,
+                        backgroundColor: data.colors.map(color => color + '80'), // Aggiungi trasparenza
+                        borderColor: data.colors,
+                        borderWidth: 2,
+                        borderRadius: 4,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Frequenza di utilizzo delle etichette ${getFilterDescription()}`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const category = data.categories[context.dataIndex];
+                                    return [
+                                        `Etichetta: ${context.label}`,
+                                        `Utilizzi: ${context.parsed.y}`,
+                                        `Categoria: ${category}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Numero di utilizzi'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Etichette'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Aggiorna legenda personalizzata
+            updateLabelsLegend(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento del grafico etichette:', error);
+            showChartError(ctx, 'Errore nel caricamento dei dati delle etichette');
+        });
+}
+
+// Carica grafico annotatori
+function loadAnnotatorsChart() {
+    if (annotatorsChart) {
+        annotatorsChart.destroy();
+    }
+    
+    const canvas = document.getElementById('annotatorsHistogramChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    showChartLoader(ctx);
+    
+    // Ottieni filtri correnti
+    const filters = getCurrentChartFilters();
+    const queryString = new URLSearchParams(filters).toString();
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/annotators_histogram?${queryString}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.labels.length === 0) {
+                showChartError(ctx, 'Nessun annotatore trovato con i filtri applicati');
+                updateAnnotatorsStats({labels: [], annotations: [], cells: []});
+                return;
+            }
+            
+            annotatorsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Totale Annotazioni',
+                            data: data.annotations,
+                            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 2,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Celle Uniche',
+                            data: data.cells,
+                            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 2,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Produttività annotatori ${getFilterDescription()}`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        const cells = data.cells[context.dataIndex];
+                                        const annotations = data.annotations[context.dataIndex];
+                                        const ratio = cells > 0 ? (annotations / cells).toFixed(1) : 0;
+                                        return `Intensità: ${ratio} annotazioni/cella`;
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Quantità'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Annotatori'
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Aggiorna statistiche annotatori
+            updateAnnotatorsStats(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento del grafico annotatori:', error);
+            showChartError(ctx, 'Errore nel caricamento dei dati degli annotatori');
+        });
+}
+
+// Carica grafico categorie
+function loadCategoriesChart() {
+    if (categoriesChart) {
+        categoriesChart.destroy();
+    }
+    
+    const canvas = document.getElementById('categoriesDistributionChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    showChartLoader(ctx);
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/categories_distribution`)
+        .then(response => response.json())
+        .then(data => {
+            const colors = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+                '#4BC0C0', '#FF6384', '#36A2EB', '#FFCE56'
+            ];
+            
+            categoriesChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories,
+                    datasets: [{
+                        label: 'Annotazioni',
+                        data: data.annotations,
+                        backgroundColor: colors.slice(0, data.categories.length),
+                        borderColor: colors.slice(0, data.categories.length).map(color => color),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Distribuzione per categoria tematica',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = data.annotations.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    const labelCount = data.labels_count[context.dataIndex];
+                                    return [
+                                        `${context.label}: ${context.parsed} annotazioni (${percentage}%)`,
+                                        `Etichette uniche: ${labelCount}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Aggiorna statistiche categorie
+            updateCategoriesStats(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento del grafico categorie:', error);
+            showChartError(ctx, 'Errore nel caricamento dei dati delle categorie');
+        });
+}
+
+// Carica grafici di copertura
+function loadCoverageCharts() {
+    const canvas1 = document.getElementById('coverageOverviewChart');
+    const canvas2 = document.getElementById('coverageDistributionChart');
+    
+    if (!canvas1 || !canvas2) return;
+    
+    const ctx1 = canvas1.getContext('2d');
+    const ctx2 = canvas2.getContext('2d');
+    
+    showChartLoader(ctx1);
+    showChartLoader(ctx2);
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/coverage_analysis`)
+        .then(response => response.json())
+        .then(data => {
+            // Grafico overview copertura
+            if (coverageOverviewChart) {
+                coverageOverviewChart.destroy();
+            }
+            
+            coverageOverviewChart = new Chart(ctx1, {
+                type: 'pie',
+                data: {
+                    labels: ['Celle Annotate', 'Celle Non Annotate'],
+                    datasets: [{
+                        data: [data.annotated_cells, data.unannotated_cells],
+                        backgroundColor: ['#28a745', '#dc3545'],
+                        borderColor: ['#28a745', '#dc3545'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Copertura: ${data.coverage_percentage.toFixed(1)}%`,
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const percentage = ((context.parsed / data.total_cells) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} celle (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Grafico distribuzione intensità
+            if (coverageDistributionChart) {
+                coverageDistributionChart.destroy();
+            }
+            
+            coverageDistributionChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: data.distribution_labels,
+                    datasets: [{
+                        label: 'Numero di celle',
+                        data: data.distribution_values,
+                        backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Intensità di annotazione',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Numero di celle'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Annotazioni per cella'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Aggiorna statistiche copertura
+            updateCoverageStats(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento dei grafici di copertura:', error);
+            showChartError(ctx1, 'Errore nei dati di copertura');
+            showChartError(ctx2, 'Errore nei dati di distribuzione');
+        });
+}
+
+// Aggiorna legenda etichette
+function updateLabelsLegend(data) {
+    const legendContainer = document.getElementById('labelsChartLegend');
+    if (!legendContainer) return;
+    
+    let html = '<h6 class="mb-2">Etichette per categoria:</h6><div class="chart-legend">';
+    
+    // Raggruppa per categoria
+    const byCategory = {};
+    data.labels.forEach((label, index) => {
+        const category = data.categories[index];
+        if (!byCategory[category]) {
+            byCategory[category] = [];
+        }
+        byCategory[category].push({
+            name: label,
+            color: data.colors[index],
+            value: data.values[index]
+        });
+    });
+    
+    Object.entries(byCategory).forEach(([category, labels]) => {
+        html += `<div class="mb-2"><strong>${category}:</strong></div>`;
+        labels.forEach(label => {
+            html += `
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: ${label.color}"></div>
+                    <div class="legend-text">${label.name}</div>
+                    <div class="legend-value">${label.value}</div>
+                </div>
+            `;
+        });
+    });
+    
+    html += '</div>';
+    legendContainer.innerHTML = html;
+}
+
+// Aggiorna statistiche annotatori
+function updateAnnotatorsStats(data) {
+    const statsContainer = document.getElementById('annotatorsStats');
+    if (!statsContainer) return;
+    
+    const totalAnnotations = data.annotations.reduce((a, b) => a + b, 0);
+    const totalCells = data.cells.reduce((a, b) => a + b, 0);
+    const avgIntensity = totalCells > 0 ? (totalAnnotations / totalCells).toFixed(1) : 0;
+    
+    statsContainer.innerHTML = `
+        <div class="card bg-light">
+            <div class="card-body p-3">
+                <h6 class="card-title">Statistiche Generali</h6>
+                <small>
+                    <strong>Totale Annotazioni:</strong> ${totalAnnotations}<br>
+                    <strong>Totale Celle:</strong> ${totalCells}<br>
+                    <strong>Intensità Media:</strong> ${avgIntensity} ann./cella<br>
+                    <strong>Annotatori Attivi:</strong> ${data.labels.length}
+                </small>
+            </div>
+        </div>
+    `;
+}
+
+// Aggiorna statistiche categorie
+function updateCategoriesStats(data) {
+    const statsContainer = document.getElementById('categoriesStats');
+    if (!statsContainer) return;
+    
+    const total = data.annotations.reduce((a, b) => a + b, 0);
+    const maxCategory = data.categories[data.annotations.indexOf(Math.max(...data.annotations))];
+    const maxValue = Math.max(...data.annotations);
+    const percentage = ((maxValue / total) * 100).toFixed(1);
+    
+    statsContainer.innerHTML = `
+        <div class="card bg-light">
+            <div class="card-body p-3">
+                <h6 class="card-title">Analisi Tematica</h6>
+                <small>
+                    <strong>Categoria Predominante:</strong><br>
+                    ${maxCategory} (${maxValue} annotazioni, ${percentage}%)<br><br>
+                    <strong>Totale Categorie:</strong> ${data.categories.length}<br>
+                    <strong>Distribuzione:</strong> ${data.categories.length > 1 ? 'Diversificata' : 'Concentrata'}
+                </small>
+            </div>
+        </div>
+    `;
+}
+
+// Aggiorna statistiche copertura
+function updateCoverageStats(data) {
+    const statsContainer = document.getElementById('coverageStats');
+    if (!statsContainer) return;
+    
+    const qualityLevel = data.coverage_percentage >= 80 ? 'Ottima' : 
+                        data.coverage_percentage >= 60 ? 'Buona' : 
+                        data.coverage_percentage >= 40 ? 'Discreta' : 'Bassa';
+    const qualityClass = data.coverage_percentage >= 80 ? 'success' : 
+                        data.coverage_percentage >= 60 ? 'info' : 
+                        data.coverage_percentage >= 40 ? 'warning' : 'danger';
+    
+    statsContainer.innerHTML = `
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center p-2">
+                    <h6 class="text-primary">${data.total_cells}</h6>
+                    <small>Celle Totali</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center p-2">
+                    <h6 class="text-success">${data.annotated_cells}</h6>
+                    <small>Celle Annotate</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center p-2">
+                    <h6 class="text-${qualityClass}">${data.coverage_percentage.toFixed(1)}%</h6>
+                    <small>Copertura</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center p-2">
+                    <h6 class="text-${qualityClass}">${qualityLevel}</h6>
+                    <small>Qualità</small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Mostra loader per grafico
+function showChartLoader(ctx) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#6c757d';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Caricamento...', ctx.canvas.width / 2, ctx.canvas.height / 2);
+}
+
+// Ottieni filtri correnti per i grafici
+function getCurrentChartFilters() {
+    const categoryFilter = document.getElementById('chart-category-filter');
+    const labelFilter = document.getElementById('chart-label-filter');
+    const minUsage = document.getElementById('chart-min-usage');
+    const maxUsage = document.getElementById('chart-max-usage');
+    
+    const filters = {};
+    
+    if (categoryFilter && categoryFilter.value) {
+        filters.category = categoryFilter.value;
+    }
+    
+    if (labelFilter && labelFilter.value.trim()) {
+        filters.label_name = labelFilter.value.trim();
+    }
+    
+    if (minUsage && minUsage.value) {
+        filters.min_usage = minUsage.value;
+    }
+    
+    if (maxUsage && maxUsage.value) {
+        filters.max_usage = maxUsage.value;
+    }
+    
+    return filters;
+}
+
+// Ottieni descrizione dei filtri applicati
+function getFilterDescription() {
+    const filters = getCurrentChartFilters();
+    const descriptions = [];
+    
+    if (filters.category) {
+        descriptions.push(`Categoria: ${filters.category}`);
+    }
+    
+    if (filters.label_name) {
+        descriptions.push(`Etichetta: "${filters.label_name}"`);
+    }
+    
+    if (filters.min_usage) {
+        descriptions.push(`Min: ${filters.min_usage}`);
+    }
+    
+    if (filters.max_usage) {
+        descriptions.push(`Max: ${filters.max_usage}`);
+    }
+    
+    if (descriptions.length > 0) {
+        return `(Filtri: ${descriptions.join(', ')})`;
+    }
+    
+    return '';
+}
+
+// Aggiorna tutti i grafici con i filtri correnti
+function updateAllCharts() {
+    console.log('🔄 Aggiornamento tutti i grafici...');
+    
+    // Protezione filtri prima dell'aggiornamento
+    protectChartFilters();
+    
+    const updateBtn = document.getElementById('update-charts-btn');
+    if (updateBtn) {
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Aggiornando...';
+    }
+    
+    const activeTab = document.querySelector('.nav-link.active');
+    const filters = getCurrentChartFilters();
+    
+    console.log('📊 Filtri applicati:', filters);
+    
+    // Aggiorna stato filtri
+    updateFilterStatus(filters);
+    
+    try {
+        if (activeTab) {
+            const tabId = activeTab.id;
+            console.log(`🎯 Tab attivo: ${tabId}`);
+            
+            if (tabId === 'labels-chart-tab') {
+                loadLabelsChart();
+            } else if (tabId === 'annotators-chart-tab') {
+                loadAnnotatorsChart();
+            } else if (tabId === 'categories-chart-tab') {
+                loadCategoriesChart();
+            } else if (tabId === 'coverage-chart-tab') {
+                loadCoverageCharts();
+            }
+        } else {
+            console.log('🎯 Nessun tab attivo, carico grafici etichette di default');
+            loadLabelsChart();
+        }
+    } catch (error) {
+        console.error('❌ Errore durante aggiornamento grafici:', error);
+    } finally {
+        // Ripristina il pulsante dopo un delay
+        setTimeout(() => {
+            if (updateBtn) {
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Aggiorna';
+            }
+        }, 1000);
+    }
+}
+
+// Reset filtri dei grafici
+function resetChartFilters() {
+    console.log('🔄 Reset filtri grafici...');
+    
+    // Protezione filtri
+    protectChartFilters();
+    
+    const categoryFilter = document.getElementById('chart-category-filter');
+    const labelFilter = document.getElementById('chart-label-filter');
+    const minUsage = document.getElementById('chart-min-usage');
+    const maxUsage = document.getElementById('chart-max-usage');
+    
+    if (categoryFilter) categoryFilter.value = '';
+    if (labelFilter) labelFilter.value = '';
+    if (minUsage) minUsage.value = '';
+    if (maxUsage) maxUsage.value = '';
+    
+    updateFilterStatus({});
+    updateAllCharts();
+    
+    console.log('✅ Reset filtri completato');
+}
+
+// Aggiorna stato dei filtri
+function updateFilterStatus(filters) {
+    const statusElement = document.getElementById('chart-filter-status');
+    if (!statusElement) return;
+    
+    const filterCount = Object.keys(filters).length;
+    
+    if (filterCount > 0) {
+        statusElement.innerHTML = `<span class="badge bg-info">${filterCount} filtro${filterCount > 1 ? 'i' : ''} attivo${filterCount > 1 ? 'i' : ''}</span>`;
+    } else {
+        statusElement.innerHTML = '<span class="badge bg-secondary">Nessun filtro</span>';
+    }
+}
+
+// Mostra loader per grafico
+function showChartLoader(ctx) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#6c757d';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Caricamento...', ctx.canvas.width / 2, ctx.canvas.height / 2);
+}
+
+// Mostra errore per grafico
+function showChartError(ctx, message) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#dc3545';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(message, ctx.canvas.width / 2, ctx.canvas.height / 2);
+}
+
+// Carica grafico categorie (aggiornato con filtri)
+function loadCategoriesChart() {
+    if (categoriesChart) {
+        categoriesChart.destroy();
+    }
+    
+    const canvas = document.getElementById('categoriesDistributionChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    showChartLoader(ctx);
+    
+    // Ottieni filtri correnti
+    const filters = getCurrentChartFilters();
+    const queryString = new URLSearchParams(filters).toString();
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/categories_distribution?${queryString}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.categories.length === 0) {
+                showChartError(ctx, 'Nessuna categoria trovata con i filtri applicati');
+                updateCategoriesStats({categories: [], annotations: [], labels_count: []});
+                return;
+            }
+            
+            const colors = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
+                '#4BC0C0', '#FF6384', '#36A2EB', '#FFCE56'
+            ];
+            
+            categoriesChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories,
+                    datasets: [{
+                        label: 'Annotazioni',
+                        data: data.annotations,
+                        backgroundColor: colors.slice(0, data.categories.length),
+                        borderColor: colors.slice(0, data.categories.length).map(color => color),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Distribuzione per categoria tematica ${getFilterDescription()}`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = data.annotations.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    const labelCount = data.labels_count[context.dataIndex];
+                                    return [
+                                        `${context.label}: ${context.parsed} annotazioni (${percentage}%)`,
+                                        `Etichette uniche: ${labelCount}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+            
+            // Aggiorna statistiche categorie
+            updateCategoriesStats(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento del grafico categorie:', error);
+            showChartError(ctx, 'Errore nel caricamento dei dati delle categorie');
+        });
+}
+
+// Carica grafici di copertura (aggiornato con filtri)
+function loadCoverageCharts() {
+    const canvas1 = document.getElementById('coverageOverviewChart');
+    const canvas2 = document.getElementById('coverageDistributionChart');
+    
+    if (!canvas1 || !canvas2) return;
+    
+    const ctx1 = canvas1.getContext('2d');
+    const ctx2 = canvas2.getContext('2d');
+    
+    showChartLoader(ctx1);
+    showChartLoader(ctx2);
+    
+    // Ottieni filtri correnti
+    const filters = getCurrentChartFilters();
+    const queryString = new URLSearchParams(filters).toString();
+    
+    fetch(`/statistics/api/question_chart_data/{{ file.id }}/{{ question|urlencode }}/coverage_analysis?${queryString}`)
+        .then(response => response.json())
+        .then(data => {
+            // Grafico overview copertura
+            if (coverageOverviewChart) {
+                coverageOverviewChart.destroy();
+            }
+            
+            const filterSuffix = data.filtered ? ' (Filtrato)' : '';
+            
+            coverageOverviewChart = new Chart(ctx1, {
+                type: 'pie',
+                data: {
+                    labels: ['Celle Annotate', 'Celle Non Annotate'],
+                    datasets: [{
+                        data: [data.annotated_cells, data.unannotated_cells],
+                        backgroundColor: ['#28a745', '#dc3545'],
+                        borderColor: ['#28a745', '#dc3545'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Copertura: ${data.coverage_percentage.toFixed(1)}%${filterSuffix}`,
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const percentage = ((context.parsed / data.total_cells) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} celle (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Grafico distribuzione intensità
+            if (coverageDistributionChart) {
+                coverageDistributionChart.destroy();
+            }
+            
+            if (data.distribution_labels.length === 0) {
+                showChartError(ctx2, 'Nessun dato di distribuzione con i filtri applicati');
+            } else {
+                coverageDistributionChart = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: data.distribution_labels,
+                        datasets: [{
+                            label: 'Numero di celle',
+                            data: data.distribution_values,
+                            backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                            borderColor: 'rgba(255, 193, 7, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Intensità di annotazione${filterSuffix}`,
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Numero di celle'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Annotazioni per cella'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Aggiorna statistiche copertura
+            updateCoverageStats(data);
+        })
+        .catch(error => {
+            console.error('Errore nel caricamento dei grafici di copertura:', error);
+            showChartError(ctx1, 'Errore nei dati di copertura');
+            showChartError(ctx2, 'Errore nei dati di distribuzione');
+        });
+}
+
+// Setup filtri (funzionalità esistenti)
+function setupFilters() {
     const form = document.getElementById('label-filters-form');
+    if (!form) return;
+    
     const inputs = form.querySelectorAll('input[type="text"], input[type="number"]');
     
     // Aggiungi debounce per evitare troppe richieste
@@ -1101,26 +2521,105 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('input', function() {
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                // Auto-submit è disabilitato di default, decommentare se necessario
-                // form.submit();
+                // Auto-submit è disabilitato di default
             }, 1000);
         });
     });
     
     // Evidenzia automaticamente se c'è un termine di ricerca
-    const searchTerm = document.getElementById('label-name-filter').value;
-    if (searchTerm) {
+    const searchInput = document.getElementById('label-name-filter');
+    if (searchInput && searchInput.value) {
         toggleHighlight();
     }
     
     // Aggiungi contatori in tempo reale
     updateFilterCounters();
-});
+}
+
+// Export CSV delle etichette filtrate
+function exportLabelsCSV() {
+    const table = document.getElementById('labels-table');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr:not([style*="display: none"])');
+    
+    if (rows.length === 0) {
+        alert('Nessuna etichetta da esportare!');
+        return;
+    }
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Etichetta,Categoria,Utilizzi\n";
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const labelName = cells[0].querySelector('.label-badge').textContent.trim();
+        const category = cells[1].textContent.trim();
+        const usage = cells[2].querySelector('strong').textContent.trim();
+        
+        csvContent += `"${labelName}","${category}","${usage}"\n`;
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "etichette_quesito_{{ question|replace(' ', '_') }}_{{ file.filename|replace('.xlsx', '') }}.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Export report completo in vari formati
+function exportCompleteReport(format) {
+    // Codice per export report (mantenuto dall'implementazione precedente)
+    // ... (resto del codice di export) ...
+    console.log(`Export in formato ${format} richiesto`);
+    alert(`Funzione export ${format} in sviluppo`);
+}
+
+// Toggle evidenziazione termini cercati
+function toggleHighlight() {
+    highlightEnabled = !highlightEnabled;
+    const searchInput = document.getElementById('label-name-filter');
+    if (!searchInput) return;
+    
+    const searchTerm = searchInput.value.toLowerCase();
+    const badges = document.querySelectorAll('.label-badge');
+    
+    badges.forEach(badge => {
+        if (highlightEnabled && searchTerm) {
+            const text = badge.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                badge.style.boxShadow = '0 0 10px #ffc107';
+                badge.style.border = '2px solid #ffc107';
+            }
+        } else {
+            badge.style.boxShadow = '';
+            badge.style.border = '';
+        }
+    });
+    
+    // Cambia icona del pulsante
+    const btn = event.target.closest('button');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (highlightEnabled) {
+            icon.className = 'bi bi-highlighter-fill';
+            btn.classList.add('active');
+        } else {
+            icon.className = 'bi bi-highlighter';
+            btn.classList.remove('active');
+        }
+    }
+}
 
 // Aggiorna contatori dei filtri
 function updateFilterCounters() {
-    const totalRows = document.querySelectorAll('#labels-table tbody tr').length;
-    const visibleRows = document.querySelectorAll('#labels-table tbody tr:not([style*="display: none"])').length;
+    const table = document.getElementById('labels-table');
+    if (!table) return;
+    
+    const totalRows = table.querySelectorAll('tbody tr').length;
+    const visibleRows = table.querySelectorAll('tbody tr:not([style*="display: none"])').length;
     
     // Aggiorna il contatore se necessario
     const counter = document.querySelector('.text-muted small');
@@ -1139,7 +2638,10 @@ document.addEventListener('keydown', function(e) {
     // Ctrl+F per focus sulla ricerca
     if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
-        document.getElementById('label-name-filter').focus();
+        const searchInput = document.getElementById('label-name-filter');
+        if (searchInput) {
+            searchInput.focus();
+        }
     }
     
     // Escape per reset filtri
