@@ -424,6 +424,19 @@ def api_files():
 
 # Funzioni di supporto
 
+def get_activity_type_display(activity_type):
+    """Traduce il tipo di attività in italiano"""
+    translations = {
+        'general': 'Generale',
+        'meeting': 'Riunione',
+        'milestone': 'Milestone',
+        'issue': 'Problema',
+        'decision': 'Decisione',
+        'reflection': 'Riflessione',
+        'consideration': 'Considerazione'
+    }
+    return translations.get(activity_type, activity_type.title())
+
 def build_export_query(start_date, end_date, activity_type, priority, status):
     """Costruisce la query per l'export con filtri"""
     query = DiaryEntry.query
@@ -471,7 +484,7 @@ def generate_txt_content(entries):
         content.append(f"TITOLO: {entry.title}")
         content.append(f"AUTORE: {entry.author.username}")
         content.append(f"DATA: {entry.created_at.strftime('%d/%m/%Y %H:%M')}")
-        content.append(f"TIPO: {entry.activity_type.upper()}")
+        content.append(f"TIPO: {get_activity_type_display(entry.activity_type).upper()}")
         content.append(f"PRIORITÀ: {entry.priority.upper()}")
         content.append(f"STATUS: {entry.status.upper()}")
         
@@ -528,7 +541,7 @@ def generate_word_document(entries):
         metadata = [
             ('Autore', entry.author.username),
             ('Data', entry.created_at.strftime('%d/%m/%Y %H:%M')),
-            ('Tipo', entry.activity_type.title()),
+            ('Tipo', get_activity_type_display(entry.activity_type)),
             ('Priorità', entry.priority.title()),
             ('Status', entry.status.title())
         ]
@@ -607,7 +620,7 @@ def generate_pdf_document(entries, output_path):
             ['<b>Campo</b>', '<b>Valore</b>'],
             ['Autore', entry.author.username],
             ['Data', entry.created_at.strftime('%d/%m/%Y %H:%M')],
-            ['Tipo', entry.activity_type.title()],
+            ['Tipo', get_activity_type_display(entry.activity_type)],
             ['Priorità', entry.priority.title()],
             ['Status', entry.status.title()]
         ]

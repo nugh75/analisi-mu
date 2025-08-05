@@ -887,7 +887,7 @@ class DiaryEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    activity_type = db.Column(db.String(50), default='general')  # general, meeting, milestone, issue, decision
+    activity_type = db.Column(db.String(50), default='general')  # general, meeting, milestone, issue, decision, reflection, consideration
     priority = db.Column(db.String(20), default='medium')  # low, medium, high, urgent
     status = db.Column(db.String(20), default='active')  # active, completed, archived
     
@@ -992,7 +992,9 @@ class DiaryEntry(db.Model):
             'meeting': 'bi-people',
             'milestone': 'bi-flag',
             'issue': 'bi-exclamation-triangle',
-            'decision': 'bi-check-circle'
+            'decision': 'bi-check-circle',
+            'reflection': 'bi-lightbulb',
+            'consideration': 'bi-chat-dots'
         }
         return icons.get(self.activity_type, 'bi-journal-text')
     
