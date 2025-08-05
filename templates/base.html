@@ -36,67 +36,71 @@
                         </a>
                     </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="excelDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-file-earmark-excel me-1"></i>File Excel
+                        <a class="nav-link dropdown-toggle" href="#" id="workspaceDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-briefcase me-1"></i>Workspace
                         </a>
                         <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">
+                                <i class="bi bi-file-earmark me-1"></i>Documenti
+                            </h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('excel.upload') }}">
-                                <i class="bi bi-cloud-upload me-1"></i>Carica File
+                                <i class="bi bi-file-earmark-excel me-1"></i>Carica File Excel
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('excel.list_files') }}">
-                                <i class="bi bi-list me-1"></i>Lista File
+                                <i class="bi bi-list me-1"></i>Lista File Excel
                             </a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="textDocsDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-file-text me-1"></i>Documenti Testo
-                        </a>
-                        <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('text_documents.upload') }}">
-                                <i class="bi bi-cloud-upload me-1"></i>Carica Documento
+                                <i class="bi bi-file-text me-1"></i>Carica Documento Testo
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('text_documents.list_documents') }}">
-                                <i class="bi bi-list me-1"></i>Lista Documenti
+                                <i class="bi bi-list me-1"></i>Lista Documenti Testo
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><h6 class="dropdown-header">Gestione</h6></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="labelsDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-tags me-1"></i>Etichette
-                        </a>
-                        <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">
+                                <i class="bi bi-tools me-1"></i>Strumenti di Lavoro
+                            </h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('labels.list_labels') }}">
-                                <i class="bi bi-list me-1"></i>Gestisci Etichette
+                                <i class="bi bi-tags me-1"></i>Gestisci Etichette
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('labels.create_label') }}">
                                 <i class="bi bi-plus-circle me-1"></i>Crea Etichetta
                             </a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-pencil-square me-1"></i>Annotazioni
-                        </a>
-                        <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('annotation.browse_annotations') }}">
-                                <i class="bi bi-search me-1"></i>Naviga e Annota Celle
+                                <i class="bi bi-pencil-square me-1"></i>Naviga e Annota Celle
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('questions.manage_questions') }}">
                                 <i class="bi bi-patch-question me-1"></i>Gestisci Domande
                             </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('statistics.overview') }}">
-                                <i class="bi bi-graph-up me-1"></i>Statistiche
-                            </a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('forum.index') }}">
-                            <i class="bi bi-chat-dots me-1"></i>Forum
+                        <a class="nav-link" href="{{ url_for('statistics.overview') }}">
+                            <i class="bi bi-graph-up me-1"></i>Statistiche
                         </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="collaborationDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-people me-1"></i>Collaborazione
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('diary.index') }}">
+                                <i class="bi bi-journal-text me-1"></i>Diario di Bordo
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('forum.index') }}">
+                                <i class="bi bi-chat-dots me-1"></i>Forum
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('decisions.index') }}">
+                                <i class="bi bi-vote me-1"></i>Sessioni di Decisione
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('decisions.create_session') }}">
+                                <i class="bi bi-plus-circle me-1"></i>Nuova Sessione di Decisione
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><span class="dropdown-item-text small text-muted">
+                                <i class="bi bi-info-circle me-1"></i>Strumenti per lavorare insieme
+                            </span></li>
+                        </ul>
                     </li>
                     {% if current_user.can_manage_users() %}
                     <li class="nav-item dropdown">

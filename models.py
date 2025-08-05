@@ -670,3 +670,369 @@ class ForumComment(db.Model):
         if len(self.content) <= 100:
             return self.content
         return f"{self.content[:97]}..."
+
+
+# Modelli per il sistema di decisioni sull'etichettatura
+class DecisionSession(db.Model):
+    """Sessione di decisione per il raggruppamento delle etichette"""
+    __tablename__ = 'decision_session'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    status = db.Column(db.String(20), default='draft')  # draft, active, completed, archived
+    
+    # Configurazioni della sessione
+    voting_threshold = db.Column(db.Float, default=0.6)  # Soglia per approvazione (60%)
+    allow_public_comments = db.Column(db.Boolean, default=True)
+    
+    # Metadati
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    creator = db.relationship('User', backref='created_decision_sessions')
+    proposals = db.relationship('LabelGroupingProposal', backref='session', lazy=True, cascade='all, delete-orphan')
+    comments = db.relationship('LabelDecisionComment', backref='session', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<DecisionSession {self.name}>'
+    
+    @property
+    def proposal_count(self):
+        """Numero totale di proposte"""
+        return len(self.proposals)
+    
+    @property
+    def approved_proposals_count(self):
+        """Numero di proposte approvate"""
+        return len([p for p in self.proposals if p.status == 'approved'])
+    
+    @property
+    def pending_proposals_count(self):
+        """Numero di proposte in attesa"""
+        return len([p for p in self.proposals if p.status == 'pending'])
+    
+    @property
+    def completion_percentage(self):
+        """Percentuale di completamento della sessione"""
+        if self.proposal_count == 0:
+            return 0
+        return (self.approved_proposals_count / self.proposal_count) * 100
+    
+    def can_edit(self, user):
+        """Verifica se l'utente può modificare la sessione"""
+        return user.is_admin or user.id == self.created_by
+    
+    def get_participants(self):
+        """Ottiene la lista degli utenti che hanno partecipato"""
+        participant_ids = set()
+        for proposal in self.proposals:
+            participant_ids.add(proposal.created_by)
+            for vote in proposal.votes:
+                participant_ids.add(vote.user_id)
+        return User.query.filter(User.id.in_(participant_ids)).all()
+
+
+class LabelGroupingProposal(db.Model):
+    """Proposta di raggruppamento delle etichette"""
+    __tablename__ = 'label_grouping_proposal'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('decision_session.id'), nullable=False)
+    
+    # Contenuto della proposta
+    category = db.Column(db.String(200), nullable=False)  # es: "Impatti sugli studenti"
+    original_labels = db.Column(db.Text, nullable=False)  # JSON array delle etichette originali
+    proposed_label = db.Column(db.String(200), nullable=False)  # es: "Accessibilità e inclusione"
+    proposed_code = db.Column(db.String(10), nullable=False)  # es: "S1"
+    rationale = db.Column(db.Text)  # Motivazione del raggruppamento
+    
+    # Status e metadati
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, under_review
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    creator = db.relationship('User', backref='created_proposals')
+    votes = db.relationship('LabelDecisionVote', backref='proposal', lazy=True, cascade='all, delete-orphan')
+    comments = db.relationship('LabelDecisionComment', backref='proposal', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<LabelGroupingProposal {self.proposed_code}: {self.proposed_label}>'
+    
+    @property
+    def original_labels_list(self):
+        """Ottiene la lista delle etichette originali"""
+        try:
+            return json.loads(self.original_labels)
+        except:
+            return self.original_labels.split(';') if self.original_labels else []
+    
+    @original_labels_list.setter
+    def original_labels_list(self, labels):
+        """Imposta la lista delle etichette originali"""
+        if isinstance(labels, list):
+            self.original_labels = json.dumps(labels)
+        else:
+            self.original_labels = labels
+    
+    @property
+    def vote_counts(self):
+        """Conta i voti per tipo"""
+        counts = {'approve': 0, 'reject': 0, 'abstain': 0}
+        for vote in self.votes:
+            counts[vote.vote] = counts.get(vote.vote, 0) + 1
+        return counts
+    
+    @property
+    def total_votes(self):
+        """Numero totale di voti"""
+        return len(self.votes)
+    
+    @property
+    def approval_percentage(self):
+        """Percentuale di approvazione"""
+        if self.total_votes == 0:
+            return 0
+        return (self.vote_counts['approve'] / self.total_votes) * 100
+    
+    def get_user_vote(self, user_id):
+        """Ottiene il voto di un utente specifico"""
+        for vote in self.votes:
+            if vote.user_id == user_id:
+                return vote
+        return None
+    
+    def update_status_by_votes(self, threshold=0.6):
+        """Aggiorna lo status basato sui voti"""
+        if self.total_votes < 2:  # Minimo 2 voti per decidere
+            return
+        
+        if self.approval_percentage >= (threshold * 100):
+            self.status = 'approved'
+        elif self.vote_counts['reject'] > self.vote_counts['approve']:
+            self.status = 'rejected'
+
+
+class LabelDecisionVote(db.Model):
+    """Voto su una proposta di raggruppamento"""
+    __tablename__ = 'label_decision_vote'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    proposal_id = db.Column(db.Integer, db.ForeignKey('label_grouping_proposal.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Voto e commento
+    vote = db.Column(db.String(10), nullable=False)  # approve, reject, abstain
+    comment = db.Column(db.Text)  # Commento opzionale per motivare il voto
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    user = db.relationship('User', backref='decision_votes')
+    
+    # Constraint per un voto per utente per proposta
+    __table_args__ = (db.UniqueConstraint('proposal_id', 'user_id', name='unique_vote_per_user_proposal'),)
+    
+    def __repr__(self):
+        return f'<LabelDecisionVote {self.user.username}: {self.vote}>'
+
+
+class LabelDecisionComment(db.Model):
+    """Commento su una sessione di decisione o proposta specifica"""
+    __tablename__ = 'label_decision_comment'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('decision_session.id'), nullable=False)
+    proposal_id = db.Column(db.Integer, db.ForeignKey('label_grouping_proposal.id'), nullable=True)  # Opzionale
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Contenuto
+    content = db.Column(db.Text, nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('label_decision_comment.id'))  # Per reply annidate
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    user = db.relationship('User', backref='decision_comments')
+    parent = db.relationship('LabelDecisionComment', remote_side=[id], backref='replies')
+    
+    def __repr__(self):
+        return f'<LabelDecisionComment by {self.user.username}>'
+    
+    @property
+    def content_preview(self):
+        """Anteprima del contenuto (massimo 100 caratteri)"""
+        if len(self.content) <= 100:
+            return self.content
+        return f"{self.content[:97]}..."
+    
+    @property
+    def is_general_comment(self):
+        """True se è un commento generale sulla sessione"""
+        return self.proposal_id is None
+
+
+class DiaryEntry(db.Model):
+    """Modello per le voci del Diario di Bordo"""
+    __tablename__ = 'diary_entries'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    activity_type = db.Column(db.String(50), default='general')  # general, meeting, milestone, issue, decision
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, urgent
+    status = db.Column(db.String(20), default='active')  # active, completed, archived
+    
+    # Data/ora personalizzabile per la voce
+    entry_date = db.Column(db.DateTime, default=datetime.utcnow)  # Data dell'attività/evento
+    
+    # Metadati per export
+    word_count = db.Column(db.Integer, default=0)
+    mentioned_users = db.Column(db.Text)  # JSON array degli utenti menzionati
+    referenced_files = db.Column(db.Text)  # JSON array dei file referenziati
+    tags = db.Column(db.Text)  # JSON array dei tag
+    
+    # Relazioni
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('excel_file.id'), nullable=True)  # Progetto correlato
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    author = db.relationship('User', backref='diary_entries')
+    project = db.relationship('ExcelFile', backref='diary_entries')
+    attachments = db.relationship('DiaryAttachment', backref='entry', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<DiaryEntry {self.title}>'
+    
+    @property
+    def mentioned_users_list(self):
+        """Ottiene la lista degli utenti menzionati"""
+        try:
+            return json.loads(self.mentioned_users) if self.mentioned_users else []
+        except:
+            return []
+    
+    @mentioned_users_list.setter
+    def mentioned_users_list(self, users):
+        """Imposta la lista degli utenti menzionati"""
+        self.mentioned_users = json.dumps(users) if users else None
+    
+    @property
+    def referenced_files_list(self):
+        """Ottiene la lista dei file referenziati"""
+        try:
+            return json.loads(self.referenced_files) if self.referenced_files else []
+        except:
+            return []
+    
+    @referenced_files_list.setter
+    def referenced_files_list(self, files):
+        """Imposta la lista dei file referenziati"""
+        self.referenced_files = json.dumps(files) if files else None
+    
+    @property
+    def tags_list(self):
+        """Ottiene la lista dei tag"""
+        try:
+            return json.loads(self.tags) if self.tags else []
+        except:
+            return []
+    
+    @tags_list.setter
+    def tags_list(self, tags_list):
+        """Imposta la lista dei tag"""
+        self.tags = json.dumps(tags_list) if tags_list else None
+    
+    @property
+    def content_preview(self):
+        """Anteprima del contenuto (massimo 150 caratteri)"""
+        if len(self.content) <= 150:
+            return self.content
+        return f"{self.content[:147]}..."
+    
+    def update_word_count(self):
+        """Aggiorna il conteggio delle parole"""
+        if self.content:
+            # Rimuovi markdown e HTML per il conteggio
+            import re
+            clean_content = re.sub(r'[#*_`~\[\]()]', '', self.content)
+            clean_content = re.sub(r'<[^>]+>', '', clean_content)
+            self.word_count = len(clean_content.split())
+    
+    def parse_mentions_and_files(self):
+        """Analizza il contenuto per estrarre menzioni e riferimenti"""
+        import re
+        
+        # Estrai menzioni utenti (@username)
+        user_mentions = re.findall(r'@(\w+)', self.content)
+        
+        # Estrai riferimenti file (#filename)
+        file_references = re.findall(r'#(\S+)', self.content)
+        
+        # Aggiorna le liste
+        self.mentioned_users_list = list(set(user_mentions))
+        self.referenced_files_list = list(set(file_references))
+    
+    def get_activity_icon(self):
+        """Restituisce l'icona Bootstrap per il tipo di attività"""
+        icons = {
+            'general': 'bi-journal-text',
+            'meeting': 'bi-people',
+            'milestone': 'bi-flag',
+            'issue': 'bi-exclamation-triangle',
+            'decision': 'bi-check-circle'
+        }
+        return icons.get(self.activity_type, 'bi-journal-text')
+    
+    def get_priority_class(self):
+        """Restituisce la classe CSS per la priorità"""
+        classes = {
+            'low': 'text-success',
+            'medium': 'text-warning',
+            'high': 'text-danger',
+            'urgent': 'text-danger fw-bold'
+        }
+        return classes.get(self.priority, 'text-secondary')
+
+
+class DiaryAttachment(db.Model):
+    """Modello per gli allegati del diario di bordo"""
+    __tablename__ = 'diary_attachments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('diary_entries.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Dimensione in bytes
+    mime_type = db.Column(db.String(100))
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<DiaryAttachment {self.original_name}>'
+    
+    @property
+    def file_size_human(self):
+        """Dimensione del file in formato leggibile"""
+        if not self.file_size:
+            return "Sconosciuta"
+        
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if self.file_size < 1024:
+                return f"{self.file_size:.1f} {unit}"
+            self.file_size /= 1024
+        return f"{self.file_size:.1f} TB"

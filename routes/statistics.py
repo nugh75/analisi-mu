@@ -610,7 +610,14 @@ def api_global_stats():
 def question_chart_data(file_id, chart_type):
     """API per dati dei grafici delle pagine dei quesiti"""
     question = request.args.get('question')
+    
+    # Debug logging
+    print(f"[DEBUG] API chiamata: file_id={file_id}, chart_type={chart_type}")
+    print(f"[DEBUG] Question ricevuta: '{question}'")
+    print(f"[DEBUG] Tutti i parametri: {dict(request.args)}")
+    
     if not question:
+        print("[ERROR] Question parameter mancante")
         return jsonify({'error': 'Question parameter required'}), 400
     
     # Parametri per il filtraggio
@@ -618,6 +625,8 @@ def question_chart_data(file_id, chart_type):
     label_name_filter = request.args.get('label_name', '').strip()
     min_usage = request.args.get('min_usage', type=int)
     max_usage = request.args.get('max_usage', type=int)
+    
+    print(f"[DEBUG] Filtri: category={category_filter}, label_name='{label_name_filter}', min_usage={min_usage}, max_usage={max_usage}")
     
     try:
         if chart_type == 'labels_histogram':
@@ -629,12 +638,18 @@ def question_chart_data(file_id, chart_type):
         elif chart_type == 'coverage_analysis':
             return _get_coverage_analysis_data(file_id, question)
         else:
+            print(f"[ERROR] Chart type non supportato: {chart_type}")
             return jsonify({'error': 'Chart type not found'}), 404
     except Exception as e:
+        print(f"[ERROR] Eccezione nell'API: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 def _get_labels_histogram_data(file_id, question, category_filter=None, label_name_filter=None, min_usage=None, max_usage=None):
     """Ottieni dati per istogramma etichette"""
+    print(f"[DEBUG] _get_labels_histogram_data chiamata con: file_id={file_id}, question='{question}'")
+    
     query = db.session.query(
         Label.name,
         Label.color,
@@ -650,25 +665,37 @@ def _get_labels_histogram_data(file_id, question, category_filter=None, label_na
     # Applica filtri
     if category_filter:
         query = query.filter(Category.name == category_filter)
+        print(f"[DEBUG] Filtro categoria applicato: {category_filter}")
     
     if label_name_filter:
         query = query.filter(Label.name.ilike(f'%{label_name_filter}%'))
+        print(f"[DEBUG] Filtro nome etichetta applicato: {label_name_filter}")
     
     if min_usage is not None:
         query = query.having(func.count(CellAnnotation.id) >= min_usage)
+        print(f"[DEBUG] Filtro min_usage applicato: {min_usage}")
     
     if max_usage is not None:
         query = query.having(func.count(CellAnnotation.id) <= max_usage)
+        print(f"[DEBUG] Filtro max_usage applicato: {max_usage}")
     
     # Ordina per utilizzo decrescente
     data = query.order_by(desc('usage_count')).all()
     
-    return jsonify({
+    print(f"[DEBUG] Query eseguita, trovati {len(data)} risultati")
+    for item in data[:3]:  # Log primi 3 risultati
+        print(f"[DEBUG] Risultato: {item.name}, {item.usage_count}, {item.color}")
+    
+    result = {
         'labels': [item.name for item in data],
         'values': [item.usage_count for item in data],
         'colors': [item.color or '#007bff' for item in data],
         'categories': [item.category_name or 'Senza categoria' for item in data]
-    })
+    }
+    
+    print(f"[DEBUG] Risultato finale: {len(result['labels'])} etichette")
+    
+    return jsonify(result)
 
 def _get_annotators_histogram_data(file_id, question, category_filter=None, label_name_filter=None, min_usage=None, max_usage=None):
     """Ottieni dati per istogramma annotatori con filtri applicati alle etichette"""

@@ -67,6 +67,8 @@ def create_app():
     from routes.questions import questions_bp
     from routes.text_documents import text_documents_bp
     from routes.forum import forum_bp
+    from routes.decisions import decisions_bp
+    from routes.diary import diary_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(main_bp, url_prefix='/')
@@ -79,6 +81,8 @@ def create_app():
     app.register_blueprint(questions_bp, url_prefix='/questions')
     app.register_blueprint(text_documents_bp)
     app.register_blueprint(forum_bp)
+    app.register_blueprint(decisions_bp)
+    app.register_blueprint(diary_bp, url_prefix='/diary')
     
     # Creazione delle cartelle necessarie con permessi corretti
     upload_folder = app.config['UPLOAD_FOLDER']

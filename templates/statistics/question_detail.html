@@ -1148,7 +1148,7 @@ function loadLabelsChart() {
     // Ottieni filtri correnti
     const filters = getCurrentChartFilters();
     
-    // Aggiungi il quesito ai parametri
+    // Aggiungi il quesito ai parametri (codificato correttamente)
     filters.question = `{{ question|e }}`;
     
     const queryString = new URLSearchParams(filters).toString();
@@ -1158,9 +1158,13 @@ function loadLabelsChart() {
     
     fetch(url)
         .then(response => {
-            console.log('📡 Risposta ricevuta:', response.status);
+            console.log('📡 Risposta ricevuta:', response.status, response.statusText);
+            console.log('📡 URL chiamato:', response.url);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                return response.text().then(text => {
+                    console.error('❌ Errore risposta:', text);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${text}`);
+                });
             }
             return response.json();
         })
