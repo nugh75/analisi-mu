@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Progetti - Anatema{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header con statistiche -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>
+                        <i class="bi bi-folder me-2"></i>I Miei Progetti
+                    </h2>
+                    <p class="text-muted">Gestisci progetti multi-file per l'analisi collaborativa</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-2"></i>Nuovo Progetto
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiche rapide -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-folder display-4 mb-2"></i>
+                    <h3>{{ stats.total_projects }}</h3>
+                    <small>Progetti Totali</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-play-circle display-4 mb-2"></i>
+                    <h3>{{ stats.active_projects }}</h3>
+                    <small>Progetti Attivi</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-person-check display-4 mb-2"></i>
+                    <h3>{{ stats.my_projects }}</h3>
+                    <small>Di Mia Proprietà</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-clock-history display-4 mb-2"></i>
+                    <h3>{{ stats.recent_activity }}</h3>
+                    <small>Attività Ultima Settimana</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtri di ricerca -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            {{ search_form.search_query.label(class="form-label") }}
+                            {{ search_form.search_query(class="form-control") }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ search_form.project_type.label(class="form-label") }}
+                            {{ search_form.project_type(class="form-select") }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ search_form.status.label(class="form-label") }}
+                            {{ search_form.status(class="form-select") }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ search_form.my_role.label(class="form-label") }}
+                            {{ search_form.my_role(class="form-select") }}
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-search me-1"></i>Filtra
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista progetti -->
+    {% if projects.items %}
+    <div class="row">
+        {% for project in projects.items %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <i class="{{ project.get_type_icon() }} me-2"></i>
+                        <span class="fw-bold">{{ project.name[:30] }}{% if project.name|length > 30 %}...{% endif %}</span>
+                    </div>
+                    <span class="badge bg-{{ project.get_status_class() }}">{{ project.status|title }}</span>
+                </div>
+                
+                <div class="card-body">
+                    {% if project.description %}
+                    <p class="text-muted small">
+                        {{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}
+                    </p>
+                    {% endif %}
+                    
+                    <!-- Statistiche progetto -->
+                    <div class="row text-center mb-3">
+                        <div class="col-4">
+                            <strong>{{ project.total_files }}</strong><br>
+                            <small class="text-muted">File</small>
+                        </div>
+                        <div class="col-4">
+                            <strong>{{ project.total_annotations }}</strong><br>
+                            <small class="text-muted">Annotazioni</small>
+                        </div>
+                        <div class="col-4">
+                            <strong>{{ "%.0f"|format(project.completion_percentage) }}%</strong><br>
+                            <small class="text-muted">Completato</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress bar -->
+                    <div class="progress mb-3" style="height: 6px;">
+                        <div class="progress-bar" 
+                             role="progressbar" 
+                             style="width: {{ project.completion_percentage }}%"
+                             aria-valuenow="{{ project.completion_percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                        </div>
+                    </div>
+                    
+                    <!-- Tag -->
+                    {% if project.tags_list %}
+                    <div class="mb-2">
+                        {% for tag in project.tags_list[:3] %}
+                        <span class="badge bg-light text-dark me-1">{{ tag }}</span>
+                        {% endfor %}
+                        {% if project.tags_list|length > 3 %}
+                        <span class="badge bg-secondary">+{{ project.tags_list|length - 3 }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Info meta -->
+                    <div class="text-muted small">
+                        <div><i class="bi bi-person me-1"></i>{{ project.owner.username }}</div>
+                        <div><i class="bi bi-calendar me-1"></i>{{ project.created_at.strftime('%d/%m/%Y') }}</div>
+                        {% if project.last_activity %}
+                        <div><i class="bi bi-clock me-1"></i>Ultima attività: {{ project.last_activity.strftime('%d/%m %H:%M') }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('projects.view_project', project_id=project.id) }}" 
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-eye me-1"></i>Apri
+                        </a>
+                        <div class="btn-group">
+                            <a href="{{ url_for('projects.project_files', project_id=project.id) }}" 
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-files me-1"></i>File
+                            </a>
+                            {% if project.can_edit(current_user) %}
+                            <a href="{{ url_for('projects.project_settings', project_id=project.id) }}" 
+                               class="btn btn-outline-warning btn-sm">
+                                <i class="bi bi-gear"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Paginazione -->
+    {% if projects.pages > 1 %}
+    <nav aria-label="Paginazione progetti" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if projects.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.prev_num, **request.args) }}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in projects.iter_pages() %}
+                {% if page_num %}
+                    {% if page_num != projects.page %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('projects.list_projects', page=page_num, **request.args) }}">{{ page_num }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">…</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if projects.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('projects.list_projects', page=projects.next_num, **request.args) }}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <!-- Stato vuoto -->
+    <div class="row">
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="bi bi-folder2-open display-1 text-muted mb-4"></i>
+                <h4 class="text-muted">Nessun Progetto Trovato</h4>
+                <p class="text-muted mb-4">
+                    {% if search_form.search_query.data or search_form.project_type.data or search_form.status.data %}
+                    Nessun progetto corrisponde ai filtri di ricerca. Prova a modificare i criteri.
+                    {% else %}
+                    Non hai ancora creato nessun progetto. Inizia creando il tuo primo progetto per organizzare file Excel e documenti di testo.
+                    {% endif %}
+                </p>
+                {% if not (search_form.search_query.data or search_form.project_type.data or search_form.status.data) %}
+                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle me-2"></i>Crea il Primo Progetto
+                </a>
+                {% else %}
+                <a href="{{ url_for('projects.list_projects') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Rimuovi Filtri
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-submit form quando cambiano i filtri select
+document.querySelectorAll('select[name^="project_type"], select[name^="status"], select[name^="my_role"]').forEach(select => {
+    select.addEventListener('change', function() {
+        this.form.submit();
+    });
+});
+
+// Tooltip per i badge di stato
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+});
+</script>
+{% endblock %}

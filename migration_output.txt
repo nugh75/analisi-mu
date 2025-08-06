@@ -1,0 +1,10 @@
+🔄 Connessione a database: /home/nugh75/Git/analisi-mu/instance/analisi_mu.db
+✅ Tabella 'projects' creata
+✅ Tabella 'project_notes' creata
+✅ Tabella 'project_collaborators' creata
+⚠️ Errore aggiunta colonna a 'file': no such table: file
+⚠️ Errore aggiunta colonna a 'text_document': no such table: text_document
+
+✅ Migrazione completata con successo!
+
+📋 Tabelle progetti create: ['projects', 'project_notes', 'project_collaborators']
