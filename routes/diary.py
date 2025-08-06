@@ -680,18 +680,63 @@ def generate_pdf_document(entries, output_path):
 
 def process_content_links(content):
     """Processa il contenuto per creare link per menzioni e riferimenti file"""
+    # Prima controlla se il contenuto è già HTML (da Quill)
+    if '<p>' in content or '<h1>' in content or '<h2>' in content or '<h3>' in content:
+        # È già HTML, processa solo le menzioni
+        processed_content = content
+    else:
+        # È testo semplice o Markdown, processa Markdown e aggiungi a capo
+        processed_content = process_markdown_and_newlines(content)
+    
     # Sostituisci menzioni utenti
-    content = re.sub(
+    processed_content = re.sub(
         r'@(\w+)',
         r'<span class="mention-user" title="Utente menzionato">@\1</span>',
-        content
+        processed_content
     )
     
     # Sostituisci riferimenti file
-    content = re.sub(
+    processed_content = re.sub(
         r'#(\S+)',
         r'<span class="mention-file" title="File referenziato">#\1</span>',
-        content
+        processed_content
     )
     
-    return content
+    return processed_content
+
+def process_markdown_and_newlines(content):
+    """Processa Markdown base e converte a capo in HTML"""
+    # Processa Markdown base
+    # Titoli
+    content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', content, flags=re.MULTILINE)
+    content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', content, flags=re.MULTILINE)
+    content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', content, flags=re.MULTILINE)
+    
+    # Grassetto e corsivo
+    content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
+    content = re.sub(r'\*(.*?)\*', r'<em>\1</em>', content)
+    
+    # Liste puntate
+    content = re.sub(r'^[\*\-\+] (.*?)$', r'<li>\1</li>', content, flags=re.MULTILINE)
+    content = re.sub(r'(<li>.*?</li>\s*)+', lambda m: f'<ul>{m.group(0)}</ul>', content, flags=re.DOTALL)
+    
+    # Liste numerate
+    content = re.sub(r'^\d+\. (.*?)$', r'<li>\1</li>', content, flags=re.MULTILINE)
+    # Sostituisci sequenze di <li> numerati con <ol>
+    content = re.sub(r'(<li>.*?</li>(?:\s*<li>.*?</li>)*)', lambda m: f'<ol>{m.group(0)}</ol>' if '.' in content else m.group(0), content)
+    
+    # Paragrafi (doppio a capo)
+    paragraphs = content.split('\n\n')
+    processed_paragraphs = []
+    
+    for para in paragraphs:
+        para = para.strip()
+        if para:
+            # Se non è già un elemento HTML, avvolgilo in <p>
+            if not (para.startswith('<') and para.endswith('>')):
+                # Sostituisci singoli a capo con <br>
+                para = para.replace('\n', '<br>')
+                para = f'<p>{para}</p>'
+            processed_paragraphs.append(para)
+    
+    return '\n'.join(processed_paragraphs)

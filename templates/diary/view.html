@@ -27,6 +27,97 @@
     font-size: 1.1em;
 }
 
+/* Stili per il contenuto HTML */
+.entry-content h1,
+.entry-content h2,
+.entry-content h3,
+.entry-content h4,
+.entry-content h5,
+.entry-content h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.entry-content h1 { font-size: 1.5rem; }
+.entry-content h2 { font-size: 1.4rem; }
+.entry-content h3 { font-size: 1.3rem; }
+
+.entry-content p {
+    margin-bottom: 1rem;
+}
+
+.entry-content ul,
+.entry-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.entry-content li {
+    margin-bottom: 0.5rem;
+}
+
+.entry-content blockquote {
+    border-left: 4px solid #007bff;
+    padding-left: 1rem;
+    margin: 1rem 0;
+    font-style: italic;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+.entry-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.entry-content th,
+.entry-content td {
+    border: 1px solid #dee2e6;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.entry-content th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.entry-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.entry-content pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.entry-content strong {
+    font-weight: 600;
+}
+
+.entry-content em {
+    font-style: italic;
+}
+
+.entry-content a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.entry-content a:hover {
+    text-decoration: underline;
+}
+
 .entry-meta {
     background-color: #f8f9fa;
     border-radius: 8px;
@@ -93,7 +184,7 @@
                 <div class="card-body">
                     <!-- Contenuto -->
                     <div class="entry-content mb-4">
-                        {{ content_with_links|safe|replace('\n', '<br>')|safe }}
+                        {{ content_with_links|safe }}
                     </div>
 
                     <!-- Allegati -->

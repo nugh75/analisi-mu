@@ -136,6 +136,7 @@
     <div class="row">
         <div class="col-lg-8">
             <form method="POST" id="diaryEditForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="card">
                     <div class="card-body">
                         <!-- Titolo -->
@@ -210,15 +211,17 @@
                         <div class="mb-3">
                             <label for="content" class="form-label">Contenuto <span class="text-danger">*</span></label>
                             
-                            <!-- Editor Quill -->
-                            <div id="quillEditor" style="height: 300px;"></div>
+                            <!-- Fallback: textarea normale -->
+                            <textarea class="form-control" id="content" name="content" rows="12" required 
+                                      placeholder="Descrivi l'attività, le decisioni prese, i problemi riscontrati...">{{ entry.content }}</textarea>
                             
-                            <!-- Campo nascosto per il contenuto -->
-                            <input type="hidden" id="content" name="content" required value="{{ entry.content }}">
+                            <!-- Editor Quill (se disponibile) -->
+                            <div id="quillEditor" style="height: 300px; display: none;"></div>
                             
                             <div class="form-text mt-2">
                                 <i class="bi bi-info-circle me-1"></i>
-                                Usa la barra degli strumenti per formattare il testo. Per menzionare utenti usa @nomeutente, per file usa #nomefile.
+                                Usa markdown per formattare il testo (es: **grassetto**, *corsivo*, ## Titolo).
+                                Per menzionare utenti usa @nomeutente, per file usa #nomefile.
                             </div>
                         </div>
 
@@ -393,23 +396,44 @@
 
 {% block extra_js %}
 <script>
-    // Configurazione Quill
-    var quill = new Quill('#quillEditor', {
-        theme: 'snow',
-        modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline'],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['link'],
-                ['clean']
-            ]
-        },
-        placeholder: 'Descrivi l\'attività, le decisioni prese, i problemi riscontrati... Usa @ per menzionare utenti e # per referenziare file'
-    });
-    
-    // Inizializza con il contenuto esistente
-    quill.root.innerHTML = `{{ entry.content|safe }}`;
+    // Inizializzazione Quill Editor (con fallback)
+    let quill = null;
+    let useQuill = false;
+
+    // Prova a caricare Quill
+    if (typeof Quill !== 'undefined') {
+        try {
+            quill = new Quill('#quillEditor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['link'],
+                        ['clean']
+                    ]
+                },
+                placeholder: 'Descrivi l\'attività, le decisioni prese, i problemi riscontrati... Usa @ per menzionare utenti e # per referenziare file'
+            });
+            
+            // Inizializza con il contenuto esistente
+            quill.root.innerHTML = `{{ entry.content|safe }}`;
+            
+            // Se Quill si carica correttamente, nasconde la textarea e mostra l'editor
+            document.getElementById('quillEditor').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            useQuill = true;
+            
+            console.log('Quill editor caricato con successo');
+        } catch (error) {
+            console.warn('Errore caricamento Quill:', error);
+            useQuill = false;
+        }
+    } else {
+        console.log('Quill non disponibile, usando textarea normale');
+        useQuill = false;
+    }
     
     // Sistema di menzioni personalizzato
     let mentionIndex = -1;
@@ -585,10 +609,22 @@
     
     // Contatori in tempo reale
     function updateCounters() {
-        const text = quill.getText();
+        let text = '';
+        if (useQuill && quill) {
+            text = quill.getText();
+        } else {
+            text = document.getElementById('content').value;
+        }
         const words = text.trim().split(/\s+/).filter(word => word.length > 0);
         document.getElementById('wordCount').textContent = words.length;
         document.getElementById('charCount').textContent = text.length;
+    }
+    
+    // Event listeners per aggiornamento contatori
+    if (useQuill && quill) {
+        quill.on('text-change', updateCounters);
+    } else {
+        document.getElementById('content').addEventListener('input', updateCounters);
     }
     
     // Inizializza contatori
@@ -596,7 +632,9 @@
     
     // Aggiorna il campo nascosto prima del submit
     document.getElementById('diaryEditForm').addEventListener('submit', function() {
-        document.getElementById('content').value = quill.root.innerHTML;
+        if (useQuill && quill) {
+            document.getElementById('content').value = quill.root.innerHTML;
+        }
         hasUnsavedChanges = false;
     });
     
@@ -665,10 +703,16 @@
         }
     });
     
-    // Ascolta anche modifiche nel editor Quill
-    quill.on('text-change', function() {
-        hasUnsavedChanges = true;
-    });
+    // Ascolta modifiche nel content (Quill o textarea)
+    if (useQuill && quill) {
+        quill.on('text-change', function() {
+            hasUnsavedChanges = true;
+        });
+    } else {
+        document.getElementById('content').addEventListener('input', function() {
+            hasUnsavedChanges = true;
+        });
+    }
     
     window.addEventListener('beforeunload', function(e) {
         if (hasUnsavedChanges) {
