@@ -8,6 +8,8 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+import stat
+import sqlite3
 
 def activate_venv():
     """Attiva il virtual environment se esiste"""
@@ -31,14 +33,19 @@ def setup_dev_environment():
     """Configura l'ambiente di sviluppo"""
     # Percorso del progetto
     project_root = Path('/home/nugh75/Git/analisi-mu')
-    
+
     # Usa cartelle di sviluppo separate per evitare conflitti con Docker
     instance_dir = project_root / 'instance_dev'
     upload_dir = project_root / 'uploads_dev'
     
-    # Crea le cartelle con permessi corretti (di proprietà di nugh75)
+    # Crea le cartelle con permessi corretti (di proprietà dell'utente corrente)
     instance_dir.mkdir(mode=0o755, exist_ok=True)
     upload_dir.mkdir(mode=0o755, exist_ok=True)
+    try:
+        instance_dir.chmod(0o755)
+        upload_dir.chmod(0o755)
+    except Exception as e:
+        print(f"⚠️  Impossibile impostare i permessi sulle directory dev: {e}")
     
     # Percorso database di sviluppo nella cartella dedicata
     dev_db_path = instance_dir / 'analisi_mu_dev.db'
@@ -54,11 +61,10 @@ def setup_dev_environment():
             # Se non è accessibile, prova a sistemare i permessi
             print(f"🔧 Sistemando permessi database: {dev_db_path}")
             try:
-                import stat
                 dev_db_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
-            except:
+            except Exception:
                 # Se non riesce, rimuovi e ricrea
-                print(f"🗑️ Rimuovendo database con permessi errati...")
+                print("🗑️ Rimuovendo database con permessi errati...")
                 dev_db_path.unlink()
     
     # Se il database di sviluppo non esiste, crealo
@@ -71,7 +77,6 @@ def setup_dev_environment():
             try:
                 shutil.copy2(main_db_path, dev_db_path)
                 # Imposta permessi corretti
-                import stat
                 dev_db_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
                 print(f"✅ Database copiato con successo!")
             except PermissionError as e:
@@ -85,10 +90,31 @@ def setup_dev_environment():
             print(f"⚠️  Database principale non trovato in {main_db_path}")
             # Crea un file vuoto che SQLite può inizializzare
             dev_db_path.touch()
-            import stat
             dev_db_path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+    # Verifica di scrivibilità SQLite (crea/ins/dis/drop tabella temporanea)
+    try:
+        conn = sqlite3.connect(str(dev_db_path))
+        cur = conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL;")
+        conn.commit()
+        cur.execute("CREATE TABLE IF NOT EXISTS __dev_write_test (id INTEGER);")
+        conn.commit()
+        cur.execute("INSERT INTO __dev_write_test (id) VALUES (1);")
+        conn.commit()
+        cur.execute("DELETE FROM __dev_write_test;")
+        conn.commit()
+        cur.execute("DROP TABLE IF EXISTS __dev_write_test;")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError as e:
+        print("❌ SQLite non riesce a scrivere nel database di sviluppo.")
+        print(f"   Percorso: {dev_db_path}")
+        print(f"   Errore: {e}")
+        print("👉 Controlla i permessi della cartella e del file (dev consiglia: cartella 755, file 644).")
+        print(f"   Suggerimento: chmod 755 {instance_dir} && chmod 644 {dev_db_path}")
     
-    return f'sqlite:///{dev_db_path}'
+    return f'sqlite:///{dev_db_path}', instance_dir, upload_dir
 
 def main():
     """Avvia l'applicazione in modalità sviluppo"""
@@ -97,20 +123,24 @@ def main():
     activate_venv()
     
     # Configura l'ambiente di sviluppo
-    database_url = setup_dev_environment()
+    database_url, instance_dir, upload_dir = setup_dev_environment()
     
     # Configurazione ambiente sviluppo
     os.environ['FLASK_ENV'] = 'development'
     os.environ['FLASK_DEBUG'] = '1'
+    os.environ['DEV_MODE'] = '1'
     os.environ['DATABASE_URL'] = database_url
     os.environ['SECRET_KEY'] = 'dev-secret-key-for-development-only'
-    os.environ['UPLOAD_FOLDER'] = 'uploads_dev'  # Usa cartella di sviluppo
+    # Passa percorsi ASSOLUTI per evitare ambiguità
+    os.environ['UPLOAD_FOLDER'] = str(upload_dir)
+    os.environ['INSTANCE_FOLDER'] = str(instance_dir)
     
     print("🚀 Avvio Anatema in modalità SVILUPPO")
     print(f"📊 Database: {database_url}")
     print("🌐 Porta: 5001")
     print("🐛 Debug: Attivo")
-    print("📁 Upload: uploads_dev/")
+    print(f"📁 Upload: {upload_dir}")
+    print(f"📦 Instance dir: {instance_dir}")
     print("=" * 50)
     
     # Importa l'app dopo aver configurato l'ambiente

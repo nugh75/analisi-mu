@@ -583,3 +583,42 @@ window.AnalisiMU = {
     getCSRFToken,
     apiRequest
 };
+
+// Client error logging to server (visible in Flask terminal)
+(function setupClientLogging(){
+    if (window.__clientLogSetup) return; window.__clientLogSetup = true;
+    function send(level, message, meta={}){
+        try {
+            fetch('/client-log', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    level,
+                    message: String(message),
+                    location: meta.location || window.location.href,
+                    stack: meta.stack || (message && message.stack) || ''
+                })
+            }).catch(()=>{});
+        } catch(_) {}
+    }
+    const origOnError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error){
+        send('ERROR', message, { stack: error && error.stack ? error.stack : `${source}:${lineno}:${colno}` });
+        if (typeof origOnError === 'function') return origOnError.apply(this, arguments);
+        return false;
+    };
+    const origRej = window.onunhandledrejection;
+    window.onunhandledrejection = function(event){
+        const reason = event && (event.reason || event);
+        send('ERROR', reason && (reason.message || String(reason)), { stack: reason && reason.stack });
+        if (typeof origRej === 'function') return origRej.apply(this, arguments);
+    };
+    const originalConsoleError = console.error;
+    console.error = function(){
+        try { send('ERROR', Array.from(arguments).map(String).join(' ')); } catch(_) {}
+        return originalConsoleError.apply(console, arguments);
+    };
+})();

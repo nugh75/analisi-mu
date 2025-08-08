@@ -256,7 +256,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/text_annotation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/text_annotation.js') }}?v={{ csrf_token() }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Variabili utente globali

@@ -3,6 +3,7 @@
  */
 class TextAnnotationSystem {
     constructor(options) {
+    console.log('TextAnnotationSystem loaded v2025-08-08-2');
         this.documentId = options.documentId;
         this.container = document.getElementById(options.containerId);
         this.annotations = options.annotations || [];
@@ -11,6 +12,8 @@ class TextAnnotationSystem {
         this.selectedText = null;
         this.selectedRange = null;
         this.lineNumbersVisible = false;
+        this.state = 'idle'; // idle | selecting | modal
+        this._globalListenersBound = false;
         
         this.init();
     }
@@ -18,8 +21,16 @@ class TextAnnotationSystem {
     init() {
         // Salva il contenuto originale
         this.originalContent = this.container.textContent;
+        // Cache riferimenti DOM del modal (se presenti)
+        this.modalEls = {
+            modal: document.getElementById('annotationModal'),
+            selectedText: document.getElementById('selectedText'),
+            positionInfo: document.getElementById('positionInfo'),
+            labelSelect: document.getElementById('labelSelect')
+        };
         
         this.setupEventListeners();
+        this.setupGlobalListeners();
         this.renderAnnotations();
         this.setupModals();
         
@@ -30,6 +41,28 @@ class TextAnnotationSystem {
         this.updateStats();
     }
     
+    setupGlobalListeners() {
+        if (this._globalListenersBound) return;
+        // Listener globale per tracciare i cambi stato della selezione
+        document.addEventListener('selectionchange', () => {
+            const sel = window.getSelection && window.getSelection();
+            if (!sel) return;
+            if (sel.rangeCount === 0 || sel.isCollapsed) {
+                // Nessuna selezione attiva
+                if (this.state !== 'modal') {
+                    this.state = 'idle';
+                }
+                return;
+            }
+            // C'è una selezione: verifica che sia nel container
+            const range = sel.getRangeAt(0);
+            if (this.container && this.container.contains(range.commonAncestorContainer)) {
+                this.state = 'selecting';
+            }
+        });
+        this._globalListenersBound = true;
+    }
+
     setupEventListeners() {
         // Selezione testo
         this.container.addEventListener('mouseup', (e) => {
@@ -119,12 +152,26 @@ class TextAnnotationSystem {
     }
     
     setupModals() {
-        this.annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
+        // Aggiorna cache e istanzia il modal solo se presente
+        this.modalEls.modal = document.getElementById('annotationModal');
+        this.modalEls.selectedText = document.getElementById('selectedText');
+        this.modalEls.positionInfo = document.getElementById('positionInfo');
+        this.modalEls.labelSelect = document.getElementById('labelSelect');
+        if (this.modalEls.modal) {
+            this.annotationModal = new bootstrap.Modal(this.modalEls.modal);
+        }
         this.detailsModal = new bootstrap.Modal(document.getElementById('annotationDetailsModal'));
         
         // Salva annotazione
         document.getElementById('saveAnnotation').addEventListener('click', () => {
             this.saveAnnotation();
+        });
+
+        // Quando il modal viene chiuso, pulisci sempre la selezione per permettere subito una nuova annotazione
+        const annotationModalEl = document.getElementById('annotationModal');
+        annotationModalEl.addEventListener('hidden.bs.modal', () => {
+            this.state = 'idle';
+            this.clearSelection();
         });
     }
     
@@ -168,6 +215,7 @@ class TextAnnotationSystem {
             end: endPos,
             range: range.cloneRange()
         };
+        this.state = 'selecting';
         
         console.log('Testo selezionato:', selectedText, 'Posizioni:', startPos, '-', endPos);
         
@@ -196,14 +244,50 @@ class TextAnnotationSystem {
     }
     
     showAnnotationModal() {
-        document.getElementById('selectedText').textContent = this.selectedText;
-        document.getElementById('positionInfo').textContent = 
-            `${this.selectedRange.start} - ${this.selectedRange.end} (${this.selectedText.length} caratteri)`;
-        
+        const ensureEls = () => {
+            // Aggiorna cache se serve
+            if (!this.modalEls || !this.modalEls.modal) {
+                this.setupModals();
+            } else {
+                // Anche i child potrebbero essere null in rare condizioni
+                this.modalEls.selectedText = this.modalEls.selectedText || document.getElementById('selectedText');
+                this.modalEls.positionInfo = this.modalEls.positionInfo || document.getElementById('positionInfo');
+                this.modalEls.labelSelect = this.modalEls.labelSelect || document.getElementById('labelSelect');
+            }
+            return !!(this.modalEls && this.modalEls.modal && this.modalEls.selectedText && this.modalEls.positionInfo && this.modalEls.labelSelect);
+        };
+
+        if (!ensureEls()) {
+            // Retry asincrono breve (es. dopo re-render/listener reset)
+            if (!this._modalRetry) {
+                this._modalRetry = true;
+                setTimeout(() => {
+                    this._modalRetry = false;
+                    if (ensureEls()) {
+                        this.showAnnotationModal();
+                    } else {
+                        this.showToast('Impossibile aprire il modal di annotazione. Riprova la selezione.', 'warning');
+                    }
+                }, 50);
+            } else {
+                this.showToast('Impossibile aprire il modal di annotazione. Riprova la selezione.', 'warning');
+            }
+            return;
+        }
+
+        this.modalEls.selectedText.textContent = this.selectedText;
+        this.modalEls.positionInfo.textContent = `${this.selectedRange.start} - ${this.selectedRange.end} (${this.selectedText.length} caratteri)`;
         // Reset label selection
-        document.getElementById('labelSelect').value = '';
+        this.modalEls.labelSelect.value = '';
         
-        this.annotationModal.show();
+        this.state = 'modal';
+        if (!this.annotationModal) {
+            this.setupModals();
+        }
+        if (this.annotationModal && typeof this.annotationModal.show === 'function') {
+            // Piccolo delay per lasciare stabilizzare la selezione prima dell'apertura
+            setTimeout(() => this.annotationModal.show(), 0);
+        }
     }
     
     saveAnnotation() {
@@ -275,8 +359,8 @@ class TextAnnotationSystem {
                 // Aggiorna la lista compatta "Annotazione (n)"
                 this.rebuildAnnotationsList();
                 
-                // Pulisci la selezione
-                this.clearSelection();
+                // Reset post-commit: azzera selezione e stato UI, mantieni i listener attivi
+                this.resetAfterCommit();
                 
                 // Aggiorna contatori
                 this.updateStats();
@@ -288,6 +372,25 @@ class TextAnnotationSystem {
         .catch(error => {
             this.showToast('Errore di connessione: ' + error.message, 'error');
         });
+    }
+
+    /**
+     * Reset completo dopo il commit di un'annotazione
+     * - Rimuove qualsiasi selezione attiva (removeAllRanges)
+     * - Reimposta variabili interne e stato UI su 'idle'
+     * - Garantisce che i listener restino attivi
+     */
+    resetAfterCommit() {
+        // Rimuovi qualsiasi selezione dal documento
+        if (window.getSelection) {
+            try { window.getSelection().removeAllRanges(); } catch (e) { /* ignore */ }
+        }
+        // Pulisci variabili e UI
+        this.clearSelection();
+        this.state = 'idle';
+        // I listener globali restano attivi; riattacca quelli del container per sicurezza
+        this.reattachEventListeners();
+        console.log('Reset post-commit completato: UI in stato idle');
     }
     
     getContext(start, end) {
@@ -384,6 +487,10 @@ class TextAnnotationSystem {
         
         // IMPORTANTE: Riattiva i listener dopo aver ricreato il contenuto
         this.reattachEventListeners();
+        // Assicurati che lo stato non rimanga bloccato su selecting dopo un re-render
+        if (this.state !== 'modal') {
+            this.state = 'idle';
+        }
     }
 
     /**
@@ -706,7 +813,7 @@ class TextAnnotationSystem {
         this.selectedRange = null;
         
         // Chiudi eventuali modali aperti
-        if (this.annotationModal) {
+        if (this.annotationModal && this.modalEls && this.modalEls.modal && this.modalEls.modal.classList.contains('show')) {
             this.annotationModal.hide();
         }
         

@@ -4,10 +4,12 @@ Applicazione Flask per la gestione collaborativa dell'etichettatura tematica
 di risposte testuali contenute in file Excel.
 """
 
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 import os
+import logging
+import traceback
 
 # Importa l'istanza db dai modelli
 from models import db
@@ -30,7 +32,8 @@ def create_app():
     
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', default_db)
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = 'uploads'
+    # Consenti override via env
+    app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     
     # Configurazioni specifiche per ambiente
@@ -88,7 +91,7 @@ def create_app():
     
     # Creazione delle cartelle necessarie con permessi corretti
     upload_folder = app.config['UPLOAD_FOLDER']
-    instance_folder = 'instance'
+    instance_folder = os.environ.get('INSTANCE_FOLDER', 'instance')
     
     os.makedirs(upload_folder, mode=0o755, exist_ok=True)
     os.makedirs(instance_folder, mode=0o755, exist_ok=True)
@@ -99,6 +102,20 @@ def create_app():
         os.chmod(instance_folder, 0o755)
     except OSError:
         pass  # Ignora errori di permessi se l'utente non ha privilegi sufficienti
+
+    # Configurazione logging dettagliata su console
+    log_level = logging.DEBUG if app.config.get('DEBUG') else logging.INFO
+    handler = logging.StreamHandler()
+    handler.setLevel(log_level)
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+    handler.setFormatter(formatter)
+    if not app.logger.handlers:
+        app.logger.addHandler(handler)
+    app.logger.setLevel(log_level)
+
+    # Allinea anche il logger di werkzeug
+    logging.getLogger('werkzeug').setLevel(log_level)
+    logging.getLogger('werkzeug').addHandler(handler)
     
     # User loader per Flask-Login
     @login_manager.user_loader
@@ -111,6 +128,43 @@ def create_app():
     def inject_csrf_token():
         from flask_wtf.csrf import generate_csrf
         return dict(csrf_token=generate_csrf)
+
+    # Endpoint per raccogliere errori JS lato client e loggarli in console
+    @app.post('/client-log')
+    def client_log():
+        try:
+            data = request.get_json(force=True, silent=True) or {}
+            level = data.get('level', 'ERROR').upper()
+            msg = data.get('message', 'Client log')
+            location = data.get('location')
+            stack = data.get('stack')
+            user_agent = request.headers.get('User-Agent', '-')
+            referer = request.headers.get('Referer', '-')
+            payload = f"[CLIENT][{level}] {msg} | {location} | UA={user_agent} | Ref={referer}\n{stack or ''}"
+            if level == 'ERROR':
+                app.logger.error(payload)
+            elif level == 'WARN' or level == 'WARNING':
+                app.logger.warning(payload)
+            else:
+                app.logger.info(payload)
+            return ('', 204)
+        except Exception:
+            app.logger.error('Errore in /client-log: %s', traceback.format_exc())
+            return jsonify({'ok': False}), 500
+
+    # Esenta l'endpoint client-log dal CSRF
+    csrf.exempt(client_log)
+
+    # Error handlers per loggare 404/500 esplicitamente
+    @app.errorhandler(404)
+    def handle_404(e):
+        app.logger.warning(f"404 Not Found: path={request.path} ref={request.headers.get('Referer','-')}")
+        return e, 404
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        app.logger.error('500 Internal Server Error on %s\n%s', request.path, traceback.format_exc())
+        return e, 500
     
     # Creazione delle tabelle del database
     with app.app_context():
