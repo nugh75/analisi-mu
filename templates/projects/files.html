@@ -10,11 +10,6 @@
 			<p class="text-muted mb-0">Vista unificata di file Excel e Documenti di Testo</p>
 		</div>
 			<div class="btn-group">
-				{% if project.can_edit(current_user) %}
-				<a href="{{ url_for('projects.assign_files', project_id=project.id) }}" class="btn btn-primary">
-					<i class="bi bi-plus-circle me-1"></i>Assegna File
-				</a>
-				{% endif %}
 			<a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-outline-secondary">
 				<i class="bi bi-speedometer2 me-1"></i>Dashboard
 			</a>
@@ -101,6 +96,14 @@
 						<i class="bi bi-eye me-1"></i>Apri
 					</a>
 					{% endif %}
+					{% if project.can_edit(current_user) %}
+					<form method="post" action="{{ url_for('projects.unassign_file', project_id=project.id, file_type=f.type, file_id=f.id, type=file_type, sort=sort_by, page=files.page) }}" class="d-inline ms-1" onsubmit="return confirm('Rimuovere questo file dal progetto?');">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+						<button type="submit" class="btn btn-sm btn-outline-danger">
+							<i class="bi bi-x-circle me-1"></i>Rimuovi
+						</button>
+					</form>
+					{% endif %}
 				</td>
 			</tr>
 			{% endfor %}
@@ -144,6 +147,134 @@
 	<h5 class="text-muted">Nessun file</h5>
 	<p class="text-muted">Carica file Excel o documenti di testo in questo progetto.</p>
 </div>
+{% endif %}
+
+{% if project.can_edit(current_user) %}
+<!-- Barra azioni -->
+<div class="d-flex justify-content-end mt-3">
+		<button id="btn-open-assign" class="btn btn-primary">
+				<i class="bi bi-plus-circle me-1"></i> Assegna file al progetto
+		</button>
+		<input type="hidden" id="csrf_token" value="{{ csrf_token() }}"/>
+		<input type="hidden" id="project_id" value="{{ project.id }}"/>
+</div>
+
+<!-- Modale assegnazione -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Assegna file a {{ project.name }}</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<ul class="nav nav-tabs" role="tablist">
+					<li class="nav-item" role="presentation">
+						<button class="nav-link active" id="tab-excel" data-bs-toggle="tab" data-bs-target="#pane-excel" type="button" role="tab">Excel</button>
+					</li>
+					<li class="nav-item" role="presentation">
+						<button class="nav-link" id="tab-text" data-bs-toggle="tab" data-bs-target="#pane-text" type="button" role="tab">Documenti</button>
+					</li>
+				</ul>
+				<div class="tab-content mt-3">
+					<div class="tab-pane fade show active" id="pane-excel" role="tabpanel">
+						<div id="excel-list" class="list-group small"></div>
+					</div>
+					<div class="tab-pane fade" id="pane-text" role="tabpanel">
+						<div id="text-list" class="list-group small"></div>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+				<button type="button" id="btn-assign-confirm" class="btn btn-primary">
+					<i class="bi bi-check-circle me-1"></i> Assegna selezionati
+				</button>
+			</div>
+		</div>
+	</div>
+	</div>
+
+<script>
+	(function() {
+		const btnOpen = document.getElementById('btn-open-assign');
+		const modalEl = document.getElementById('assignModal');
+		const excelList = document.getElementById('excel-list');
+		const textList = document.getElementById('text-list');
+		const btnConfirm = document.getElementById('btn-assign-confirm');
+		const projectId = document.getElementById('project_id').value;
+		const csrf = document.getElementById('csrf_token').value;
+
+		function renderItems(container, items) {
+			container.innerHTML = '';
+			if (!items || items.length === 0) {
+				container.innerHTML = '<div class="text-muted p-3">Nessun elemento</div>';
+				return;
+			}
+			for (const it of items) {
+				const row = document.createElement('label');
+				row.className = 'list-group-item d-flex justify-content-between align-items-center';
+				row.innerHTML = `
+					<div class="form-check">
+						<input class="form-check-input me-2" type="checkbox" value="${it.id}" data-type="${it.type}">
+						<span class="fw-semibold">${it.name}</span>
+						<small class="text-muted ms-2">${it.uploader || ''}</small>
+					</div>
+					<small class="text-muted">${(it.uploaded_at || '').replace('T',' ').slice(0,16)}</small>
+				`;
+				container.appendChild(row);
+			}
+		}
+
+		async function loadUnassigned() {
+			const resp = await fetch(`${window.location.pathname}/unassigned`);
+			if (!resp.ok) return;
+			const data = await resp.json();
+			renderItems(excelList, data.excel);
+			renderItems(textList, data.texts);
+		}
+
+		btnOpen?.addEventListener('click', async () => {
+			await loadUnassigned();
+			const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+			modal.show();
+		});
+
+		btnConfirm?.addEventListener('click', async () => {
+			const checked = modalEl.querySelectorAll('input[type="checkbox"]:checked');
+			const excelIds = [];
+			const textIds = [];
+			checked.forEach(cb => {
+				(cb.dataset.type === 'excel' ? excelIds : textIds).push(parseInt(cb.value));
+			});
+			if (excelIds.length === 0 && textIds.length === 0) {
+				alert('Seleziona almeno un elemento.');
+				return;
+			}
+			try {
+				const res = await fetch(`${window.location.pathname}/assign`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-CSRFToken': csrf
+					},
+					body: JSON.stringify({ excel_ids: excelIds, text_ids: textIds })
+				});
+				if (!res.ok) throw new Error('Errore di rete');
+				const out = await res.json();
+				if (out.success) {
+					// ricarica pagina mantenendo filtri
+					const params = new URLSearchParams(window.location.search);
+					window.location.href = `${window.location.pathname}?${params.toString()}`;
+				} else {
+					alert(out.error || 'Errore durante l\'assegnazione');
+				}
+			} catch (e) {
+				alert('Errore durante l\'assegnazione: ' + e.message);
+			}
+		});
+	})();
+</script>
 {% endif %}
 
 {% endblock %}

@@ -99,6 +99,18 @@
 				<div class="mb-2"><strong>Visibilità:</strong> {{ project.visibility|title }}</div>
 			</div>
 		</div>
+		{% if project.can_manage(current_user) %}
+			<div class="card mb-3">
+			<div class="card-header"><i class="bi bi-people me-1"></i> Collaboratori</div>
+			<div class="card-body">
+					{% set selected_ids = collaborator_ids %}
+					{% set roles_map = collaborator_roles_map %}
+				{% set redirect_target = 'settings' %}
+				{% set users = all_users %}
+				{% include 'projects/_collaborators_form.html' %}
+			</div>
+		</div>
+		{% endif %}
 		{% if project.tags_list %}
 		<div class="card">
 			<div class="card-header">Tag Correnti</div>

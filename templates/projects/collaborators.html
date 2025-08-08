@@ -35,25 +35,35 @@
     <div>Collaboratori</div>
     <span class="badge bg-secondary">{{ collaborators|length - 1 }} membri</span>
   </div>
-  <ul class="list-group list-group-flush">
-    {% for c in collaborators %}
-      {% if c.role != 'owner' %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center">
-          <span class="badge bg-{{ c.role_class }} me-2">{{ c.role_display }}</span>
-          <div>
-            <div class="fw-semibold">{{ c.user.username }}</div>
-            <small class="text-muted">Aggiunto il {{ c.joined_at.strftime('%d/%m/%Y') if c.joined_at else '' }}</small>
-          </div>
-        </div>
-        <div class="text-muted small">
-          {{ c.annotations_count }} annotazioni
-        </div>
-      </li>
-      {% endif %}
+  <div class="card-body">
+    {% if project.can_manage(current_user) %}
+      {% set selected_ids = collaborator_ids %}
+      {% set roles_map = collaborator_roles_map %}
+      {% set redirect_target = 'collaborators' %}
+      {% set users = all_users %}
+      {% include 'projects/_collaborators_form.html' %}
     {% else %}
-      <li class="list-group-item text-muted">Nessun collaboratore</li>
-    {% endfor %}
-  </ul>
+      <ul class="list-group list-group-flush">
+        {% for c in collaborators %}
+          {% if c.role != 'owner' %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+              <span class="badge bg-{{ c.role_class }} me-2">{{ c.role_display }}</span>
+              <div>
+                <div class="fw-semibold">{{ c.user.username }}</div>
+                <small class="text-muted">Aggiunto il {{ c.joined_at.strftime('%d/%m/%Y') if c.joined_at else '' }}</small>
+              </div>
+            </div>
+            <div class="text-muted small">
+              {{ c.annotations_count }} annotazioni
+            </div>
+          </li>
+          {% endif %}
+        {% else %}
+          <li class="list-group-item text-muted">Nessun collaboratore</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

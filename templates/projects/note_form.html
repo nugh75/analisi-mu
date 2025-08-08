@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% set is_create = (action == 'create') %}
+{% block title %}{{ 'Nuova Nota' if is_create else 'Modifica Nota' }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12 d-flex justify-content-between align-items-center">
+		<h2><i class="bi bi-sticky me-2"></i>{{ 'Nuova Nota' if is_create else 'Modifica Nota' }}</h2>
+		<a href="{{ url_for('projects.project_notes', project_id=project.id) }}" class="btn btn-outline-secondary">
+			<i class="bi bi-arrow-left me-1"></i>Torna alle Note
+		</a>
+	</div>
+	<div class="col-12 text-muted">Progetto: <strong>{{ project.name }}</strong></div>
+	{% if project.description %}
+	<div class="col-12 small text-muted">{{ project.description }}</div>
+	{% endif %}
+  
+</div>
+
+<div class="row">
+	<div class="col-lg-8">
+		<div class="card">
+			<div class="card-header">Dettagli Nota</div>
+			<div class="card-body">
+				<form method="post">
+					{{ form.csrf_token }}
+
+					<div class="mb-3">
+						{{ form.title.label(class='form-label') }}
+						{{ form.title(class='form-control', placeholder='Titolo della nota') }}
+						{% for error in form.title.errors %}
+							<div class="invalid-feedback d-block">{{ error }}</div>
+						{% endfor %}
+					</div>
+
+					<div class="mb-3">
+						{{ form.content.label(class='form-label') }}
+						{{ form.content(class='form-control', placeholder='Scrivi qui la tua nota...') }}
+						{% for error in form.content.errors %}
+							<div class="invalid-feedback d-block">{{ error }}</div>
+						{% endfor %}
+					</div>
+
+					<div class="row">
+						<div class="col-md-4 mb-3">
+							{{ form.note_type.label(class='form-label') }}
+							{{ form.note_type(class='form-select') }}
+						</div>
+						<div class="col-md-8 mb-3 d-flex align-items-end gap-4">
+							<div class="form-check">
+								{{ form.is_pinned(class='form-check-input', id='is_pinned') }}
+								<label class="form-check-label" for="is_pinned">{{ form.is_pinned.label.text }}</label>
+							</div>
+							<div class="form-check">
+								{{ form.is_private(class='form-check-input', id='is_private') }}
+								<label class="form-check-label" for="is_private">{{ form.is_private.label.text }}</label>
+							</div>
+						</div>
+					</div>
+
+					<div class="mb-3">
+						{{ form.tags.label(class='form-label') }}
+						{{ form.tags(class='form-control', placeholder='es: riunione, decisione, sprint-1') }}
+						{% if form.tags.description %}
+						<div class="form-text">{{ form.tags.description }}</div>
+						{% endif %}
+					</div>
+
+					<div class="d-flex justify-content-end gap-2">
+						<a href="{{ url_for('projects.project_notes', project_id=project.id) }}" class="btn btn-outline-secondary">Annulla</a>
+						<button type="submit" class="btn btn-primary">
+							<i class="bi bi-save me-1"></i>{{ 'Crea Nota' if is_create else 'Salva Modifiche' }}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-lg-4">
+		<div class="card">
+			<div class="card-header">Suggerimenti</div>
+			<div class="card-body small text-muted">
+				- Usa le note "Riunione" per verbali rapidi con decisioni e TODO.<br>
+				- Segna come "Privata" per appunti personali visibili solo a te e ai moderatori.<br>
+				- Aggiungi tag per facilitarne la ricerca.
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}

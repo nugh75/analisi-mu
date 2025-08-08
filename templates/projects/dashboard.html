@@ -15,6 +15,17 @@
 			<a href="{{ url_for('projects.project_files', project_id=project.id) }}" class="btn btn-outline-secondary">
 				<i class="bi bi-files me-1"></i>File
 			</a>
+			<a href="{{ url_for('projects.project_notes', project_id=project.id) }}" class="btn btn-outline-secondary">
+				<i class="bi bi-sticky me-1"></i>Note
+			</a>
+			<a href="{{ url_for('projects.manage_collaborators', project_id=project.id) }}" class="btn btn-outline-secondary">
+				<i class="bi bi-people me-1"></i>Collaboratori
+			</a>
+			{% if project.can_edit(current_user) %}
+			<a href="{{ url_for('projects.create_note', project_id=project.id) }}" class="btn btn-primary">
+				<i class="bi bi-plus-circle me-1"></i>Nuova Nota
+			</a>
+			{% endif %}
 			{% if project.can_manage(current_user) %}
 			<a href="{{ url_for('projects.project_settings', project_id=project.id) }}" class="btn btn-outline-warning">
 				<i class="bi bi-gear me-1"></i>Impostazioni
@@ -83,9 +94,30 @@
 							<strong>{{ note.title }}</strong>
 							<div class="text-muted small">{{ note.author.username }} • {{ note.updated_at.strftime('%d/%m %H:%M') }}</div>
 						</div>
-						{% if note.is_pinned %}
-						<span class="badge bg-warning text-dark"><i class="bi bi-pin-angle"></i></span>
-						{% endif %}
+						<div class="text-end">
+							<div>
+								{% if note.is_pinned %}
+								<span class="badge bg-warning text-dark me-1" title="Fissata"><i class="bi bi-pin-angle"></i></span>
+								{% endif %}
+								<span class="badge bg-light text-dark text-uppercase">{{ note.note_type }}</span>
+								{% if note.is_private %}
+								<span class="badge bg-secondary ms-1">Privata</span>
+								{% endif %}
+							</div>
+							{% if project.can_edit(current_user) and (note.author_id == current_user.id or project.can_manage(current_user)) %}
+							<div class="mt-2">
+								<a href="{{ url_for('projects.edit_note', project_id=project.id, note_id=note.id) }}" class="btn btn-sm btn-outline-primary me-1" title="Modifica">
+									<i class="bi bi-pencil-square"></i>
+								</a>
+								<form method="POST" action="{{ url_for('projects.delete_note', project_id=project.id, note_id=note.id) }}" class="d-inline" onsubmit="return confirm('Eliminare la nota \"{{ note.title }}\"?');">
+									<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+									<button class="btn btn-sm btn-outline-danger" type="submit" title="Elimina">
+										<i class="bi bi-trash"></i>
+									</button>
+								</form>
+							</div>
+							{% endif %}
+						</div>
 					</div>
 					<div class="small text-muted mt-2">{{ note.content[:140] }}{% if note.content|length > 140 %}...{% endif %}</div>
 				</li>
@@ -120,4 +152,26 @@
 		</div>
 	</div>
 </div>
+
+{% if project.can_manage(current_user) %}
+<div class="row mt-4">
+	<div class="col-12">
+		<div class="card">
+			<div class="card-header d-flex justify-content-between align-items-center">
+				<div>
+					<i class="bi bi-people me-2"></i>Gestione Collaboratori
+				</div>
+				<small class="text-muted">Seleziona gli utenti che possono accedere al progetto</small>
+			</div>
+			<div class="card-body">
+				{% set selected_ids = collaborator_ids %}
+				{% set roles_map = collaborator_roles_map %}
+				{% set redirect_target = 'dashboard' %}
+				{% set users = all_users %}
+				{% include 'projects/_collaborators_form.html' %}
+			</div>
+		</div>
+	</div>
+</div>
+{% endif %}
 {% endblock %}
