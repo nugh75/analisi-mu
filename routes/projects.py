@@ -207,15 +207,26 @@ def view_project(project_id):
                 'object': f
             })
     
-    # Collaboratori attivi
+
+    # Collaboratori attivi (sempre visibili)
     collaborators = get_project_collaborators(project)
-    
+
+    # Tutti gli utenti dell'app (per suggerire potenziali collaboratori)
+    all_users = User.query.order_by(User.username).all()
+
+    # Id e mappa ruoli (escludi owner)
+    collaborator_ids = [c['user'].id for c in collaborators if c.get('role') != 'owner']
+    collaborator_roles_map = {c['user'].id: c.get('role') for c in collaborators if c.get('role') != 'owner'}
+
     return render_template('projects/dashboard.html',
                          project=project,
                          stats=stats,
                          recent_notes=recent_notes,
                          recent_files=recent_files,
-                         collaborators=collaborators)
+                         collaborators=collaborators,
+                         all_users=all_users,
+                         collaborator_ids=collaborator_ids,
+                         collaborator_roles_map=collaborator_roles_map)
 
 
 @projects_bp.route('/<int:project_id>/files')
@@ -301,74 +312,142 @@ def project_files(project_id):
                          sort_by=sort_by)
 
 
-@projects_bp.route('/<int:project_id>/assign-files', methods=['GET', 'POST'])
+# Endpoint helper: elenco file non assegnati (per modale di assegnazione)
+@projects_bp.route('/<int:project_id>/files/unassigned')
+@login_required
+def unassigned_files(project_id):
+    project = Project.query.get_or_404(project_id)
+    if not project.can_edit(current_user):
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    # Excel e Documenti non assegnati a nessun progetto
+    excel_q = ExcelFile.query.filter(ExcelFile.project_id.is_(None)).order_by(desc(ExcelFile.uploaded_at))
+    text_q = TextDocument.query.filter(TextDocument.project_id.is_(None)).order_by(desc(TextDocument.created_at))
+
+    excel = [
+        {
+            'id': f.id,
+            'name': f.original_filename,
+            'uploader': f.uploader.username if getattr(f, 'uploader', None) else '—',
+            'uploaded_at': f.uploaded_at.isoformat() if f.uploaded_at else None,
+            'type': 'excel'
+        }
+        for f in excel_q.limit(200).all()
+    ]
+    texts = [
+        {
+            'id': d.id,
+            'name': d.original_name,
+            'uploader': d.uploader.username if getattr(d, 'uploader', None) else '—',
+            'uploaded_at': d.created_at.isoformat() if d.created_at else None,
+            'type': 'text'
+        }
+        for d in text_q.limit(200).all()
+    ]
+
+    return jsonify({'excel': excel, 'texts': texts})
+
+
+# Assegna una lista di file (excel_ids, text_ids) al progetto
+@projects_bp.route('/<int:project_id>/files/assign', methods=['POST'])
 @login_required
 def assign_files(project_id):
-    """Assegna file Excel e Documenti di testo al progetto"""
     project = Project.query.get_or_404(project_id)
+    if not project.can_edit(current_user):
+        flash('Non hai i permessi per modificare i file di questo progetto.', 'error')
+        return redirect(url_for('projects.project_files', project_id=project.id))
 
-    if not (project.can_manage(current_user) or project.can_edit(current_user)):
-        flash('Non hai i permessi per gestire i file di questo progetto.', 'error')
-        return redirect(url_for('projects.view_project', project_id=project.id))
+    # Supporta form-encoded e JSON
+    payload = request.get_json(silent=True) or request.form
+    excel_ids = payload.get('excel_ids') or []
+    text_ids = payload.get('text_ids') or []
 
-    # Gestione assegnazione
-    if request.method == 'POST':
-        excel_ids = request.form.getlist('excel_ids')
-        text_ids = request.form.getlist('text_ids')
+    # Se arrivano come stringa CSV da form
+    if isinstance(excel_ids, str):
+        excel_ids = [int(x) for x in excel_ids.split(',') if x.strip().isdigit()]
+    if isinstance(text_ids, str):
+        text_ids = [int(x) for x in text_ids.split(',') if x.strip().isdigit()]
 
-        assigned = 0
-        try:
-            if excel_ids:
-                excel_files = ExcelFile.query.filter(ExcelFile.id.in_(excel_ids)).all()
-                for f in excel_files:
-                    f.project_id = project.id
-                    assigned += 1
-            if text_ids:
-                text_docs = TextDocument.query.filter(TextDocument.id.in_(text_ids)).all()
-                for d in text_docs:
-                    d.project_id = project.id
-                    assigned += 1
-            if assigned:
-                project.update_statistics()
-            db.session.commit()
-            flash(f'{assigned} file assegnati al progetto.', 'success')
+    # Se JSON, assicurati siano liste di int
+    try:
+        excel_ids = [int(x) for x in excel_ids]
+        text_ids = [int(x) for x in text_ids]
+    except Exception:
+        excel_ids = []
+        text_ids = []
+
+    assigned = {'excel': 0, 'texts': 0}
+    try:
+        if excel_ids:
+            files = ExcelFile.query.filter(ExcelFile.id.in_(excel_ids)).all()
+            for f in files:
+                f.project_id = project.id
+                assigned['excel'] += 1
+        if text_ids:
+            docs = TextDocument.query.filter(TextDocument.id.in_(text_ids)).all()
+            for d in docs:
+                d.project_id = project.id
+                assigned['texts'] += 1
+        project.last_activity = datetime.utcnow()
+        project.update_statistics()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # Se la richiesta era AJAX/JSON ritorna JSON
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        flash(f'Errore durante l\'assegnazione: {str(e)}', 'error')
+        return redirect(url_for('projects.project_files', project_id=project.id))
+
+    # Risposta
+    if request.is_json:
+        return jsonify({'success': True, 'assigned': assigned})
+    flash(f'Assegnati {assigned["excel"]} file Excel e {assigned["texts"]} documenti al progetto.', 'success')
+    return redirect(url_for('projects.project_files', project_id=project.id))
+
+
+# Disassegna un singolo file dal progetto
+@projects_bp.route('/<int:project_id>/files/<string:file_type>/<int:file_id>/unassign', methods=['POST'])
+@login_required
+def unassign_file(project_id, file_type, file_id):
+    project = Project.query.get_or_404(project_id)
+    if not project.can_edit(current_user):
+        flash('Non hai i permessi per modificare i file di questo progetto.', 'error')
+        return redirect(url_for('projects.project_files', project_id=project.id))
+
+    try:
+        if file_type == 'excel':
+            f = ExcelFile.query.get_or_404(file_id)
+            if f.project_id != project.id:
+                flash('Il file non appartiene a questo progetto.', 'error')
+                return redirect(url_for('projects.project_files', project_id=project.id))
+            f.project_id = None
+        elif file_type == 'text':
+            d = TextDocument.query.get_or_404(file_id)
+            if d.project_id != project.id:
+                flash('Il documento non appartiene a questo progetto.', 'error')
+                return redirect(url_for('projects.project_files', project_id=project.id))
+            d.project_id = None
+        else:
+            flash('Tipo di file non valido.', 'error')
             return redirect(url_for('projects.project_files', project_id=project.id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Errore durante l\'assegnazione: {str(e)}', 'error')
 
-    # Filtri di ricerca
-    search = request.args.get('search', '', type=str).strip()
-    file_type = request.args.get('type', 'all')  # all, excel, text
+        project.last_activity = datetime.utcnow()
+        project.update_statistics()
+        db.session.commit()
+        flash('File rimosso dal progetto.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore durante la rimozione: {str(e)}', 'error')
 
-    # Query file non assegnati
-    excel_unassigned_q = ExcelFile.query.filter(ExcelFile.project_id.is_(None))
-    text_unassigned_q = TextDocument.query.filter(TextDocument.project_id.is_(None))
-
-    if search:
-        like = f"%{search}%"
-        excel_unassigned_q = excel_unassigned_q.join(User, ExcelFile.uploader).filter(
-            or_(ExcelFile.original_filename.ilike(like), User.username.ilike(like))
-        )
-        text_unassigned_q = text_unassigned_q.join(User, TextDocument.uploader).filter(
-            or_(TextDocument.original_name.ilike(like), User.username.ilike(like))
-        )
-
-    excel_unassigned = excel_unassigned_q.order_by(desc(ExcelFile.uploaded_at)).limit(200).all()
-    text_unassigned = text_unassigned_q.order_by(desc(TextDocument.created_at)).limit(200).all()
-
-    # Alcuni assegnati recenti per contesto
-    excel_assigned = ExcelFile.query.filter_by(project_id=project.id).order_by(desc(ExcelFile.uploaded_at)).limit(20).all()
-    text_assigned = TextDocument.query.filter_by(project_id=project.id).order_by(desc(TextDocument.created_at)).limit(20).all()
-
-    return render_template('projects/assign_files.html',
-                           project=project,
-                           search=search,
-                           file_type=file_type,
-                           excel_unassigned=excel_unassigned,
-                           text_unassigned=text_unassigned,
-                           excel_assigned=excel_assigned,
-                           text_assigned=text_assigned)
+    # Mantieni parametri di filtro/paginazione se presenti
+    args = {
+        'project_id': project.id,
+        'type': request.args.get('type', 'all'),
+        'sort': request.args.get('sort', 'date'),
+        'page': request.args.get('page', 1)
+    }
+    return redirect(url_for('projects.project_files', **args))
 
 
 @projects_bp.route('/<int:project_id>/notes')
@@ -466,6 +545,73 @@ def create_note(project_id):
                          action='create')
 
 
+@projects_bp.route('/<int:project_id>/notes/<int:note_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_note(project_id, note_id):
+    """Modifica una nota esistente del progetto"""
+    project = Project.query.get_or_404(project_id)
+    note = ProjectNote.query.filter_by(id=note_id, project_id=project.id).first_or_404()
+
+    if not project.can_edit(current_user):
+        flash('Non hai i permessi per modificare note in questo progetto.', 'error')
+        return redirect(url_for('projects.project_notes', project_id=project.id))
+
+    # Se nota privata, solo autore o manager
+    if note.is_private and (note.author_id != current_user.id) and (not project.can_manage(current_user)):
+        flash('Non puoi modificare una nota privata di un altro utente.', 'error')
+        return redirect(url_for('projects.project_notes', project_id=project.id))
+
+    form = ProjectNoteForm(obj=note)
+    # Precompila i tag
+    if note.tags_list:
+        form.tags.data = ', '.join(note.tags_list)
+
+    if form.validate_on_submit():
+        # Aggiorna
+        note.title = form.title.data
+        note.content = form.content.data
+        note.note_type = form.note_type.data
+        note.is_pinned = form.is_pinned.data
+        note.is_private = form.is_private.data
+        # Tag
+        if form.tags.data:
+            note.tags_list = [t.strip() for t in form.tags.data.split(',') if t.strip()]
+        else:
+            note.tags_list = []
+        try:
+            db.session.commit()
+            flash('Nota aggiornata con successo!', 'success')
+            return redirect(url_for('projects.project_notes', project_id=project.id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Errore durante l'aggiornamento: {str(e)}", 'error')
+
+    return render_template('projects/note_form.html', form=form, project=project, action='edit')
+
+
+@projects_bp.route('/<int:project_id>/notes/<int:note_id>/delete', methods=['POST'])
+@login_required
+def delete_note(project_id, note_id):
+    """Elimina una nota del progetto"""
+    project = Project.query.get_or_404(project_id)
+    note = ProjectNote.query.filter_by(id=note_id, project_id=project.id).first_or_404()
+
+    # Solo autore o manager del progetto
+    if not (note.author_id == current_user.id or project.can_manage(current_user)):
+        flash('Non hai i permessi per eliminare questa nota.', 'error')
+        return redirect(url_for('projects.project_notes', project_id=project.id))
+
+    try:
+        db.session.delete(note)
+        db.session.commit()
+        flash('Nota eliminata.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Errore durante l'eliminazione: {str(e)}", 'error')
+
+    return redirect(url_for('projects.project_notes', project_id=project.id))
+
+
 @projects_bp.route('/<int:project_id>/collaborators')
 @login_required
 def manage_collaborators(project_id):
@@ -476,12 +622,22 @@ def manage_collaborators(project_id):
         flash('Non hai i permessi per gestire i collaboratori di questo progetto.', 'error')
         return redirect(url_for('projects.view_project', project_id=project.id))
     
+
     # Ottieni collaboratori dettagliati
     collaborators = get_project_collaborators(project, detailed=True)
-    
+
+    # Tutti gli utenti dell'app
+    all_users = User.query.order_by(User.username).all()
+
+    collaborator_ids = [c['user'].id for c in collaborators if c.get('role') != 'owner']
+    collaborator_roles_map = {c['user'].id: c.get('role') for c in collaborators if c.get('role') != 'owner'}
+
     return render_template('projects/collaborators.html',
                          project=project,
-                         collaborators=collaborators)
+                         collaborators=collaborators,
+                         all_users=all_users,
+                         collaborator_ids=collaborator_ids,
+                         collaborator_roles_map=collaborator_roles_map)
 
 
 @projects_bp.route('/<int:project_id>/settings', methods=['GET', 'POST'])
@@ -527,9 +683,78 @@ def project_settings(project_id):
             db.session.rollback()
             flash(f'Errore durante l\'aggiornamento: {str(e)}', 'error')
     
+    # Tutti gli utenti per gestione collaboratori (eccetto owner visualizzato separatamente)
+    all_users = User.query.order_by(User.username).all()
+    current_collaborator_ids = {c.get('user_id') for c in project.collaborators_list if isinstance(c, dict)}
+    collaborators = get_project_collaborators(project, detailed=True)
+    collaborator_ids = [c['user'].id for c in collaborators if c.get('role') != 'owner']
+    collaborator_roles_map = {c['user'].id: c.get('role') for c in collaborators if c.get('role') != 'owner'}
+
     return render_template('projects/settings.html', 
                          form=form, 
-                         project=project)
+                         project=project,
+                         all_users=all_users,
+                         current_collaborator_ids=current_collaborator_ids,
+                         collaborators=collaborators,
+                         collaborator_ids=collaborator_ids,
+                         collaborator_roles_map=collaborator_roles_map)
+
+
+@projects_bp.route('/<int:project_id>/collaborators/update', methods=['POST'])
+@login_required
+def update_collaborators(project_id):
+    """Aggiorna la lista dei collaboratori (selezione multiutente dalla dashboard o impostazioni)."""
+    project = Project.query.get_or_404(project_id)
+    if not project.can_manage(current_user):
+        flash('Non hai i permessi per modificare i collaboratori.', 'error')
+        return redirect(url_for('projects.view_project', project_id=project.id))
+
+    # Ottengo lista di user_id selezionati (checkbox name="collaborators[]")
+    selected_ids = request.form.getlist('collaborators[]')
+    try:
+        selected_ids = [int(uid) for uid in selected_ids if uid.isdigit()]
+    except ValueError:
+        selected_ids = []
+
+    # Costruisci nuova lista collaboratori (mantieni ruoli esistenti, consenti aggiornamento ruolo da form)
+    existing = {c.get('user_id'): c for c in project.collaborators_list if isinstance(c, dict)}
+    new_list = []
+    now_iso = datetime.utcnow().isoformat()
+    for uid in selected_ids:
+        # salta l'owner se accidentalmente selezionato
+        if uid == project.owner_id:
+            continue
+        prev = existing.get(uid)
+        # ruolo dal form: role_<id>
+        role_key = f'role_{uid}'
+        role_val = request.form.get(role_key, (prev.get('role') if prev else 'viewer'))
+        if prev:
+            new_list.append({
+                'user_id': uid,
+                'role': role_val,
+                'added_at': prev.get('added_at', now_iso)
+            })
+        else:
+            new_list.append({
+                'user_id': uid,
+                'role': role_val,
+                'added_at': now_iso
+            })
+
+    project.collaborators_list = new_list
+    project.last_activity = datetime.utcnow()
+    try:
+        db.session.commit()
+        flash('Collaboratori aggiornati.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Errore aggiornando i collaboratori: {str(e)}', 'error')
+
+    # Redirect alla pagina di provenienza (dashboard o settings) se passato il ref
+    redirect_target = request.form.get('redirect', 'dashboard')
+    if redirect_target == 'settings':
+        return redirect(url_for('projects.project_settings', project_id=project.id))
+    return redirect(url_for('projects.view_project', project_id=project.id))
 
 
 # ============================================================================
