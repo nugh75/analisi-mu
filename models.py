@@ -245,6 +245,9 @@ class ExcelFile(db.Model):
     uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Associazione al progetto
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
+    
     # Relazioni
     uploader = db.relationship('User', backref='uploaded_files')
     text_cells = db.relationship('TextCell', backref='excel_file', lazy=True, cascade='all, delete-orphan')
@@ -497,8 +500,9 @@ class TextDocument(db.Model):
     word_count = db.Column(db.Integer, default=0)
     character_count = db.Column(db.Integer, default=0)
     
-    # Relazioni utente
+    # Relazioni utente e progetto
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
     
     # Timestamp
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1038,3 +1042,226 @@ class DiaryAttachment(db.Model):
                 return f"{self.file_size:.1f} {unit}"
             self.file_size /= 1024
         return f"{self.file_size:.1f} TB"
+
+
+# ============================================================================
+# MODELLI PER I PROGETTI
+# ============================================================================
+
+class Project(db.Model):
+    """Modello per i progetti multi-file"""
+    __tablename__ = 'projects'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    project_type = db.Column(db.String(50), default='general')  # general, research, annotation, etc.
+    
+    # Configurazione del progetto
+    objectives = db.Column(db.Text)  # Obiettivi del progetto
+    methodology = db.Column(db.Text)  # Metodologia
+    visibility = db.Column(db.String(20), default='private')  # private, public, restricted
+    
+    # Impostazioni di annotazione
+    default_annotation_mode = db.Column(db.String(30), default='manual')  # manual, ai_assisted, automatic
+    enable_ai_assistance = db.Column(db.Boolean, default=True)
+    auto_assign_collaborators = db.Column(db.Boolean, default=False)
+    
+    # Metadati e organizzazione
+    tags = db.Column(db.Text)  # JSON array di tag
+    status = db.Column(db.String(20), default='active')  # active, completed, archived, suspended
+    
+    # Statistiche e progress
+    completion_percentage = db.Column(db.Float, default=0.0)
+    total_files = db.Column(db.Integer, default=0)
+    total_annotations = db.Column(db.Integer, default=0)
+    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Gestione collaboratori (JSON)
+    collaborators = db.Column(db.Text)  # JSON array di collaboratori con ruoli
+    
+    # Ownership e timestamp
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    owner = db.relationship('User', backref='owned_projects')
+    notes = db.relationship('ProjectNote', backref='project', lazy=True, cascade='all, delete-orphan')
+    excel_files = db.relationship('ExcelFile', backref='project', lazy=True)
+    text_documents = db.relationship('TextDocument', backref='project', lazy=True)
+    
+    def __repr__(self):
+        return f'<Project {self.name}>'
+    
+    @property
+    def tags_list(self):
+        """Restituisce la lista dei tag"""
+        if self.tags:
+            try:
+                return json.loads(self.tags)
+            except:
+                return []
+        return []
+    
+    @tags_list.setter
+    def tags_list(self, value):
+        """Imposta la lista dei tag"""
+        self.tags = json.dumps(value) if value else None
+    
+    @property
+    def collaborators_list(self):
+        """Restituisce la lista dei collaboratori"""
+        if self.collaborators:
+            try:
+                return json.loads(self.collaborators)
+            except:
+                return []
+        return []
+    
+    @collaborators_list.setter
+    def collaborators_list(self, value):
+        """Imposta la lista dei collaboratori"""
+        self.collaborators = json.dumps(value) if value else None
+    
+    def can_access(self, user):
+        """Verifica se l'utente può accedere al progetto"""
+        if not user:
+            return False
+        if user.is_admin or self.owner_id == user.id:
+            return True
+        if self.visibility == 'public':
+            return True
+        # Verifica se è un collaboratore
+        for collab in self.collaborators_list:
+            if isinstance(collab, dict) and collab.get('user_id') == user.id:
+                return True
+        return False
+    
+    def can_edit(self, user):
+        """Verifica se l'utente può modificare il progetto"""
+        if not user:
+            return False
+        if user.is_admin or self.owner_id == user.id:
+            return True
+        # Verifica se è un collaboratore con permessi di edit
+        for collab in self.collaborators_list:
+            if isinstance(collab, dict) and collab.get('user_id') == user.id:
+                role = collab.get('role', 'viewer')
+                return role in ['editor', 'moderator']
+        return False
+    
+    def can_manage(self, user):
+        """Verifica se l'utente può gestire il progetto (collaboratori, impostazioni)"""
+        if not user:
+            return False
+        if user.is_admin or self.owner_id == user.id:
+            return True
+        # Solo moderatori possono gestire
+        for collab in self.collaborators_list:
+            if isinstance(collab, dict) and collab.get('user_id') == user.id:
+                role = collab.get('role', 'viewer')
+                return role == 'moderator'
+        return False
+    
+    def update_statistics(self):
+        """Aggiorna le statistiche del progetto"""
+        # Conta file
+        self.total_files = len(self.excel_files) + len(self.text_documents)
+        
+        # Conta annotazioni
+        total_annotations = 0
+        annotated_items = 0
+        total_items = 0
+        
+        # Annotazioni Excel
+        for excel_file in self.excel_files:
+            for cell in excel_file.text_cells:
+                total_items += 1
+                if cell.annotations:
+                    annotated_items += 1
+                    total_annotations += len(cell.annotations)
+        
+        # Annotazioni testo
+        for text_doc in self.text_documents:
+            total_items += 1
+            if text_doc.annotations:
+                annotated_items += 1
+                total_annotations += len(text_doc.annotations)
+        
+        self.total_annotations = total_annotations
+        self.completion_percentage = (annotated_items / total_items * 100) if total_items > 0 else 0
+        self.last_activity = datetime.utcnow()
+
+
+class ProjectNote(db.Model):
+    """Modello per le note del progetto"""
+    __tablename__ = 'project_notes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    
+    # Tipologia e organizzazione
+    note_type = db.Column(db.String(30), default='general')  # general, meeting, decision, observation, etc.
+    tags = db.Column(db.Text)  # JSON array di tag
+    is_pinned = db.Column(db.Boolean, default=False)
+    is_private = db.Column(db.Boolean, default=False)
+    
+    # Authorship
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Timestamp
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relazioni
+    author = db.relationship('User', backref='project_notes')
+    
+    def __repr__(self):
+        return f'<ProjectNote {self.title}>'
+    
+    @property
+    def tags_list(self):
+        """Restituisce la lista dei tag"""
+        if self.tags:
+            try:
+                return json.loads(self.tags)
+            except:
+                return []
+        return []
+    
+    @tags_list.setter
+    def tags_list(self, value):
+        """Imposta la lista dei tag"""
+        self.tags = json.dumps(value) if value else None
+
+
+class ProjectCollaborator(db.Model):
+    """Modello per i collaboratori del progetto (alternativo al JSON)"""
+    __tablename__ = 'project_collaborators'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    role = db.Column(db.String(20), default='viewer')  # viewer, annotator, editor, moderator
+    
+    # Permessi specifici
+    can_view_private_notes = db.Column(db.Boolean, default=False)
+    can_export_data = db.Column(db.Boolean, default=False)
+    can_manage_files = db.Column(db.Boolean, default=False)
+    
+    # Timestamp
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_by_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    
+    # Relazioni
+    user = db.relationship('User', foreign_keys=[user_id], backref='project_collaborations')
+    added_by = db.relationship('User', foreign_keys=[added_by_id])
+    
+    # Indice univoco per evitare duplicati
+    __table_args__ = (db.UniqueConstraint('project_id', 'user_id', name='unique_project_collaborator'),)
+    
+    def __repr__(self):
+        return f'<ProjectCollaborator {self.user.username} in {self.project_id}>'

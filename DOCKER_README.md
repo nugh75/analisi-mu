@@ -37,7 +37,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 ### 4. Accedi all'applicazione
-- **URL**: http://localhost:5000
+- **URL**: http://localhost:5017
 - **Username**: admin
 - **Password**: admin123
 

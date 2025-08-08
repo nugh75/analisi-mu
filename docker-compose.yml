@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: anatema-web
     ports:
-      - "5000:5000"
+      - "5017:5018"
     environment:
       - SECRET_KEY=anatema-production-secret-key-2025
       - DATABASE_URL=sqlite:////app/instance/analisi_mu.db
@@ -22,7 +22,7 @@ services:
       - ./backups:/app/backups:rw
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5018/"]
       interval: 30s
       timeout: 10s
       retries: 3

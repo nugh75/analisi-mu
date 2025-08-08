@@ -61,7 +61,7 @@ docker-compose up -d
 if check_health; then
     echo ""
     echo "🎉Anatema è pronto!"
-    echo "📊 Dashboard: http://localhost:5000"
+    echo "📊 Dashboard: http://localhost:5017"
     echo "🔑 Login: admin / admin123"
     echo ""
     echo "📋 Comandi utili:"
