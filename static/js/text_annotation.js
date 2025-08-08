@@ -119,8 +119,46 @@ class TextAnnotationSystem {
     }
     
     setupModals() {
-        this.annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
-        this.detailsModal = new bootstrap.Modal(document.getElementById('annotationDetailsModal'));
+        // Controlla se Bootstrap è disponibile
+        if (typeof bootstrap !== 'undefined') {
+            this.annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
+            this.detailsModal = new bootstrap.Modal(document.getElementById('annotationDetailsModal'));
+        } else {
+            // Fallback per quando Bootstrap non è disponibile
+            console.warn('Bootstrap non disponibile, usando fallback per i modali');
+            this.annotationModal = {
+                show: () => {
+                    const modal = document.getElementById('annotationModal');
+                    if (modal) {
+                        modal.style.display = 'block';
+                        modal.classList.add('show');
+                    }
+                },
+                hide: () => {
+                    const modal = document.getElementById('annotationModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        modal.classList.remove('show');
+                    }
+                }
+            };
+            this.detailsModal = {
+                show: () => {
+                    const modal = document.getElementById('annotationDetailsModal');
+                    if (modal) {
+                        modal.style.display = 'block';
+                        modal.classList.add('show');
+                    }
+                },
+                hide: () => {
+                    const modal = document.getElementById('annotationDetailsModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        modal.classList.remove('show');
+                    }
+                }
+            };
+        }
         
         // Salva annotazione
         document.getElementById('saveAnnotation').addEventListener('click', () => {
