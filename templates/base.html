@@ -57,6 +57,16 @@
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">
+                                <i class="bi bi-folder2-open me-1"></i>Progetti
+                            </h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('projects.list_projects') }}">
+                                <i class="bi bi-folder me-1"></i>I Miei Progetti
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('projects.create_project') }}">
+                                <i class="bi bi-plus-circle me-1"></i>Nuovo Progetto
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">
                                 <i class="bi bi-tools me-1"></i>Strumenti di Lavoro
                             </h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('labels.list_labels') }}">

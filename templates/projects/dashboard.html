@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Progetto{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12 d-flex justify-content-between align-items-center">
+		<div>
+			<h2><i class="{{ project.get_type_icon() }} me-2"></i>{{ project.name }}</h2>
+			{% if project.description %}
+			<p class="text-muted mb-0">{{ project.description }}</p>
+			{% endif %}
+		</div>
+		<div class="btn-group">
+			<a href="{{ url_for('projects.project_files', project_id=project.id) }}" class="btn btn-outline-secondary">
+				<i class="bi bi-files me-1"></i>File
+			</a>
+			{% if project.can_manage(current_user) %}
+			<a href="{{ url_for('projects.project_settings', project_id=project.id) }}" class="btn btn-outline-warning">
+				<i class="bi bi-gear me-1"></i>Impostazioni
+			</a>
+			{% endif %}
+		</div>
+	</div>
+	<div class="col-12">
+		<span class="badge bg-{{ project.get_status_class() }}">{{ project.status|title }}</span>
+		{% if project.tags_list %}
+		<div class="mt-2">
+			{% for tag in project.tags_list %}
+			<span class="badge bg-light text-dark me-1">{{ tag }}</span>
+			{% endfor %}
+		</div>
+		{% endif %}
+	</div>
+</div>
+
+<div class="row g-3">
+	<div class="col-md-3">
+		<div class="card h-100">
+			<div class="card-body text-center">
+				<div class="display-6">{{ stats.files.total }}</div>
+				<div class="text-muted">File</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card h-100">
+			<div class="card-body text-center">
+				<div class="display-6">{{ stats.annotations.total }}</div>
+				<div class="text-muted">Annotazioni</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card h-100">
+			<div class="card-body text-center">
+				<div class="display-6">{{ "%.0f"|format(stats.completion.percentage) }}%</div>
+				<div class="text-muted">Completamento</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card h-100">
+			<div class="card-body text-center">
+				<div class="display-6">{{ collaborators|length }}</div>
+				<div class="text-muted">Collaboratori</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row mt-4">
+	<div class="col-lg-6">
+		<div class="card h-100">
+			<div class="card-header">
+				<i class="bi bi-sticky me-2"></i>Note Recenti
+			</div>
+			<ul class="list-group list-group-flush">
+				{% for note in recent_notes %}
+				<li class="list-group-item">
+					<div class="d-flex justify-content-between">
+						<div>
+							<strong>{{ note.title }}</strong>
+							<div class="text-muted small">{{ note.author.username }} • {{ note.updated_at.strftime('%d/%m %H:%M') }}</div>
+						</div>
+						{% if note.is_pinned %}
+						<span class="badge bg-warning text-dark"><i class="bi bi-pin-angle"></i></span>
+						{% endif %}
+					</div>
+					<div class="small text-muted mt-2">{{ note.content[:140] }}{% if note.content|length > 140 %}...{% endif %}</div>
+				</li>
+				{% else %}
+				<li class="list-group-item text-muted">Nessuna nota recente</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</div>
+	<div class="col-lg-6">
+		<div class="card h-100">
+			<div class="card-header">
+				<i class="bi bi-files me-2"></i>File Recenti
+			</div>
+			<ul class="list-group list-group-flush">
+				{% for f in recent_files %}
+				<li class="list-group-item d-flex justify-content-between align-items-center">
+					<div>
+						<div class="fw-semibold">{{ f.name }}</div>
+						<div class="small text-muted">{{ f.type|title }} • {{ f.uploader }}</div>
+					</div>
+					{% if f.type == 'excel' %}
+					<a href="{{ url_for('excel.view_file', file_id=f.id) }}" class="btn btn-sm btn-outline-primary">Apri</a>
+					{% else %}
+					<a href="{{ url_for('text_documents.annotate', document_id=f.id) }}" class="btn btn-sm btn-outline-primary">Apri</a>
+					{% endif %}
+				</li>
+				{% else %}
+				<li class="list-group-item text-muted">Nessun file recente</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</div>
+</div>
+{% endblock %}

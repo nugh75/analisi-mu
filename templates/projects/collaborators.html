@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Collaboratori - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <div>
+      <h2><i class="bi bi-people me-2"></i>Collaboratori di {{ project.name }}</h2>
+      <p class="text-muted mb-0">Gestisci le persone che possono accedere al progetto</p>
+    </div>
+    <div class="btn-group">
+      <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-speedometer2 me-1"></i>Dashboard
+      </a>
+      {% if project.can_manage(current_user) %}
+      <a href="{{ url_for('projects.project_settings', project_id=project.id) }}" class="btn btn-outline-warning">
+        <i class="bi bi-gear me-1"></i>Impostazioni
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Proprietario</div>
+  <div class="card-body d-flex align-items-center">
+    <span class="badge rounded-pill bg-danger me-3">Proprietario</span>
+    <div class="fw-semibold">{{ project.owner.username }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>Collaboratori</div>
+    <span class="badge bg-secondary">{{ collaborators|length - 1 }} membri</span>
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for c in collaborators %}
+      {% if c.role != 'owner' %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center">
+          <span class="badge bg-{{ c.role_class }} me-2">{{ c.role_display }}</span>
+          <div>
+            <div class="fw-semibold">{{ c.user.username }}</div>
+            <small class="text-muted">Aggiunto il {{ c.joined_at.strftime('%d/%m/%Y') if c.joined_at else '' }}</small>
+          </div>
+        </div>
+        <div class="text-muted small">
+          {{ c.annotations_count }} annotazioni
+        </div>
+      </li>
+      {% endif %}
+    {% else %}
+      <li class="list-group-item text-muted">Nessun collaboratore</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

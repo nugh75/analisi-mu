@@ -57,6 +57,24 @@ def list_projects():
     
     if search_form.status.data:
         query = query.filter(Project.status == search_form.status.data)
+
+    if hasattr(search_form, 'visibility') and search_form.visibility.data:
+        query = query.filter(Project.visibility == search_form.visibility.data)
+
+    # Filtra per ruolo dell'utente nei progetti
+    if hasattr(search_form, 'my_role') and search_form.my_role.data:
+        role = search_form.my_role.data
+        if role == 'owner':
+            query = query.filter(Project.owner_id == current_user.id)
+        elif role == 'public':
+            query = query.filter(Project.visibility == 'public')
+        elif role == 'collaborator':
+            query = query.filter(
+                and_(
+                    Project.owner_id != current_user.id,
+                    Project.collaborators.like(f'%"user_id": {current_user.id}%')
+                )
+            )
     
     # Ordina per ultima attività
     query = query.order_by(desc(Project.last_activity), desc(Project.updated_at))
@@ -67,18 +85,20 @@ def list_projects():
     )
     
     # Statistiche rapide
+    if current_user.is_admin:
+        total_q = Project.query
+        active_q = Project.query.filter(Project.status == 'active')
+        recent_q = Project.query.filter(Project.last_activity >= datetime.utcnow() - timedelta(days=7))
+    else:
+        total_q = Project.query.filter(accessible_projects)
+        active_q = Project.query.filter(and_(Project.status == 'active', accessible_projects))
+        recent_q = Project.query.filter(and_(Project.last_activity >= datetime.utcnow() - timedelta(days=7), accessible_projects))
+
     stats = {
-        'total_projects': Project.query.filter(accessible_projects if not current_user.is_admin else True).count(),
-        'active_projects': Project.query.filter(
-            and_(Project.status == 'active', accessible_projects if not current_user.is_admin else True)
-        ).count(),
+        'total_projects': total_q.count(),
+        'active_projects': active_q.count(),
         'my_projects': Project.query.filter(Project.owner_id == current_user.id).count(),
-        'recent_activity': Project.query.filter(
-            and_(
-                Project.last_activity >= datetime.utcnow() - timedelta(days=7),
-                accessible_projects if not current_user.is_admin else True
-            )
-        ).count()
+        'recent_activity': recent_q.count()
     }
     
     return render_template('projects/list.html', 
@@ -148,17 +168,44 @@ def view_project(project_id):
     # Ottieni statistiche dettagliate
     stats = get_project_statistics(project)
     
-    # Attività recenti (ultimi 10 elementi)
-    recent_notes = ProjectNote.query.filter_by(project_id=project.id)\
-                                  .order_by(desc(ProjectNote.updated_at))\
-                                  .limit(5).all()
-    
-    # File recenti
+    # Attività recenti (ultimi 5 elementi)
+    recent_notes = (
+        ProjectNote.query
+        .filter_by(project_id=project.id)
+        .order_by(desc(ProjectNote.updated_at))
+        .limit(5)
+        .all()
+    )
+
+    # File recenti (Excel + Testo) in forma uniforme
+    recent_files_raw = []
+    recent_files_raw.extend(project.excel_files[-5:])
+    recent_files_raw.extend(project.text_documents[-5:])
+
+    def _uploaded_ts(obj):
+        return getattr(obj, 'uploaded_at', None) or getattr(obj, 'created_at', None) or datetime.min
+
+    recent_files_raw.sort(key=_uploaded_ts, reverse=True)
     recent_files = []
-    recent_files.extend(project.excel_files[-3:])  # Ultimi 3 file Excel
-    recent_files.extend(project.text_documents[-3:])  # Ultimi 3 documenti testo
-    recent_files.sort(key=lambda x: x.uploaded_at if hasattr(x, 'uploaded_at') else x.created_at, reverse=True)
-    recent_files = recent_files[:5]  # Massimo 5 file totali
+    for f in recent_files_raw[:5]:
+        if hasattr(f, 'original_filename'):  # ExcelFile
+            recent_files.append({
+                'id': f.id,
+                'name': f.original_filename,
+                'type': 'excel',
+                'uploaded_at': f.uploaded_at,
+                'uploader': f.uploader.username if getattr(f, 'uploader', None) else '—',
+                'object': f
+            })
+        else:  # TextDocument
+            recent_files.append({
+                'id': f.id,
+                'name': getattr(f, 'original_name', f"Documento {f.id}"),
+                'type': 'text',
+                'uploaded_at': getattr(f, 'created_at', None),
+                'uploader': f.uploader.username if getattr(f, 'uploader', None) else '—',
+                'object': f
+            })
     
     # Collaboratori attivi
     collaborators = get_project_collaborators(project)
@@ -252,6 +299,76 @@ def project_files(project_id):
                          files=pagination,
                          file_type=file_type,
                          sort_by=sort_by)
+
+
+@projects_bp.route('/<int:project_id>/assign-files', methods=['GET', 'POST'])
+@login_required
+def assign_files(project_id):
+    """Assegna file Excel e Documenti di testo al progetto"""
+    project = Project.query.get_or_404(project_id)
+
+    if not (project.can_manage(current_user) or project.can_edit(current_user)):
+        flash('Non hai i permessi per gestire i file di questo progetto.', 'error')
+        return redirect(url_for('projects.view_project', project_id=project.id))
+
+    # Gestione assegnazione
+    if request.method == 'POST':
+        excel_ids = request.form.getlist('excel_ids')
+        text_ids = request.form.getlist('text_ids')
+
+        assigned = 0
+        try:
+            if excel_ids:
+                excel_files = ExcelFile.query.filter(ExcelFile.id.in_(excel_ids)).all()
+                for f in excel_files:
+                    f.project_id = project.id
+                    assigned += 1
+            if text_ids:
+                text_docs = TextDocument.query.filter(TextDocument.id.in_(text_ids)).all()
+                for d in text_docs:
+                    d.project_id = project.id
+                    assigned += 1
+            if assigned:
+                project.update_statistics()
+            db.session.commit()
+            flash(f'{assigned} file assegnati al progetto.', 'success')
+            return redirect(url_for('projects.project_files', project_id=project.id))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Errore durante l\'assegnazione: {str(e)}', 'error')
+
+    # Filtri di ricerca
+    search = request.args.get('search', '', type=str).strip()
+    file_type = request.args.get('type', 'all')  # all, excel, text
+
+    # Query file non assegnati
+    excel_unassigned_q = ExcelFile.query.filter(ExcelFile.project_id.is_(None))
+    text_unassigned_q = TextDocument.query.filter(TextDocument.project_id.is_(None))
+
+    if search:
+        like = f"%{search}%"
+        excel_unassigned_q = excel_unassigned_q.join(User, ExcelFile.uploader).filter(
+            or_(ExcelFile.original_filename.ilike(like), User.username.ilike(like))
+        )
+        text_unassigned_q = text_unassigned_q.join(User, TextDocument.uploader).filter(
+            or_(TextDocument.original_name.ilike(like), User.username.ilike(like))
+        )
+
+    excel_unassigned = excel_unassigned_q.order_by(desc(ExcelFile.uploaded_at)).limit(200).all()
+    text_unassigned = text_unassigned_q.order_by(desc(TextDocument.created_at)).limit(200).all()
+
+    # Alcuni assegnati recenti per contesto
+    excel_assigned = ExcelFile.query.filter_by(project_id=project.id).order_by(desc(ExcelFile.uploaded_at)).limit(20).all()
+    text_assigned = TextDocument.query.filter_by(project_id=project.id).order_by(desc(TextDocument.created_at)).limit(20).all()
+
+    return render_template('projects/assign_files.html',
+                           project=project,
+                           search=search,
+                           file_type=file_type,
+                           excel_unassigned=excel_unassigned,
+                           text_unassigned=text_unassigned,
+                           excel_assigned=excel_assigned,
+                           text_assigned=text_assigned)
 
 
 @projects_bp.route('/<int:project_id>/notes')

@@ -1193,6 +1193,26 @@ class Project(db.Model):
         self.completion_percentage = (annotated_items / total_items * 100) if total_items > 0 else 0
         self.last_activity = datetime.utcnow()
 
+    # Helper per UI
+    def get_type_icon(self):
+        mapping = {
+            'general': 'bi bi-folder',
+            'research': 'bi bi-beaker',
+            'annotation': 'bi bi-pencil-square',
+            'analysis': 'bi bi-clipboard-data',
+            'collaborative': 'bi bi-people'
+        }
+        return mapping.get(self.project_type, 'bi bi-folder')
+
+    def get_status_class(self):
+        mapping = {
+            'active': 'success',
+            'completed': 'secondary',
+            'archived': 'dark',
+            'suspended': 'warning'
+        }
+        return mapping.get(self.status, 'secondary')
+
 
 class ProjectNote(db.Model):
     """Modello per le note del progetto"""

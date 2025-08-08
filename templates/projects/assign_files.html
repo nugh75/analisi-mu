@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Assegna File - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12 d-flex justify-content-between align-items-center">
+		<h2><i class="bi bi-plus-circle me-2"></i>Assegna File a {{ project.name }}</h2>
+		<a href="{{ url_for('projects.project_files', project_id=project.id) }}" class="btn btn-outline-secondary">
+			<i class="bi bi-arrow-left me-1"></i>Torna ai File
+		</a>
+	</div>
+</div>
+
+<form method="get" class="row g-3 mb-3">
+	<div class="col-md-6">
+		<input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Cerca per nome o utente...">
+	</div>
+	<div class="col-md-3">
+		<select class="form-select" name="type">
+			<option value="all" {{ 'selected' if file_type=='all' else '' }}>Tutti</option>
+			<option value="excel" {{ 'selected' if file_type=='excel' else '' }}>Excel</option>
+			<option value="text" {{ 'selected' if file_type=='text' else '' }}>Testo</option>
+		</select>
+	</div>
+	<div class="col-md-3">
+		<button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filtra</button>
+	</div>
+</form>
+
+<form method="post">
+	{{ csrf_token() }}
+	<div class="row g-3">
+		{% if file_type in ['all','excel'] %}
+		<div class="col-lg-6">
+			<div class="card h-100">
+				<div class="card-header">File Excel non assegnati</div>
+				<div class="card-body p-0">
+					<div class="list-group list-group-flush" style="max-height: 430px; overflow:auto;">
+						{% for f in excel_unassigned %}
+						<label class="list-group-item d-flex align-items-center">
+							<input class="form-check-input me-2" type="checkbox" name="excel_ids" value="{{ f.id }}">
+							<div class="flex-fill">
+								<div class="fw-semibold">{{ f.original_filename }}</div>
+								<small class="text-muted">{{ f.uploader.username if f.uploader else '—' }} • {{ f.uploaded_at.strftime('%d/%m/%Y %H:%M') if f.uploaded_at else '' }}</small>
+							</div>
+						</label>
+						{% else %}
+						<div class="p-3 text-muted">Nessun file Excel non assegnato</div>
+						{% endfor %}
+					</div>
+				</div>
+			</div>
+		</div>
+		{% endif %}
+
+		{% if file_type in ['all','text'] %}
+		<div class="col-lg-6">
+			<div class="card h-100">
+				<div class="card-header">Documenti di Testo non assegnati</div>
+				<div class="card-body p-0">
+					<div class="list-group list-group-flush" style="max-height: 430px; overflow:auto;">
+						{% for d in text_unassigned %}
+						<label class="list-group-item d-flex align-items-center">
+							<input class="form-check-input me-2" type="checkbox" name="text_ids" value="{{ d.id }}">
+							<div class="flex-fill">
+								<div class="fw-semibold">{{ d.original_name }}</div>
+								<small class="text-muted">{{ d.uploader.username if d.uploader else '—' }} • {{ d.created_at.strftime('%d/%m/%Y %H:%M') if d.created_at else '' }}</small>
+							</div>
+						</label>
+						{% else %}
+						<div class="p-3 text-muted">Nessun documento di testo non assegnato</div>
+						{% endfor %}
+					</div>
+				</div>
+			</div>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="d-flex justify-content-end mt-3">
+		<button type="submit" class="btn btn-success">
+			<i class="bi bi-check-circle me-1"></i>Assegna al Progetto
+		</button>
+	</div>
+</form>
+
+<div class="row mt-4">
+	<div class="col-lg-6">
+		<div class="card">
+			<div class="card-header">Excel assegnati di recente</div>
+			<ul class="list-group list-group-flush">
+				{% for f in excel_assigned %}
+				<li class="list-group-item d-flex justify-content-between align-items-center">
+					<div>
+						<div class="fw-semibold">{{ f.original_filename }}</div>
+						<small class="text-muted">{{ f.uploader.username if f.uploader else '—' }} • {{ f.uploaded_at.strftime('%d/%m/%Y %H:%M') if f.uploaded_at else '' }}</small>
+					</div>
+					<a href="{{ url_for('excel.view_file', file_id=f.id) }}" class="btn btn-sm btn-outline-primary">Apri</a>
+				</li>
+				{% else %}
+				<li class="list-group-item text-muted">Nessun file</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</div>
+	<div class="col-lg-6">
+		<div class="card">
+			<div class="card-header">Documenti assegnati di recente</div>
+			<ul class="list-group list-group-flush">
+				{% for d in text_assigned %}
+				<li class="list-group-item d-flex justify-content-between align-items-center">
+					<div>
+						<div class="fw-semibold">{{ d.original_name }}</div>
+						<small class="text-muted">{{ d.uploader.username if d.uploader else '—' }} • {{ d.created_at.strftime('%d/%m/%Y %H:%M') if d.created_at else '' }}</small>
+					</div>
+					<a href="{{ url_for('text_documents.annotate', document_id=d.id) }}" class="btn btn-sm btn-outline-primary">Apri</a>
+				</li>
+				{% else %}
+				<li class="list-group-item text-muted">Nessun documento</li>
+				{% endfor %}
+			</ul>
+		</div>
+	</div>
+</div>
+{% endblock %}

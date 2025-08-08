@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Note - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12 d-flex justify-content-between align-items-center">
+		<div>
+			<h2><i class="bi bi-sticky me-2"></i>Note di {{ project.name }}</h2>
+			<p class="text-muted mb-0">Organizza note per tipo e tag</p>
+		</div>
+		<div class="btn-group">
+			<a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-outline-secondary">
+				<i class="bi bi-speedometer2 me-1"></i>Dashboard
+			</a>
+			{% if project.can_edit(current_user) %}
+			<a href="{{ url_for('projects.create_note', project_id=project.id) }}" class="btn btn-primary">
+				<i class="bi bi-plus-circle me-1"></i>Nuova Nota
+			</a>
+			{% endif %}
+		</div>
+	</div>
+</div>
+
+<form method="get" class="row g-3 mb-3">
+	<div class="col-md-4">
+		<label class="form-label">Tipo</label>
+		<select name="type" class="form-select">
+			<option value="all" {{ 'selected' if note_type=='all' else '' }}>Tutti</option>
+			<option value="general" {{ 'selected' if note_type=='general' else '' }}>Generale</option>
+			<option value="meeting" {{ 'selected' if note_type=='meeting' else '' }}>Riunione</option>
+			<option value="decision" {{ 'selected' if note_type=='decision' else '' }}>Decisione</option>
+			<option value="observation" {{ 'selected' if note_type=='observation' else '' }}>Osservazione</option>
+			<option value="todo" {{ 'selected' if note_type=='todo' else '' }}>Da Fare</option>
+			<option value="issue" {{ 'selected' if note_type=='issue' else '' }}>Problema</option>
+			<option value="idea" {{ 'selected' if note_type=='idea' else '' }}>Idea</option>
+		</select>
+	</div>
+	<div class="col-md-2 d-flex align-items-end">
+		<button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filtra</button>
+	</div>
+	<div class="col-md-6 d-flex align-items-end justify-content-end">
+		<div class="text-muted small">
+			Totale: {{ note_stats.total }}
+		</div>
+	</div>
+  
+</form>
+
+{% if notes.items %}
+<div class="list-group">
+	{% for note in notes.items %}
+	<div class="list-group-item">
+		<div class="d-flex justify-content-between align-items-start">
+			<div>
+				<div class="d-flex align-items-center">
+					{% if note.is_pinned %}
+					<span class="badge bg-warning text-dark me-2"><i class="bi bi-pin-angle"></i></span>
+					{% endif %}
+					<strong>{{ note.title }}</strong>
+				</div>
+				<div class="small text-muted">
+					{{ note.author.username }} • {{ note.updated_at.strftime('%d/%m/%Y %H:%M') }}
+					{% if note.is_private %}<span class="ms-2 badge bg-secondary">Privata</span>{% endif %}
+				</div>
+			</div>
+			<span class="badge bg-light text-dark text-uppercase">{{ note.note_type }}</span>
+		</div>
+		<div class="mt-2 text-muted">{{ note.content[:200] }}{% if note.content|length > 200 %}...{% endif %}</div>
+	</div>
+	{% endfor %}
+</div>
+
+{% if notes.pages > 1 %}
+<nav aria-label="Paginazione" class="mt-3">
+	<ul class="pagination justify-content-center">
+		{% if notes.has_prev %}
+		<li class="page-item"><a class="page-link" href="{{ url_for('projects.project_notes', project_id=project.id, page=notes.prev_num, type=note_type) }}"><i class="bi bi-chevron-left"></i></a></li>
+		{% endif %}
+		{% for p in notes.iter_pages() %}
+			{% if p %}
+			<li class="page-item {{ 'active' if p==notes.page else '' }}"><a class="page-link" href="{{ url_for('projects.project_notes', project_id=project.id, page=p, type=note_type) }}">{{ p }}</a></li>
+			{% else %}
+			<li class="page-item disabled"><span class="page-link">…</span></li>
+			{% endif %}
+		{% endfor %}
+		{% if notes.has_next %}
+		<li class="page-item"><a class="page-link" href="{{ url_for('projects.project_notes', project_id=project.id, page=notes.next_num, type=note_type) }}"><i class="bi bi-chevron-right"></i></a></li>
+		{% endif %}
+	</ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5">
+	<i class="bi bi-sticky display-1 text-muted mb-3"></i>
+	<h5 class="text-muted">Nessuna nota</h5>
+	{% if project.can_edit(current_user) %}
+	<a href="{{ url_for('projects.create_note', project_id=project.id) }}" class="btn btn-primary">
+		<i class="bi bi-plus-circle me-1"></i>Nuova Nota
+	</a>
+	{% endif %}
+	</div>
+{% endif %}
+
+{% endblock %}

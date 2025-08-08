@@ -268,6 +268,15 @@ class ProjectSearchForm(FlaskForm):
                         ],
                         default='')
     
+    my_role = SelectField('Ruolo',
+                         choices=[
+                             ('', 'Qualsiasi ruolo'),
+                             ('owner', 'Proprietario'),
+                             ('collaborator', 'Collaboratore'),
+                             ('public', 'Pubblici')
+                         ],
+                         default='')
+    
     visibility = SelectField('Visibilità', 
                             choices=[
                                 ('', 'Tutte'),

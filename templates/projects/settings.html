@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Impostazioni - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12 d-flex justify-content-between align-items-center">
+		<h2><i class="bi bi-gear me-2"></i>Impostazioni Progetto</h2>
+		<a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-outline-secondary">
+			<i class="bi bi-arrow-left me-1"></i>Torna al Progetto
+		</a>
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-lg-8">
+		<div class="card">
+			<div class="card-header">Informazioni di Base</div>
+			<div class="card-body">
+				<form method="post">
+					{{ form.csrf_token }}
+
+					<div class="mb-3">
+						{{ form.name.label(class="form-label") }}
+						{{ form.name(class="form-control") }}
+					</div>
+
+					<div class="mb-3">
+						{{ form.description.label(class="form-label") }}
+						{{ form.description(class="form-control") }}
+					</div>
+
+					<div class="row">
+						<div class="col-md-6 mb-3">
+							{{ form.project_type.label(class="form-label") }}
+							{{ form.project_type(class="form-select") }}
+						</div>
+						<div class="col-md-6 mb-3">
+							{{ form.visibility.label(class="form-label") }}
+							{{ form.visibility(class="form-select") }}
+						</div>
+					</div>
+
+					<div class="mb-3">
+						{{ form.objectives.label(class="form-label") }}
+						{{ form.objectives(class="form-control") }}
+					</div>
+
+					<div class="mb-3">
+						{{ form.methodology.label(class="form-label") }}
+						{{ form.methodology(class="form-control") }}
+					</div>
+
+					<div class="row">
+						<div class="col-md-6 mb-3">
+							{{ form.default_annotation_mode.label(class="form-label") }}
+							{{ form.default_annotation_mode(class="form-select") }}
+						</div>
+						<div class="col-md-6 mb-3 d-flex align-items-end">
+							<div class="form-check me-3">
+								{{ form.enable_ai_assistance(class="form-check-input", id="enable_ai_assistance") }}
+								<label class="form-check-label" for="enable_ai_assistance">{{ form.enable_ai_assistance.label.text }}</label>
+							</div>
+							<div class="form-check">
+								{{ form.auto_assign_collaborators(class="form-check-input", id="auto_assign_collaborators") }}
+								<label class="form-check-label" for="auto_assign_collaborators">{{ form.auto_assign_collaborators.label.text }}</label>
+							</div>
+						</div>
+					</div>
+
+					<div class="mb-3">
+						{{ form.tags.label(class="form-label") }}
+						{{ form.tags(class="form-control") }}
+						{% if form.tags.description %}
+						<div class="form-text">{{ form.tags.description }}</div>
+						{% endif %}
+					</div>
+
+					<div class="d-flex justify-content-end">
+						<button type="submit" class="btn btn-primary">
+							<i class="bi bi-save me-1"></i>Salva Impostazioni
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-lg-4">
+		<div class="card mb-3">
+			<div class="card-header">Dettagli</div>
+			<div class="card-body">
+				<div class="mb-2"><strong>Proprietario:</strong> {{ project.owner.username }}</div>
+				<div class="mb-2"><strong>Creato il:</strong> {{ project.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+				{% if project.updated_at %}
+				<div class="mb-2"><strong>Aggiornato il:</strong> {{ project.updated_at.strftime('%d/%m/%Y %H:%M') }}</div>
+				{% endif %}
+				<div class="mb-2"><strong>Stato:</strong> <span class="badge bg-{{ project.get_status_class() }}">{{ project.status|title }}</span></div>
+				<div class="mb-2"><strong>Visibilità:</strong> {{ project.visibility|title }}</div>
+			</div>
+		</div>
+		{% if project.tags_list %}
+		<div class="card">
+			<div class="card-header">Tag Correnti</div>
+			<div class="card-body">
+				{% for tag in project.tags_list %}
+				<span class="badge bg-light text-dark me-1 mb-1">{{ tag }}</span>
+				{% endfor %}
+			</div>
+		</div>
+		{% endif %}
+	</div>
+</div>
+{% endblock %}
