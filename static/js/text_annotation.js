@@ -43,6 +43,11 @@ class TextAnnotationSystem {
         
         // Click su annotazioni esistenti
         this.container.addEventListener('click', (e) => {
+            // Se c'è una selezione attiva (non-collassata), ignora il click
+            const sel = window.getSelection && window.getSelection();
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                return;
+            }
             if (e.target.classList.contains('annotation-highlight')) {
                 e.preventDefault();
                 
@@ -59,11 +64,9 @@ class TextAnnotationSystem {
         });
         
         // Previeni selezione su annotazioni esistenti durante la creazione
-        this.container.addEventListener('selectstart', (e) => {
-            if (e.target.classList.contains('annotation-highlight')) {
-                e.preventDefault();
-            }
-        });
+    // Permetti selezione anche sopra annotazioni esistenti (supporto overlap)
+    // In precedenza veniva bloccata la selezione se l'utente iniziava su un highlight
+    // ma questo impediva la seconda annotazione. Manteniamo il comportamento di default.
         
         // Aggiungi listener per il reset quando si clicca fuori dal container
         document.addEventListener('click', (e) => {
@@ -92,6 +95,11 @@ class TextAnnotationSystem {
         
         // Click su annotazioni esistenti
         this.container.addEventListener('click', (e) => {
+            // Se c'è una selezione attiva (non-collassata), ignora il click
+            const sel = window.getSelection && window.getSelection();
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                return;
+            }
             if (e.target.classList.contains('annotation-highlight')) {
                 e.preventDefault();
                 
@@ -107,12 +115,7 @@ class TextAnnotationSystem {
             }
         });
         
-        // Previeni selezione su annotazioni esistenti durante la creazione
-        this.container.addEventListener('selectstart', (e) => {
-            if (e.target.classList.contains('annotation-highlight')) {
-                e.preventDefault();
-            }
-        });
+    // Permetti selezione anche sopra annotazioni esistenti (supporto overlap)
     }
     
     setupModals() {
@@ -139,18 +142,7 @@ class TextAnnotationSystem {
             return;
         }
         
-        // Verifica che non stiamo selezionando parti di annotazioni esistenti
-        const startElement = range.startContainer.nodeType === Node.TEXT_NODE ? 
-                            range.startContainer.parentElement : range.startContainer;
-        const endElement = range.endContainer.nodeType === Node.TEXT_NODE ? 
-                          range.endContainer.parentElement : range.endContainer;
-        
-        // Se stiamo selezionando all'interno di un'annotazione esistente, ignora
-        if (startElement.closest('.annotation-highlight') || endElement.closest('.annotation-highlight')) {
-            console.log('Selezione all\'interno di annotazione esistente, ignorata');
-            selection.removeAllRanges();
-            return;
-        }
+    // Consenti selezione anche se inizia/finisce dentro un highlight per permettere annotazioni sovrapposte
         
         const selectedText = selection.toString().trim();
         
@@ -423,11 +415,7 @@ class TextAnnotationSystem {
         span.style.cursor = 'pointer';
         span.style.position = 'relative';
         
-        // IMPORTANTE: Non rendere selezionabile il contenuto delle annotazioni esistenti
-        span.style.userSelect = 'none';
-        span.style.webkitUserSelect = 'none';
-        span.style.mozUserSelect = 'none';
-        span.style.msUserSelect = 'none';
+    // Consenti la selezione del testo anche all'interno degli highlight per permettere annotazioni successive
 
         if (annotations.length === 1) {
             // Singola annotazione
